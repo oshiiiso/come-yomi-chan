@@ -1,0 +1,76 @@
+{
+  "name": "come-yomi-chan",
+  "version": "0.1.0",
+  "description": "TikTok LIVE のコメント画面と読み上げ（コメ読みちゃん）",
+  "main": "dist/main/index.js",
+  "author": "oshiiiso",
+  "license": "MIT",
+  "scripts": {
+    "build": "tsc",
+    "start": "npm run build && electron .",
+    "dev": "tsc && electron .",
+    "test": "tsc && node --test \"dist/test/**/*.test.js\" && electron scripts/verify-preload.js",
+    "pack": "npm run build && electron-builder --dir",
+    "dist": "npm run build && electron-builder --win zip",
+    "dist:dir": "npm run build && electron-builder --win dir --publish never"
+  },
+  "dependencies": {
+    "dotenv": "^17.2.1",
+    "electron-store": "^8.2.0",
+    "marked": "^15.0.12",
+    "tiktok-live-connector": "^2.4.4",
+    "ws": "^8.18.3"
+  },
+  "devDependencies": {
+    "@types/node": "^24.3.0",
+    "@types/ws": "^8.18.1",
+    "electron": "^37.3.0",
+    "electron-builder": "^26.0.12",
+    "typescript": "^5.9.2"
+  },
+  "build": {
+    "appId": "com.oshiiiso.come-yomi-chan",
+    "productName": "コメ読みちゃん",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "!dist/test/**",
+      "!dist/**/*.test.js",
+      "!dist/**/*.test.js.map",
+      "!dist/**/*.test.d.ts",
+      "!dist/**/*.test.d.ts.map",
+      "ui/**/*",
+      "assets/**/*",
+      "docs/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts",
+        "to": "scripts"
+      }
+    ],
+    "extraFiles": [
+      {
+        "from": ".portable",
+        "to": ".portable"
+      },
+      {
+        "from": ".env.dist",
+        "to": ".env"
+      }
+    ],
+    "publish": null,
+    "icon": "assets/icon.ico",
+    "afterPack": "./scripts/after-sign-icon.js",
+    "afterSign": "./scripts/after-sign-icon.js",
+    "win": {
+      "icon": "assets/icon.ico",
+      "target": [
+        "zip"
+      ]
+    }
+  }
+}

@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ヘルプ</title>
+    <link rel="icon" href="../assets/icon.png" />
+    <script src="js/ui-theme.js"></script>
+    <script>window.LiveTtsUiTheme.boot();</script>
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="titlebar">
+        <div class="titlebar__drag">
+          <img class="titlebar__icon" src="../assets/icon.png" alt="" />
+          <span class="titlebar__title">コメ読みちゃん</span>
+          <span class="titlebar__subtitle">ヘルプ</span>
+        </div>
+        <div class="titlebar__actions">
+          <button class="titlebar__btn titlebar__btn--close" id="btn-close" type="button" title="閉じる">
+            ×
+          </button>
+        </div>
+      </header>
+      <div class="help-body" id="help-content"></div>
+    </div>
+    <script>
+      document.getElementById('btn-close').addEventListener('click', () => {
+        window.liveTts.closeWindow();
+      });
+
+      function helpTopicFromUrl() {
+        return new URLSearchParams(location.search).get('topic') || '';
+      }
+
+      function scrollHelpTopic(topic) {
+        if (!topic) {
+          return;
+        }
+        const target = document.getElementById(topic);
+        if (!(target instanceof HTMLElement)) {
+          return;
+        }
+        target.classList.add('is-help-target');
+        target.scrollIntoView({ block: 'start' });
+      }
+
+      document.getElementById('help-content')?.addEventListener('click', (event) => {
+        const link = event.target.closest('a[href]');
+        if (!link) {
+          return;
+        }
+        const href = link.getAttribute('href') || '';
+        if (href.startsWith('#')) {
+          event.preventDefault();
+          scrollHelpTopic(href.slice(1));
+          return;
+        }
+        if (/^https?:\/\//i.test(href) && typeof window.liveTts.openExternal === 'function') {
+          event.preventDefault();
+          void window.liveTts.openExternal(href);
+        }
+      });
+
+      window.liveTts.getHelpContent().then((result) => {
+        const body = document.getElementById('help-content');
+        if (body) {
+          body.innerHTML = result.html;
+          scrollHelpTopic(helpTopicFromUrl());
+        }
+      }).catch(() => {
+        const body = document.getElementById('help-content');
+        if (body) {
+          body.textContent = 'ヘルプを読み込めませんでした';
+        }
+      });
+      function applyHelpTheme(config) {
+        window.LiveTtsUiTheme.apply(config?.uiTheme);
+      }
+      window.liveTts.getConfig().then(applyHelpTheme).catch(() => undefined);
+      window.liveTts.onConfigChanged(applyHelpTheme);
+    </script>
+  </body>
+</html>

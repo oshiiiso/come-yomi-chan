@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>コメ読みちゃん</title>
+    <script>
+      (() => {
+        const params = new URLSearchParams(location.search);
+        if (params.has('preview')) {
+          document.documentElement.dataset.preview = '1';
+          document.documentElement.dataset.backdrop = params.get('backdrop') || 'checker';
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="/overlay/overlay.css" />
+    <style id="custom-css"></style>
+  </head>
+  <body>
+    <div class="overlay-root">
+      <ol id="pin" class="chat chat--pin" hidden aria-live="polite"></ol>
+      <ol id="chat" class="chat" aria-live="polite"></ol>
+    </div>
+    <script src="/overlay/overlay.js?v=pin6"></script>
+  </body>
+</html>

@@ -1,0 +1,968 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>コメ読みちゃん</title>
+    <link rel="icon" href="../assets/icon.png" />
+    <script src="js/ui-theme.js"></script>
+    <script>window.LiveTtsUiTheme.boot();</script>
+    <link rel="stylesheet" href="css/app.css" />
+  </head>
+  <body data-mode="viewer">
+    <div class="app-shell">
+      <header class="titlebar">
+        <div class="titlebar__drag">
+          <img class="titlebar__icon" src="../assets/icon.png" alt="" />
+          <span class="titlebar__title">コメ読みちゃん</span>
+          <span class="titlebar__subtitle">コメント画面と読み上げ</span>
+        </div>
+        <div class="titlebar__actions">
+          <div class="titlebar-menu">
+            <button class="titlebar__text" id="menu-view-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-view-list">窓</button>
+            <div class="titlebar-menu__list" id="menu-view-list" hidden role="menu">
+              <button type="button" role="menuitemcheckbox" id="btn-always-on-top" aria-checked="false">手前に置く</button>
+              <button type="button" role="menuitemcheckbox" id="btn-compact-viewer" aria-checked="false">コンパクトな窓</button>
+            </div>
+          </div>
+          <div class="titlebar-menu">
+            <button class="titlebar__text" id="menu-log-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-log-list">サンプル</button>
+            <div class="titlebar-menu__list" id="menu-log-list" hidden role="menu">
+              <button type="button" role="menuitem" id="btn-viewer-preview-samples">コメント画面にサンプル</button>
+              <button type="button" role="menuitem" id="btn-viewer-clear" disabled>コメント画面を消す</button>
+              <button type="button" role="menuitem" id="btn-overlay-preview-samples">配信ソースにサンプル</button>
+              <button type="button" role="menuitem" id="btn-overlay-clear">配信ソースを消す</button>
+            </div>
+          </div>
+          <button class="titlebar__text" id="btn-help" type="button">ヘルプ</button>
+          <button class="titlebar__btn titlebar__btn--close" id="btn-close" type="button" title="閉じる">
+            ×
+          </button>
+        </div>
+      </header>
+
+      <div class="statusbar">
+        <div class="mode-switch" role="tablist" aria-label="画面">
+          <button class="mode-switch__btn is-active" id="mode-viewer" type="button" role="tab" aria-selected="true" aria-controls="view-viewer">コメント画面</button>
+          <button class="mode-switch__btn" id="mode-settings" type="button" role="tab" aria-selected="false" aria-controls="view-settings">設定</button>
+        </div>
+        <div class="status" id="status-line" role="status" aria-live="polite">
+          <span class="status__dot" aria-hidden="true"></span>
+          <span id="status-text">未接続</span>
+          <span class="status__duration" id="status-live-duration" hidden></span>
+        </div>
+        <div class="statusbar__actions">
+          <div class="statusbar__group">
+            <button class="btn btn--ghost btn--with-hotkey" id="btn-skip-speech" type="button" title="読み上げを飛ばす">読み上げを飛ばす</button>
+            <button class="btn btn--ghost btn--with-hotkey" id="btn-clear-speech" type="button" title="読み上げの待ちを捨てる">読み上げの待ちを捨てる</button>
+            <button class="btn btn--ghost btn--with-hotkey" id="btn-clear-pin" type="button" title="固定枠の待ちを捨てる">固定枠の待ちを捨てる</button>
+          </div>
+          <div class="statusbar__group">
+            <button class="btn" id="btn-connect" type="button">接続</button>
+            <button class="btn btn--danger" id="btn-disconnect" type="button">切断</button>
+          </div>
+        </div>
+      </div>
+
+      <section class="view-viewer" id="view-viewer" aria-labelledby="mode-viewer">
+        <div class="viewer-toolbar" id="viewer-toolbar">
+          <div class="viewer-toolbar__row viewer-toolbar__row--main">
+            <div class="mode-switch viewer-layout-switch" role="group" aria-label="コメント画面のレイアウト">
+              <button class="mode-switch__btn" id="btn-viewer-layout-combined" type="button">まとめる</button>
+              <button class="mode-switch__btn is-active" id="btn-viewer-layout-split" type="button">分ける</button>
+              <button class="mode-switch__btn" id="btn-viewer-layout-custom" type="button">自由配置</button>
+            </div>
+            <label class="viewer-search" id="viewer-search-wrap">
+              <span class="viewer-search__label" id="viewer-search-label">検索</span>
+              <input id="viewer-search" type="search" placeholder="名前・ID・本文" autocomplete="off" spellcheck="false" />
+              <span class="viewer-search__count" id="viewer-search-count" hidden></span>
+            </label>
+            <div class="row viewer-toolbar-actions" id="viewer-toolbar-actions">
+              <button class="btn btn--ghost is-hidden" id="btn-viewer-latest" type="button">最新へ</button>
+            </div>
+          </div>
+          <div class="viewer-toolbar__row viewer-toolbar__row--live" id="viewer-room-stats-row" hidden>
+            <div class="viewer-room-stats">
+              <span class="viewer-room-stats__count" id="viewer-room-count"></span>
+              <div class="viewer-room-stats__top" id="viewer-room-top" hidden>
+                <span class="viewer-room-stats__top-label" id="viewer-room-top-label">上位ギフト</span>
+                <div class="viewer-room-stats__gifters" id="viewer-room-top-gifters"></div>
+              </div>
+            </div>
+          </div>
+          <div class="viewer-toolbar__row viewer-toolbar__row--filters">
+            <div class="viewer-display" id="viewer-display" role="group" aria-label="コメント画面に出すもの">
+              <span class="viewer-display__label" id="viewer-display-label">この画面</span>
+              <label class="viewer-display__check"><input id="viewer-display-gift" type="checkbox" data-viewer-display="gift" checked />ギフト</label>
+              <label class="viewer-display__check"><input id="viewer-display-follow" type="checkbox" data-viewer-display="follow" checked />フォロー</label>
+              <label class="viewer-display__check"><input id="viewer-display-share" type="checkbox" data-viewer-display="share" checked />シェア</label>
+              <label class="viewer-display__check"><input id="viewer-display-superFan" type="checkbox" data-viewer-display="superFan" checked />スパファン</label>
+              <label class="viewer-display__check"><input id="viewer-display-envelope" type="checkbox" data-viewer-display="envelope" checked />宝箱</label>
+              <label class="viewer-display__check"><input id="viewer-display-portal" type="checkbox" data-viewer-display="portal" checked />ポータル</label>
+              <label class="viewer-display__check"><input id="viewer-display-like" type="checkbox" data-viewer-display="like" />いいね</label>
+              <label class="viewer-display__check"><input id="viewer-display-member" type="checkbox" data-viewer-display="member" />入室</label>
+            </div>
+            <label class="viewer-font" id="viewer-font">
+              <span class="viewer-font__label">文字 <em id="viewer-font-size-value">20px</em></span>
+              <input id="viewer-font-size" type="range" min="10" max="30" value="20" />
+            </label>
+          </div>
+          <p class="viewer-toolbar__hint" id="viewer-empty" hidden></p>
+        </div>
+        <div class="guide" id="viewer-guide">
+          <h2 id="guide-title">最初にやること</h2>
+        <ol class="guide__steps">
+          <li id="guide-step-id">設定で TikTok ID を入れる</li>
+          <li id="guide-step-connect">「接続」を押して相手を確認する</li>
+          <li id="guide-step-live">TikTok で配信を開始する</li>
+        </ol>
+        <p class="hint" id="guide-extra">自分の TikTok ID（先頭の @ は不要）を入れると、接続できます。</p>
+        <div class="row">
+          <button class="btn" id="btn-guide-action" type="button">設定で ID を入れる</button>
+          <button class="btn btn--ghost" id="btn-guide-samples" type="button">サンプルを見る</button>
+          <button class="btn btn--ghost" id="btn-guide-clear-samples" type="button" hidden>サンプルを消す</button>
+        </div>
+      </div>
+      <div class="viewer-workspace" id="viewer-workspace">
+        <section class="viewer-pane viewer-pane--comments" aria-labelledby="viewer-pane-comments-label">
+          <h2 class="viewer-pane__label" id="viewer-pane-comments-label">コメント</h2>
+          <p class="viewer-pane__empty" id="viewer-empty-comments">まだコメントはありません</p>
+          <ol class="viewer" id="viewer-log-comments" aria-live="polite" aria-relevant="additions"></ol>
+        </section>
+        <div
+          class="workspace__split"
+          id="viewer-split"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="コメントとイベントの幅"
+          tabindex="0"
+        ></div>
+        <section class="viewer-pane viewer-pane--events" aria-labelledby="viewer-pane-events-label">
+          <h2 class="viewer-pane__label" id="viewer-pane-events-label">ギフト・フォローなど</h2>
+          <p class="viewer-pane__empty" id="viewer-empty-events">ギフトやフォローが来るとここに出ます</p>
+          <ol class="viewer" id="viewer-log-events" aria-live="polite" aria-relevant="additions"></ol>
+        </section>
+        <div class="viewer-dock" id="viewer-dock" hidden></div>
+      </div>
+    </section>
+
+    <div class="ctx-menu" id="viewer-user-menu" hidden role="menu">
+      <p class="ctx-menu__label" id="viewer-user-menu-label"></p>
+      <button type="button" role="menuitem" id="viewer-user-menu-copy">コメントをコピー</button>
+      <button type="button" role="menuitem" id="viewer-user-menu-copy-id">IDをコピー</button>
+      <button type="button" role="menuitem" id="viewer-user-menu-copy-nickname">ニックネームをコピー</button>
+      <button class="ctx-menu__sep" type="button" role="menuitem" id="viewer-user-menu-mute">ミュート（読み上げしない）</button>
+      <button type="button" role="menuitem" id="viewer-user-menu-block">ブロック（表示も読み上げもしない）</button>
+    </div>
+
+      <div class="view-settings" id="view-settings" aria-labelledby="mode-settings" hidden>
+      <div class="workspace is-preview-hidden">
+      <div class="workspace__main">
+      <nav class="tabs" role="tablist" aria-label="設定">
+        <button class="tabs__btn is-active" type="button" role="tab" id="tab-connect" data-tab="connect" aria-controls="panel-connect" aria-selected="true" tabindex="0">接続</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-filter" data-tab="filter" aria-controls="panel-filter" aria-selected="false" tabindex="-1">フィルタ</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-comment" data-tab="comment" aria-controls="panel-comment" aria-selected="false" tabindex="-1">コメント</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-gift" data-tab="gift" aria-controls="panel-gift" aria-selected="false" tabindex="-1">ギフト</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-events" data-tab="events" aria-controls="panel-events" aria-selected="false" tabindex="-1">イベント</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-look" data-tab="look" aria-controls="panel-look" aria-selected="false" tabindex="-1">配信の見た目</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-tts" data-tab="tts" aria-controls="panel-tts" aria-selected="false" tabindex="-1">読み上げ</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-app" data-tab="app" aria-controls="panel-app" aria-selected="false" tabindex="-1">アプリ</button>
+      </nav>
+
+      <main class="panel">
+        <section class="tab is-active" role="tabpanel" id="panel-connect" aria-labelledby="tab-connect" data-tab-panel="connect">
+          <div class="card">
+            <h2>はじめて使うとき</h2>
+            <ol class="guide__steps">
+              <li>下に自分の TikTok ID を入れる（先頭の @ は不要）</li>
+              <li>画面上の <strong>接続</strong> を押す</li>
+              <li>出てきたアイコンと名前が自分か確認して、この人で接続する</li>
+              <li>いつものように TikTok で配信を開始する</li>
+            </ol>
+            <p class="hint">コメントを自分で見るだけなら、これで終わりです。視聴者の画面にもコメント列を出すときは、その下の URL をコピーします。</p>
+          </div>
+          <div class="card">
+            <h2>TikTok ID</h2>
+            <label class="field">
+              <span>自分の ID（@なし）</span>
+              <input id="unique-id" type="text" autocomplete="off" placeholder="例: your_id" />
+            </label>
+            <p class="hint">プロフィールの @ の後ろです。接続の前に、アイコンと名前で本人か確認します。他の配信ツールと同時に起動しても大丈夫です。</p>
+          </div>
+          <div class="card">
+            <h2>視聴者の画面にコメントを乗せる</h2>
+            <p class="hint">TikTok LIVE Studio で <strong>ソース追加 → リンク</strong> を選び、下のアドレスを貼ってください。</p>
+            <div class="url-block">
+              <p class="url-line" id="overlay-url"></p>
+              <button class="btn" id="btn-copy-url" type="button">LIVE Studio用をコピー</button>
+            </div>
+            <p class="hint">「正しいURLを入力してください」と出るときは、127.0.0.1 を手打ちしていないか確認してください。上のコピーを使います。</p>
+            <h3>OBS</h3>
+            <p class="hint">OBS のブラウザソースに下のアドレスを貼ってください。自分の耳に二重で聞こえるときは、このソースの音声モニタリングをオフにしてください。</p>
+            <div class="url-block">
+              <p class="url-line" id="overlay-local-url"></p>
+              <button class="btn" id="btn-copy-obs-url" type="button">OBS用をコピー</button>
+            </div>
+            <h3>別のURL</h3>
+            <p class="hint">LIVE Studio で上のアドレスが通らないときだけ使います。</p>
+            <div class="url-block url-block--muted">
+              <p class="url-line" id="overlay-studio-url"></p>
+              <button class="btn btn--ghost" id="btn-copy-studio-url" type="button">別のURLをコピー</button>
+            </div>
+            <label class="field">
+              <span>ポート</span>
+              <input id="overlay-port" type="number" min="1024" max="65535" />
+            </label>
+            <p class="hint">ポートを変えると、上の URL も変わります。配信ソフトに貼り直してください。</p>
+            <p class="hint" id="overlay-status-line"></p>
+          </div>
+          <div class="card">
+            <h2>起動</h2>
+            <label class="check">
+              <input id="auto-connect" type="checkbox" />
+              <span>起動時に配信へ接続する</span>
+            </label>
+            <p class="hint">TikTok ID が入っているとき、起動後に接続を始めます。前回確認した ID のまま使います。ID を変えたあとは、もう一度接続して相手を確認してください。</p>
+          </div>
+        </section>
+
+        <section class="tab" role="tabpanel" id="panel-filter" aria-labelledby="tab-filter" data-tab-panel="filter" hidden>
+          <div class="card">
+            <h2>NGワード</h2>
+            <label class="field">
+              <span>改行区切り。表示も読み上げもしません</span>
+              <textarea id="ng-words"></textarea>
+            </label>
+            <p class="hint">コメント本文や表示テキストに含まれていると、そのイベントを落とします。</p>
+          </div>
+          <div class="card">
+            <h2>ブロックするユーザー</h2>
+            <label class="field">
+              <span>改行区切り。TikTok ID（@なし）か、コメントに出る名前</span>
+              <textarea id="blocked-users" autocomplete="off" spellcheck="false"></textarea>
+            </label>
+            <p class="hint">その人のコメント・ギフトなどは表示も読み上げもしません。コメント画面の右クリックからも追加できます。</p>
+          </div>
+          <div class="card">
+            <h2>ミュートするユーザー</h2>
+            <label class="field">
+              <span>改行区切り。TikTok ID（@なし）か、コメントに出る名前</span>
+              <textarea id="muted-users" autocomplete="off" spellcheck="false"></textarea>
+            </label>
+            <p class="hint">読み上げしません。コメント画面と配信ソースには出ます。NGワードは文言、ブロックは表示ごと、ミュートは読み上げだけです。</p>
+          </div>
+        </section>
+
+        <section class="tab" role="tabpanel" id="panel-app" aria-labelledby="tab-app" data-tab-panel="app" hidden>
+          <div class="card">
+            <h2>ウィンドウ</h2>
+            <label class="check">
+              <input id="always-on-top" type="checkbox" />
+              <span>常に手前に置く</span>
+            </label>
+            <p class="hint">配信画面やブラウザの上に、コメント画面を重ねられます。コメント画面の「手前」と同じです。</p>
+            <label class="check">
+              <input id="compact-viewer" type="checkbox" />
+              <span>コンパクトなコメント窓</span>
+            </label>
+            <p class="hint">細い窓にしてコメント画面を出します。サブモニターや配信の横に置くときに使います。</p>
+            <label class="check">
+              <input id="minimize-tray" type="checkbox" />
+              <span>×ボタンでトレイに最小化</span>
+            </label>
+            <p class="hint">オフのときは × で終了します。配信中だけトレイに残したいときにオンにしてください。</p>
+            <label class="field">
+              <span>アプリの明るさ</span>
+              <select id="ui-theme">
+                <option value="system">PC標準</option>
+                <option value="dark">ダーク</option>
+                <option value="light">ライト</option>
+              </select>
+            </label>
+            <p class="hint">Windows のライト／ダークに合わせます。コメント画面と設定画面の色です。配信ソースの見た目は配信の見た目タブで変えます。</p>
+          </div>
+          <div class="card">
+            <h2 id="hotkey-title">ショートカット</h2>
+            <div class="field-grid">
+              <label class="field">
+                <span id="hotkey-skip-label">読み上げを飛ばすキー</span>
+                <div class="hotkey-row">
+                  <button class="hotkey-btn" id="hotkey-skip-speech" type="button">F8</button>
+                  <button class="btn btn--ghost hotkey-unset" id="hotkey-skip-unset" type="button">消す</button>
+                </div>
+              </label>
+              <label class="field">
+                <span id="hotkey-clear-label">読み上げの待ちを捨てるキー</span>
+                <div class="hotkey-row">
+                  <button class="hotkey-btn" id="hotkey-clear-speech" type="button">F9</button>
+                  <button class="btn btn--ghost hotkey-unset" id="hotkey-clear-unset" type="button">消す</button>
+                </div>
+              </label>
+              <label class="field">
+                <span id="hotkey-clear-pin-label">固定枠の待ちを捨てるキー</span>
+                <div class="hotkey-row">
+                  <button class="hotkey-btn" id="hotkey-clear-pin" type="button">F10</button>
+                  <button class="btn btn--ghost hotkey-unset" id="hotkey-clear-pin-unset" type="button">消す</button>
+                </div>
+              </label>
+            </div>
+            <p class="hint" id="hotkey-hint">ボタンを押してから、使いたいキーを押します。入力欄にいるときは効きません。</p>
+          </div>
+          <div class="card">
+            <h2>コメントログ</h2>
+            <p class="hint">アプリを開いてから流れた行をテキストに書き出せます。中身はタブ区切りです。</p>
+            <div class="row">
+              <button class="btn btn--ghost" id="btn-viewer-save-log" type="button">ログを保存</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>設定</h2>
+            <p class="hint" id="transfer-config-hint">ファイルに書き出して、別のPCや再インストール後に戻せます。VOICEVOXの場所は別のPCだと直してください。</p>
+            <div class="row">
+              <button class="btn btn--ghost" id="btn-export-config" type="button">設定を書き出す</button>
+              <button class="btn btn--ghost" id="btn-import-config" type="button">設定を読み込む</button>
+            </div>
+            <p class="hint" id="reset-config-hint">文言・見た目・読み上げ・フィルタなどを最初の状態に戻します。TikTok ID と配信画面用のポートは残します。</p>
+            <div class="row">
+              <button class="btn btn--ghost" id="btn-reset-config" type="button">設定を初期化する</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab" role="tabpanel" id="panel-comment" aria-labelledby="tab-comment" data-tab-panel="comment" hidden>
+          <div class="card">
+            <div class="event-head">
+              <h2>文言</h2>
+              <label class="check"><input id="display-comment" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-comment" type="checkbox" /> 読み上げ</label>
+            </div>
+            <label class="field">
+              <span>表示テンプレート</span>
+              <textarea id="comment-display"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げテンプレート（半角 . は拍）</span>
+              <textarea id="comment-speech"></textarea>
+            </label>
+            <p class="hint">{user} と {comment} が使えます。例: {user}.{comment}</p>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1">テスト送信</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>印</h2>
+            <div class="fan-level-look" id="fan-level-look">
+              <p class="fan-level-look__title" id="fan-level-look-label">メンレベの色</p>
+              <p class="hint" id="fan-level-look-hint">このレベ以上で印の色が変わります。印はファンクラブ名＋レベ、取れないときはメンレベ＋数字です。</p>
+              <div class="fan-level-look__rows" id="fan-level-look-rows"></div>
+            </div>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-fan="1" data-test-fan-level="1">メンレベ1</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-fan="1" data-test-fan-level="10">メンレベ10</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-fan="1" data-test-fan-level="15">メンレベ15</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-fan="1" data-test-fan-level="20">メンレベ20</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-fan="1" data-test-fan-level="25">メンレベ25</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-super="1">スーパーファン</button>
+            </div>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-fan="1" data-test-fan-level="4" data-test-super="1">メンレベ4+スーパーファン</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-fan="1" data-test-fan-status="2" data-test-fan-level="5">停止メンレベ5</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-mod="1">モデ</button>
+              <button class="btn btn--ghost" type="button" data-test-event="comment" data-test-count="1" data-test-anchor="1">配信者</button>
+            </div>
+          </div>
+          <div class="card">
+            <h2>読み上げ条件</h2>
+            <div class="option-stack">
+              <label class="check check--wrap">
+                <input id="skip-mention-speech" type="checkbox" />
+                <span>@から始まるコメントは読み上げない</span>
+              </label>
+              <p class="hint">TikTok のメンション（@ユーザー名）は表示だけして、読み上げを飛ばします。</p>
+              <label class="check check--wrap">
+                <input id="skip-url-speech" type="checkbox" />
+                <span>URLは読み上げない</span>
+              </label>
+              <p class="hint">表示はそのままです。http・www・discord.gg のリンクは読みません。リンクだけのときは名前も読みません。</p>
+              <label class="check check--wrap">
+                <input id="skip-anchor-speech" type="checkbox" />
+                <span>配信者のコメントは読み上げない</span>
+              </label>
+              <p class="hint">配信者本人のコメントは表示だけします。ギフトやフォローはそのままです。</p>
+              <label class="check check--wrap">
+                <input id="skip-emote-speech" type="checkbox" />
+                <span>絵文字だけのコメントは読み上げない</span>
+              </label>
+              <p class="hint">スタンプや絵文字だけのときは、表示はそのまま、読み上げを飛ばします。</p>
+              <label class="check check--wrap">
+                <input id="speak-fan-sub-only" type="checkbox" />
+                <span id="speak-fan-sub-only-label">メンレベとスーパーファンのコメントだけ読む</span>
+              </label>
+              <p class="hint" id="speak-fan-sub-only-hint">オフのときは全員読みます。オンのときだけ下の条件が効きます。ギフトやフォローはそのままです。</p>
+              <div class="option-extra" id="speak-fan-sub-options">
+                <label class="compact-field">
+                  <span id="speak-fan-min-level-label">メンレベは何以上を読む</span>
+                  <input id="speak-fan-min-level" type="number" min="1" max="99" value="1" />
+                </label>
+                <label class="check check--wrap">
+                  <input id="speak-subscriber-comments" type="checkbox" checked />
+                  <span id="speak-subscriber-comments-label">スーパーファンは読む</span>
+                </label>
+                <p class="hint" id="speak-subscriber-comments-hint">メンレベ未加入でもスーパーファンなら読みます。</p>
+              </div>
+              <label class="check check--wrap">
+                <input id="skip-repeat-speech" type="checkbox" />
+                <span id="skip-repeat-speech-label">同じ人の連投は読み上げない</span>
+              </label>
+              <p class="hint" id="skip-repeat-speech-hint">短い間隔で同じ人が続けてコメントしたとき、表示はして読み上げだけ飛ばします。</p>
+              <div class="option-extra" id="repeat-speech-sec-field">
+                <label class="compact-field">
+                  <span id="repeat-speech-sec-label">連投とみなす間隔</span>
+                  <input id="repeat-speech-sec" type="number" min="2" max="30" value="6" />
+                  <span class="compact-field__unit">秒</span>
+                </label>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab" role="tabpanel" id="panel-gift" aria-labelledby="tab-gift" data-tab-panel="gift" hidden>
+          <div class="card">
+            <div class="event-head">
+              <h2>ギフト</h2>
+              <label class="check"><input id="display-gift" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-gift" type="checkbox" /> 読み上げ</label>
+            </div>
+            <p class="hint">{count} は1個のとき空、2個以上は表示が ×100、読み上げが 100こ になります。配信中は投げられたギフトの TikTok アイコンが出ます。</p>
+            <label class="field">
+              <span>表示テンプレート</span>
+              <textarea id="gift-display"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げテンプレート</span>
+              <textarea id="gift-speech"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げする最低ダイヤ</span>
+              <input id="min-gift-diamonds" type="number" min="0" />
+            </label>
+            <p class="hint">0 なら安いギフトも読みます。表示はダイヤに関係なく出ます。</p>
+            <label class="field">
+              <span>テストするギフト</span>
+              <div class="control-row control-row--center">
+                <select id="test-gift"></select>
+                <img id="test-gift-icon" class="gift-test-icon is-hidden" alt="" />
+              </div>
+            </label>
+            <p class="hint">配信前でも接続タブの TikTok ID から一覧を取れます。一度取れた一覧は保存されます。一度も配信していないと失敗することがあります。空のときは仮のバラになります。</p>
+            <div class="row">
+              <button class="btn btn--ghost" id="btn-reload-gifts" type="button">一覧を再取得</button>
+              <button class="btn btn--ghost" type="button" data-test-event="gift" data-test-count="1">テスト ×1</button>
+              <button class="btn btn--ghost" type="button" data-test-event="gift" data-test-count="100">テスト ×100</button>
+            </div>
+            <p class="hint">コメント画面のギフト色はダイヤ数で変わります。下で帯を確認できます。</p>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="gift" data-test-count="1" data-test-diamonds="1">ダイヤ1</button>
+              <button class="btn btn--ghost" type="button" data-test-event="gift" data-test-count="1" data-test-diamonds="30">ダイヤ30</button>
+              <button class="btn btn--ghost" type="button" data-test-event="gift" data-test-count="1" data-test-diamonds="100">ダイヤ100</button>
+              <button class="btn btn--ghost" type="button" data-test-event="gift" data-test-count="1" data-test-diamonds="800">ダイヤ800</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab" role="tabpanel" id="panel-events" aria-labelledby="tab-events" data-tab-panel="events" hidden>
+          <div class="subtabs" id="event-sections" role="tablist" aria-label="イベントの種類">
+            <button class="subtabs__btn is-active" type="button" role="tab" data-event-section-btn="follow" aria-selected="true">フォロー</button>
+            <button class="subtabs__btn" type="button" role="tab" data-event-section-btn="share" aria-selected="false">シェア</button>
+            <button class="subtabs__btn" type="button" role="tab" data-event-section-btn="superFan" aria-selected="false">スパファン</button>
+            <button class="subtabs__btn" type="button" role="tab" data-event-section-btn="envelope" aria-selected="false">宝箱</button>
+            <button class="subtabs__btn" type="button" role="tab" data-event-section-btn="portal" aria-selected="false">ポータル</button>
+            <button class="subtabs__btn" type="button" role="tab" data-event-section-btn="like" aria-selected="false">いいね</button>
+            <button class="subtabs__btn" type="button" role="tab" data-event-section-btn="member" aria-selected="false">入室</button>
+          </div>
+          <div class="card" data-event-section="follow">
+            <div class="event-head">
+              <h2>フォロー</h2>
+              <label class="check"><input id="display-follow" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-follow" type="checkbox" /> 読み上げ</label>
+            </div>
+            <label class="field">
+              <span>表示テンプレート</span>
+              <textarea id="follow-display"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げテンプレート</span>
+              <textarea id="follow-speech"></textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="follow" data-test-count="1">テスト送信</button>
+            </div>
+          </div>
+          <div class="card" data-event-section="share" hidden>
+            <div class="event-head">
+              <h2>シェア</h2>
+              <label class="check"><input id="display-share" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-share" type="checkbox" /> 読み上げ</label>
+            </div>
+            <label class="field">
+              <span>表示テンプレート</span>
+              <textarea id="share-display"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げテンプレート</span>
+              <textarea id="share-speech"></textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="share" data-test-count="1">テスト送信</button>
+            </div>
+          </div>
+          <div class="card" data-event-section="superFan" hidden>
+            <div class="event-head">
+              <h2>スーパーファン</h2>
+              <label class="check"><input id="display-superFan" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-superFan" type="checkbox" /> 読み上げ</label>
+            </div>
+            <p class="hint">配信の月額加入とスーパーファンボックスです。同じ人の加入が短時間に二重で来たときは1件にします。</p>
+            <label class="field">
+              <span>加入の表示テンプレート</span>
+              <textarea id="superfan-display"></textarea>
+            </label>
+            <label class="field">
+              <span>加入の読み上げテンプレート</span>
+              <textarea id="superfan-speech"></textarea>
+            </label>
+            <label class="field">
+              <span>ボックスの表示テンプレート</span>
+              <textarea id="superfan-box-display"></textarea>
+            </label>
+            <label class="field">
+              <span>ボックスの読み上げテンプレート</span>
+              <textarea id="superfan-box-speech"></textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="superFan" data-test-count="1">加入をテスト</button>
+              <button class="btn btn--ghost" type="button" data-test-event="superFan" data-test-count="1" data-test-box="1" data-test-diamonds="100">ボックスをテスト</button>
+            </div>
+          </div>
+          <div class="card" data-event-section="envelope" hidden>
+            <div class="event-head">
+              <h2>宝箱</h2>
+              <label class="check"><input id="display-envelope" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-envelope" type="checkbox" /> 読み上げ</label>
+            </div>
+            <p class="hint">視聴者が投げた宝箱です。お楽しみ袋はギフトとして出ます。</p>
+            <label class="field">
+              <span>表示テンプレート</span>
+              <textarea id="envelope-display"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げテンプレート</span>
+              <textarea id="envelope-speech"></textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="envelope" data-test-count="1">テスト送信</button>
+            </div>
+          </div>
+          <div class="card" data-event-section="portal" hidden>
+            <div class="event-head">
+              <h2>ポータル</h2>
+              <label class="check"><input id="display-portal" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-portal" type="checkbox" /> 読み上げ</label>
+            </div>
+            <p class="hint">視聴者が投げたポータルです。経由入室は入室タブです。</p>
+            <label class="field">
+              <span>表示テンプレート</span>
+              <textarea id="portal-display"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げテンプレート</span>
+              <textarea id="portal-speech"></textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="portal" data-test-count="1">テスト送信</button>
+            </div>
+          </div>
+          <div class="card" data-event-section="like" hidden>
+            <div class="event-head">
+              <h2>いいね</h2>
+              <label class="check"><input id="display-like" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-like" type="checkbox" /> 読み上げ</label>
+            </div>
+            <p class="hint">視聴者ごとに累計し、指定した数の区切りをまたいだときだけ出します。例: 100 なら 100・200・300…</p>
+            <label class="field">
+              <span>表示・読み上げするいいね数（区切り）</span>
+              <input id="like-milestone" type="number" min="1" />
+            </label>
+            <label class="field">
+              <span>表示テンプレート</span>
+              <textarea id="like-display"></textarea>
+            </label>
+            <label class="field">
+              <span>読み上げテンプレート</span>
+              <textarea id="like-speech"></textarea>
+            </label>
+            <p class="hint">{user} と {likes} が使えます。{likes} はその時点の累計です。</p>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="like" data-test-count="milestone">テスト送信</button>
+            </div>
+          </div>
+          <div class="card" data-event-section="member" hidden>
+            <div class="event-head">
+              <h2>入室</h2>
+              <label class="check"><input id="display-member" type="checkbox" /> <span data-event-display-label>配信ソース</span></label>
+              <label class="check"><input id="speak-member" type="checkbox" /> 読み上げ</label>
+            </div>
+            <p class="hint">通常入室とポータル経由で文言を分けます。表示と読み上げはこの入室の設定です。人数が多い配信ではオフ推奨です。</p>
+            <label class="field">
+              <span>通常の表示テンプレート</span>
+              <textarea id="member-display"></textarea>
+            </label>
+            <label class="field">
+              <span>通常の読み上げテンプレート</span>
+              <textarea id="member-speech"></textarea>
+            </label>
+            <label class="field">
+              <span>ポータル経由の表示テンプレート</span>
+              <textarea id="portal-join-display"></textarea>
+            </label>
+            <label class="field">
+              <span>ポータル経由の読み上げテンプレート</span>
+              <textarea id="portal-join-speech"></textarea>
+            </label>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" data-test-event="member" data-test-count="1">通常をテスト</button>
+              <button class="btn btn--ghost" type="button" data-test-event="member" data-test-count="1" data-test-portal-join="1">ポータルをテスト</button>
+            </div>
+          </div>
+        </section>
+
+        <section class="tab" role="tabpanel" id="panel-look" aria-labelledby="tab-look" data-tab-panel="look" hidden>
+          <p class="hint" id="look-tab-hint">ここは視聴者の画面（配信ソース）の見た目です。コメント画面の文字サイズや欄は、コメント画面の上で変えます。</p>
+          <div class="row">
+            <button class="btn btn--ghost" id="btn-look-overlay-samples" type="button">配信ソースにサンプル</button>
+            <button class="btn btn--ghost" id="btn-look-overlay-clear" type="button">配信ソースを消す</button>
+          </div>
+          <div class="card">
+            <h2>かんたん見た目</h2>
+            <p class="hint">プリセットを選んでから、スライダーで微調整できます。このタブは少し待つと配信ソースにも保存されます。</p>
+            <div class="preset-grid">
+              <button class="preset-btn" type="button" data-look-preset="dark">標準</button>
+              <button class="preset-btn" type="button" data-look-preset="light">明るい</button>
+              <button class="preset-btn" type="button" data-look-preset="minimal">文字だけ</button>
+              <button class="preset-btn" type="button" data-look-preset="neon">ネオン</button>
+            </div>
+            <div class="field-grid">
+              <label class="field">
+                <span>文字サイズ <em id="look-font-size-value">20px</em></span>
+                <input id="look-font-size" type="range" min="10" max="30" />
+              </label>
+              <label class="field">
+                <span>背景の濃さ <em id="look-bg-opacity-value">72%</em></span>
+                <input id="look-bg-opacity" type="range" min="0" max="100" />
+              </label>
+              <label class="field">
+                <span>角の丸み <em id="look-radius-value">12px</em></span>
+                <input id="look-radius" type="range" min="0" max="28" />
+              </label>
+              <label class="field">
+                <span>ギフトアイコン <em id="look-gift-size-value">40px</em></span>
+                <input id="look-gift-size" type="range" min="16" max="80" />
+              </label>
+              <label class="field" id="look-neon-hue-field" hidden>
+                <span>ネオンの色 <em id="look-neon-hue-value" class="hue-swatch"></em></span>
+                <input id="look-neon-hue" class="hue-range" type="range" min="0" max="360" value="280" />
+              </label>
+              <label class="field">
+                <span>コメントの位置</span>
+                <select id="look-align">
+                  <option value="full">横いっぱいに</option>
+                  <option value="left">左に寄せる</option>
+                  <option value="right">右に寄せる</option>
+                </select>
+              </label>
+              <label class="field">
+                <span>プレビュー背景</span>
+                <select id="look-backdrop">
+                  <option value="checker">市松（透過確認）</option>
+                  <option value="green">配信グリーン</option>
+                  <option value="magenta">マゼンタ</option>
+                  <option value="dark">暗い無地</option>
+                </select>
+              </label>
+            </div>
+            <label class="field">
+              <span>フォント</span>
+              <select id="look-font"></select>
+            </label>
+            <label class="check check--wrap">
+              <input id="look-show-avatar" type="checkbox" />
+              <span>アイコン（アバター）を出す</span>
+            </label>
+            <label class="check check--wrap">
+              <input id="hide-user-name" type="checkbox" />
+              <span>名前を出さない</span>
+            </label>
+            <p class="hint">ニックネームは配信ソースのコメント列から消えます。ギフトやフォローにも効きます。このアプリのコメント画面には名前が出ます。読み上げはテンプレートのままです。</p>
+            <label class="field">
+              <span id="look-motion-label">動き</span>
+              <select id="look-motion"></select>
+            </label>
+            <div class="field">
+              <span id="look-motion-speed-label">速さ</span>
+              <div class="mode-switch look-speed" id="look-motion-speed" role="group" aria-labelledby="look-motion-speed-label">
+                <button class="mode-switch__btn" type="button" data-motion-speed="1">とても遅い</button>
+                <button class="mode-switch__btn" type="button" data-motion-speed="2">遅い</button>
+                <button class="mode-switch__btn is-active" type="button" data-motion-speed="3" aria-pressed="true">ふつう</button>
+                <button class="mode-switch__btn" type="button" data-motion-speed="4">速い</button>
+                <button class="mode-switch__btn" type="button" data-motion-speed="5">とても速い</button>
+              </div>
+            </div>
+            <button class="btn btn--ghost" id="btn-look-motion-replay" type="button">動きを見る</button>
+            <p class="hint" id="look-motion-hint">コメントが出るときと消えるときの動きです。次に出る行から効きます。プレビューは選ぶと再生されます。</p>
+            <input id="look-theme" type="hidden" />
+          </div>
+          <div class="card">
+            <h2 id="look-chat-title">コメント列</h2>
+            <div class="field-grid">
+              <label class="field">
+                <span>表示行数</span>
+                <input id="chat-max-rows" type="number" min="1" max="50" />
+              </label>
+              <label class="field">
+                <span>文字数上限</span>
+                <input id="max-display-chars" type="number" min="10" max="400" />
+              </label>
+            </div>
+            <label class="check check--wrap">
+              <input id="chat-display-unlimited" type="checkbox" />
+              <span>時間で消えない</span>
+            </label>
+            <label class="field" id="chat-display-sec-field">
+              <span>表示時間（秒）</span>
+              <input id="chat-display-sec" type="number" min="1" max="120" />
+            </label>
+            <p class="hint">時間で消えないときは、表示行数を超えた古い行だけ消えます。長いコメントは文字数上限で切り、末尾に … を付けます。読み上げ側の上限は読み上げタブです。</p>
+            <h3 id="look-pin-title">固定枠</h3>
+            <p class="hint" id="look-pin-hint">ギフトなどはコメント列のすぐ上に1件ずつ出します。来た順です。コメント画面には出ません。</p>
+            <label class="check check--wrap">
+              <input id="look-pin-enabled" type="checkbox" checked />
+              <span id="look-pin-enabled-label">固定枠を使う</span>
+            </label>
+            <p class="hint" id="look-pin-enabled-hint">オフにすると、今までどおり全部下から流れます。</p>
+            <div id="look-pin-options" class="option-extra">
+              <label class="field">
+                <span id="look-pin-sec-label">固定枠の表示時間（秒）</span>
+                <input id="look-pin-sec" type="number" min="1" max="120" value="4" />
+              </label>
+              <label class="check check--wrap">
+                <input id="look-pin-hold" type="checkbox" />
+                <span id="look-pin-hold-label">次が無いときは出したまま</span>
+              </label>
+              <p class="hint" id="look-pin-hold-hint">オンのとき、待ちが無ければ枠を消しません。次が来たら今の秒数のあと切り替わります。</p>
+              <div class="field">
+                <span id="look-pin-types-label">固定枠に出す種類</span>
+                <div id="look-pin-types" class="pin-types"></div>
+              </div>
+              <p class="hint" id="look-pin-types-hint">オフにすると、その種類はコメントと一緒に流れます。初期はコメント以外が全部固定枠です。</p>
+              <label class="check check--wrap">
+                <input id="look-pin-preview" type="checkbox" checked />
+                <span id="look-pin-preview-label">プレビューも固定枠で見る</span>
+              </label>
+              <p class="hint" id="look-pin-preview-hint">オフにすると、プレビューだけ今までどおり全部流れます。配信ソースは常に上の設定です。</p>
+            </div>
+          </div>
+          <details class="advanced">
+            <summary>カスタム CSS（上級者向け）</summary>
+            <label class="field">
+              <span>上書き用 CSS（空ならかんたん設定のまま）</span>
+              <textarea id="overlay-css" class="css-editor" spellcheck="false" placeholder=".chat__item { background: rgb(0 0 0 / 55%); }&#10;.chat__body { font-size: 20px; }"></textarea>
+            </label>
+            <p class="hint">.chat / .chat--pin / .chat--pin .chat__item / .chat__item / .chat__body / .chat__avatar / .chat__gift / .chat__item--gift などが使えます。</p>
+          </details>
+        </section>
+
+        <section class="tab" role="tabpanel" id="panel-tts" aria-labelledby="tab-tts" data-tab-panel="tts" hidden>
+          <div class="card">
+            <h2>読み上げエンジン</h2>
+            <label class="field">
+              <span>エンジン</span>
+              <select id="tts-engine">
+                <option value="windows">Windows 内蔵TTS</option>
+                <option value="voicevox">VOICEVOX</option>
+              </select>
+            </label>
+            <div id="voicevox-settings" class="setting-block is-hidden">
+              <p class="hint">VOICEVOX 本体のインストールが必要です。場所が空ならよくあるインストール先を探します。</p>
+              <label class="field">
+                <span>VOICEVOX の場所</span>
+                <div class="control-row">
+                  <input id="voicevox-exe" class="path-input" type="text" autocomplete="off" spellcheck="false" />
+                  <button class="btn btn--ghost" id="btn-pick-voicevox" type="button">参照</button>
+                </div>
+              </label>
+              <div class="row">
+                <button class="btn" id="btn-launch-voicevox" type="button">VOICEVOXを起動</button>
+              </div>
+              <div class="option-stack">
+                <label class="check check--wrap">
+                  <input id="voicevox-launch-on-start" type="checkbox" />
+                  <span>コメ読みちゃん起動時にVOICEVOXも起動する</span>
+                </label>
+                <p class="hint">このアプリを終了しても VOICEVOX は閉じません。</p>
+              </div>
+              <details class="advanced">
+                <summary>接続先（通常は変更不要）</summary>
+                <label class="field">
+                  <span>VOICEVOX ホスト</span>
+                  <input id="voicevox-host" type="text" autocomplete="off" />
+                </label>
+                <label class="field">
+                  <span>VOICEVOX ポート</span>
+                  <input id="voicevox-port" type="number" min="1024" max="65535" />
+                </label>
+                <p class="hint">待ち受けは 127.0.0.1 のみです。</p>
+              </details>
+            </div>
+          </div>
+          <div class="card">
+            <h2>声</h2>
+            <label class="field">
+              <span>声</span>
+              <div class="control-row">
+                <select id="tts-voice"></select>
+                <button class="btn" id="btn-preview-tts" type="button">読み上げテスト</button>
+                <button class="btn btn--ghost" id="btn-reload-voices" type="button">声を再取得</button>
+              </div>
+            </label>
+            <p class="hint">VOICEVOX を起動したあとや、エンジンを切り替えたあとに声が出ないときは再取得してください。</p>
+            <div class="field-grid">
+              <label class="field">
+                <span>速度（-10〜10）</span>
+                <input id="tts-rate" type="number" min="-10" max="10" />
+              </label>
+              <label class="field">
+                <span>音量（0〜100）</span>
+                <input id="tts-volume" type="number" min="0" max="100" />
+              </label>
+            </div>
+            <label class="field">
+              <span>読み上げテストの文言</span>
+              <textarea id="tts-test-text"></textarea>
+            </label>
+            <p class="hint">声の横の読み上げテストで、この文言をテンプレートなしでそのまま読みます。速度は VOICEVOX の話速にも使います。詰まっているときは画面上の「読み上げを飛ばす」「読み上げの待ちを捨てる」を使います。</p>
+            <label class="field">
+              <span>読み上げの文字数上限</span>
+              <input id="max-speech-chars" type="number" min="10" max="400" />
+            </label>
+            <p class="hint">超えた分は切って、末尾に … を付けて読みます。表示の上限とは別です。</p>
+            <label class="field">
+              <span>同時に待つ読み上げの上限</span>
+              <input id="max-queue" type="number" min="1" max="100" />
+            </label>
+            <p class="hint">上限を超えたコメントは読み上げません。捨てたときは画面下に知らせます。</p>
+            <details class="advanced">
+              <summary>拍の長さ（読み上げテンプレートの半角ピリオド）</summary>
+              <label class="field">
+                <span>1拍の長さ（ミリ秒）</span>
+                <input id="beat-ms" type="number" min="50" max="2000" />
+              </label>
+            </details>
+          </div>
+          <div class="card is-hidden" id="voicevox-credit-card">
+            <h2>VOICEVOX クレジット</h2>
+            <p class="hint">使うキャラの利用規約でクレジットが必要な場合は、配信の概要欄やパネルに貼ってください。アプリ内だけだと足りません。</p>
+            <label class="field">
+              <span>概要欄用テキスト</span>
+              <textarea id="tts-credit-text" readonly></textarea>
+            </label>
+            <div class="row">
+              <button class="btn" id="btn-copy-credit" type="button">クレジットをコピー</button>
+            </div>
+          </div>
+        </section>
+      </main>
+      </div>
+
+      <div
+        class="workspace__split"
+        id="workspace-split"
+        role="separator"
+        aria-orientation="vertical"
+        aria-label="設定とプレビューの幅"
+        tabindex="0"
+      ></div>
+
+      <aside class="workspace__preview">
+        <div class="dock-preview__bar">
+          <div class="dock-preview__label">プレビュー</div>
+          <label class="viewer-font" id="preview-font">
+            <span class="viewer-font__label">文字 <em id="preview-font-size-value">20px</em></span>
+            <input id="preview-font-size" type="range" min="10" max="30" value="20" />
+          </label>
+        </div>
+        <div class="preview-frame">
+          <iframe
+            id="overlay-preview"
+            title="オーバーレイプレビュー"
+            allow="autoplay"
+            src="about:blank"
+          ></iframe>
+        </div>
+        <p class="hint">市松は透過の確認用です。配信ソースの背景は透明のままです。</p>
+      </aside>
+      </div>
+      </div>
+
+      <footer class="footer">
+        <p class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></p>
+      </footer>
+    </div>
+    <div class="modal" id="connect-confirm" hidden>
+      <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="connect-confirm-title">
+        <h2 id="connect-confirm-title">このアカウントに接続しますか？</h2>
+        <div class="user-card">
+          <span class="user-card__fallback" id="connect-confirm-fallback" aria-hidden="true"></span>
+          <img class="user-card__avatar is-hidden" id="connect-confirm-avatar" alt="" referrerpolicy="no-referrer" />
+          <div>
+            <p class="user-card__name" id="connect-confirm-name"></p>
+            <p class="user-card__id" id="connect-confirm-id"></p>
+          </div>
+        </div>
+        <p class="hint" id="connect-confirm-hint">違う人ならやめて、TikTok ID を直してください。</p>
+        <div class="row">
+          <button class="btn" id="btn-connect-confirm" type="button">この人で接続</button>
+          <button class="btn btn--ghost" id="btn-connect-cancel" type="button">やめる</button>
+        </div>
+      </div>
+    </div>
+    <script src="js/hotkeys.js"></script>
+    <script src="js/fan-level-look.js"></script>
+    <script src="js/gift-tier.js"></script>
+    <script src="js/settings-layout.js"></script>
+    <script src="js/viewer-layout.js"></script>
+    <script src="js/viewer-constants.js"></script>
+    <script src="js/renderer-copy.js"></script>
+    <script src="js/overlay-motion.js"></script>
+    <script src="js/overlay-pin.js"></script>
+    <script src="js/viewer-dock-ui.js"></script>
+    <script src="js/dom.js"></script>
+    <script src="js/speech-hotkey-ui.js"></script>
+    <script src="js/user-lists.js"></script>
+    <script src="js/toast.js"></script>
+    <script src="js/test-gifts.js"></script>
+    <script src="js/look-ui.js"></script>
+    <script src="js/viewer-items.js"></script>
+    <script src="js/viewer-dock-view.js"></script>
+    <script src="js/viewer-filter-ui.js"></script>
+    <script src="js/viewer-user-menu.js"></script>
+    <script src="js/settings-form.js"></script>
+    <script src="js/layout-ui.js"></script>
+    <script src="js/settings-nav.js"></script>
+    <script src="js/viewer-status-line.js"></script>
+    <script src="js/live-duration-ui.js"></script>
+    <script src="js/viewer-room-stats.js"></script>
+    <script src="js/connect-ui.js"></script>
+    <script src="js/titlebar-ui.js"></script>
+    <script src="js/main.js"></script>
+  </body>
+</html>
