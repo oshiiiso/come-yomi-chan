@@ -14,10 +14,7 @@ test('参照中のアラート画像だけ集める', () => {
   assert.equal(keep.size, 1);
 });
 
-test('初期（なし）やテンプレだけのときは参照なし', () => {
+test('テンプレだけのときは参照なし', () => {
   const keep = collectReferencedAlertMediaFiles(defaultEventAlertMediaMap());
   assert.equal(keep.size, 0);
-  const withTemplate = defaultEventAlertMediaMap();
-  withTemplate.follow = { kind: 'template', id: 'follow' };
-  assert.equal(collectReferencedAlertMediaFiles(withTemplate).size, 0);
 });

@@ -57,21 +57,21 @@ test('メディアの正規化', () => {
   });
   assert.deepEqual(media.gift, { kind: 'file', fileName: 'spark.gif' });
   assert.deepEqual(media.follow, { kind: 'none' });
-  assert.deepEqual(media.share, { kind: 'none' });
-  assert.deepEqual(media.like, { kind: 'none' });
+  assert.deepEqual(media.share, { kind: 'template', id: 'share' });
+  assert.deepEqual(media.like, { kind: 'template', id: 'like' });
 });
 
-test('アラート画像の初期値はなし', () => {
+test('アラート画像の初期値はテンプレ', () => {
   const media = defaultEventAlertMediaMap();
-  assert.deepEqual(media.gift, { kind: 'none' });
-  assert.deepEqual(media.follow, { kind: 'none' });
+  assert.deepEqual(media.gift, { kind: 'template', id: 'gift' });
+  assert.deepEqual(media.follow, { kind: 'template', id: 'follow' });
   assert.equal(
     shouldEmitEventAlert({
       type: 'gift',
       enabled: { ...defaultEventAlertEnabledFromSpeak(DEFAULT_EVENT_TOGGLES), gift: true },
       media,
     }),
-    false,
+    true,
   );
 });
 
@@ -139,9 +139,10 @@ test('アラート表示の判定', () => {
   );
 });
 
-test('画像なしのときはオンでもアラートを出さない', () => {
+test('画像なし（none）のときはオンでもアラートを出さない', () => {
   const enabled = { ...defaultEventAlertEnabledFromSpeak(DEFAULT_EVENT_TOGGLES), follow: true };
   const media = defaultEventAlertMediaMap();
+  media.follow = { kind: 'none' };
   assert.equal(
     shouldEmitEventAlert({ type: 'follow', enabled, media }),
     false,

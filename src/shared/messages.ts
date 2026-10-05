@@ -76,13 +76,13 @@ export const MSG = {
     invalidEventAlertSec: 'イベントアラートの表示時間は 1〜120 秒で指定してください',
     eventAlertLabel: 'イベントアラート',
     eventAlertHint:
-      '別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。',
+      '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。',
     eventAlertMediaAuto: '自動',
     eventAlertMediaTemplate: 'テンプレ',
     eventAlertMediaFile: 'ファイル',
     eventAlertMediaNone: 'なし',
     eventAlertMediaAutoHint:
-      '初期は画像なしです。画像を選ぶとアラートに出ます。× でなしに戻せます。画像がないときはオンでもソースには何も出ません。',
+      '初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。',
     eventAlertTemplateNames: {
       gift: 'ギフト用テンプレ',
       follow: 'フォロー用テンプレ',
@@ -94,12 +94,12 @@ export const MSG = {
       member: '入室用テンプレ',
     },
     eventAlertPickMedia: '画像を選ぶ',
-    eventAlertResetTemplate: 'なしにする',
+    eventAlertResetTemplate: 'テンプレに戻す',
     eventAlertSecLabel: '表示時間',
     eventAlertChatUrlTitle: 'コメント列（固定枠あり）',
     eventAlertAlertsUrlTitle: 'イベントアラート',
     eventAlertAlertsUrlHint:
-      '中央に画像や GIF を出す用です。画像を選んでいない種類は、オンでも何も出ません。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+      '中央に画像や GIF を出す用です。初期は簡易テンプレです。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
     pickAlertMediaTitle: 'アラート用の画像・GIFを選ぶ',
     pickAlertMediaFilter: '画像',
     pickAlertMediaFailed: 'アラート画像の取り込みに失敗しました',

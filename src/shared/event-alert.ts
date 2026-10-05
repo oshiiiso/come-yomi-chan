@@ -46,8 +46,11 @@ export function eventAlertTemplatePath(id: EventAlertTemplateId): string {
   return `/overlay/alert-templates/${id}.svg`;
 }
 
-export function defaultAlertMediaFor(_type?: EventAlertType): AlertMediaRef {
-  return { kind: 'none' };
+export function defaultAlertMediaFor(type?: EventAlertType): AlertMediaRef {
+  if (type && isEventAlertTemplateId(type)) {
+    return { kind: 'template', id: type };
+  }
+  return { kind: 'template', id: 'gift' };
 }
 
 export function canonicalEventAlertType(type: unknown): EventAlertType | null {
@@ -86,16 +89,13 @@ export function normalizeAlertMediaRef(
     if (fileName) {
       return { kind: 'file', fileName };
     }
-    return { kind: 'none' };
+    return defaultAlertMediaFor(fallbackTemplateId);
   }
   if (record.kind === 'template') {
     if (isEventAlertTemplateId(record.id)) {
       return { kind: 'template', id: record.id };
     }
-    if (fallbackTemplateId && isEventAlertTemplateId(fallbackTemplateId)) {
-      return { kind: 'template', id: fallbackTemplateId };
-    }
-    return { kind: 'none' };
+    return defaultAlertMediaFor(fallbackTemplateId);
   }
   if (record.kind === 'auto') {
     return { kind: 'auto' };
