@@ -27,4 +27,6 @@ test('初期化は TikTok ID・ポート・窓位置だけ残す', () => {
   assert.equal(reset.ttsEngineId, DEFAULT_CONFIG.ttsEngineId);
   assert.equal(reset.overlayPinMs, DEFAULT_CONFIG.overlayPinMs);
   assert.equal(reset.clearPinHotkey, DEFAULT_CONFIG.clearPinHotkey);
+  assert.equal(reset.commentSoundVolume, DEFAULT_CONFIG.commentSoundVolume);
+  assert.equal(DEFAULT_CONFIG.commentSoundVolume, 100);
 });

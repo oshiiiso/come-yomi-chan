@@ -289,7 +289,7 @@ test('テスト送信でもサウンドモードは読まない', () => {
   assert.equal(result.shouldSpeak, false);
 });
 
-test('新着音モードのコメントは読まない', () => {
+test('サウンドモードのコメントは読まない', () => {
   const result = resolveEventSpeech({
     event: commentEvent('こんにちは'),
     config: { ...DEFAULT_CONFIG, commentNotifyMode: 'sound' },
@@ -301,7 +301,7 @@ test('新着音モードのコメントは読まない', () => {
   assert.equal(result.shouldSpeak, false);
 });
 
-test('新着音モードは forceSpeak でも読まない', () => {
+test('サウンドモードは forceSpeak でも読まない', () => {
   const result = resolveEventSpeech({
     event: commentEvent('こんにちは'),
     config: { ...DEFAULT_CONFIG, commentNotifyMode: 'sound' },

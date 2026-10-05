@@ -1,3 +1,7 @@
+import {
+  DEFAULT_GIFT_CHIME_VOLUME,
+  normalizeGiftChimeVolume,
+} from './gift-notify';
 import { DEFAULT_SOUND_REF, normalizeSoundRef, type SoundRef } from './sound-ref';
 
 export const EVENT_SOUND_TYPES = [
@@ -14,6 +18,7 @@ export type EventSoundType = (typeof EVENT_SOUND_TYPES)[number];
 export type EventNotifyMode = 'speak' | 'sound';
 export type EventNotifyModeMap = Record<EventSoundType, EventNotifyMode>;
 export type EventSoundMap = Record<EventSoundType, SoundRef>;
+export type EventSoundVolumeMap = Record<EventSoundType, number>;
 
 export const DEFAULT_EVENT_NOTIFY_MODE: EventNotifyModeMap = {
   follow: 'speak',
@@ -35,6 +40,14 @@ export function defaultEventSoundMap(): EventSoundMap {
     like: { ...DEFAULT_SOUND_REF },
     member: { ...DEFAULT_SOUND_REF },
   };
+}
+
+export function defaultEventSoundVolumeMap(): EventSoundVolumeMap {
+  const out = {} as EventSoundVolumeMap;
+  for (const type of EVENT_SOUND_TYPES) {
+    out[type] = DEFAULT_GIFT_CHIME_VOLUME;
+  }
+  return out;
 }
 
 export function isEventSoundType(type: string): type is EventSoundType {
@@ -74,4 +87,31 @@ export function normalizeEventSoundMap(raw: unknown): EventSoundMap {
     }
   }
   return out;
+}
+
+export function normalizeEventSoundVolumeMap(raw: unknown): EventSoundVolumeMap {
+  const record =
+    raw && typeof raw === 'object' && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>)
+      : {};
+  const out = defaultEventSoundVolumeMap();
+  for (const type of EVENT_SOUND_TYPES) {
+    if (Object.prototype.hasOwnProperty.call(record, type)) {
+      out[type] = normalizeGiftChimeVolume(record[type]);
+    }
+  }
+  return out;
+}
+
+export function resolveEventSoundVolume(
+  type: unknown,
+  volumes: EventSoundVolumeMap | undefined,
+): number {
+  if (typeof type === 'string' && isEventSoundType(type)) {
+    const typed = volumes?.[type];
+    if (typeof typed === 'number' && Number.isFinite(typed)) {
+      return normalizeGiftChimeVolume(typed);
+    }
+  }
+  return DEFAULT_GIFT_CHIME_VOLUME;
 }

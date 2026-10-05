@@ -9,7 +9,11 @@ import type {
   GiftChimeMatchMode,
   GiftNotifyMode,
 } from './gift-notify';
-import type { EventNotifyModeMap, EventSoundMap } from './event-notify';
+import type {
+  EventNotifyModeMap,
+  EventSoundMap,
+  EventSoundVolumeMap,
+} from './event-notify';
 import type {
   EventAlertDisplayMsMap,
   EventAlertEnabledMap,
@@ -130,9 +134,11 @@ export interface AppConfig {
   commentNotifyMode: CommentNotifyMode;
   commentSoundEnabled: boolean;
   commentSound: SoundRef;
+  commentSoundVolume: number;
   /** フォローなどイベント種別ごとの読み上げ／サウンド。 */
   eventNotifyMode: EventNotifyModeMap;
   eventSound: EventSoundMap;
+  eventSoundVolume: EventSoundVolumeMap;
   /** イベントアラート配信ソースに出すか。欠けは読み上げ（speak）と同じ。 */
   eventAlertEnabled: EventAlertEnabledMap;
   eventAlertMedia: EventAlertMediaMap;

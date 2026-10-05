@@ -46,8 +46,8 @@ export function eventAlertTemplatePath(id: EventAlertTemplateId): string {
   return `/overlay/alert-templates/${id}.svg`;
 }
 
-export function defaultAlertMediaFor(type: EventAlertType): AlertMediaRef {
-  return { kind: 'template', id: type };
+export function defaultAlertMediaFor(_type?: EventAlertType): AlertMediaRef {
+  return { kind: 'none' };
 }
 
 export function canonicalEventAlertType(type: unknown): EventAlertType | null {
@@ -74,13 +74,8 @@ export function normalizeAlertMediaRef(
   raw: unknown,
   fallbackTemplateId?: EventAlertType,
 ): AlertMediaRef {
-  const fallback =
-    fallbackTemplateId && isEventAlertTemplateId(fallbackTemplateId)
-      ? defaultAlertMediaFor(fallbackTemplateId)
-      : ({ kind: 'template', id: 'gift' } as AlertMediaRef);
-
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
-    return { ...fallback };
+    return defaultAlertMediaFor(fallbackTemplateId);
   }
   const record = raw as { kind?: unknown; fileName?: unknown; id?: unknown };
   if (record.kind === 'none') {
@@ -91,18 +86,21 @@ export function normalizeAlertMediaRef(
     if (fileName) {
       return { kind: 'file', fileName };
     }
-    return { ...fallback };
+    return { kind: 'none' };
   }
   if (record.kind === 'template') {
     if (isEventAlertTemplateId(record.id)) {
       return { kind: 'template', id: record.id };
     }
-    return { ...fallback };
+    if (fallbackTemplateId && isEventAlertTemplateId(fallbackTemplateId)) {
+      return { kind: 'template', id: fallbackTemplateId };
+    }
+    return { kind: 'none' };
   }
   if (record.kind === 'auto') {
     return { kind: 'auto' };
   }
-  return { ...fallback };
+  return defaultAlertMediaFor(fallbackTemplateId);
 }
 
 export function defaultEventAlertEnabledFromSpeak(
@@ -272,6 +270,29 @@ export function resolveEventAlertImageUrl(params: {
   }
   const url = typeof params.giftImageUrl === 'string' ? params.giftImageUrl.trim() : '';
   return url || null;
+}
+
+/** ON かつ画像が解決できるときだけアラートソースへ出す。画像なしは文言も出さない。 */
+export function shouldEmitEventAlert(params: {
+  type: OverlayEventType | string;
+  enabled: EventAlertEnabledMap | undefined;
+  media: EventAlertMediaMap | undefined;
+  giftImageUrl?: string | null;
+}): boolean {
+  if (!shouldShowEventAlert(params.type, params.enabled)) {
+    return false;
+  }
+  const key = canonicalEventAlertType(params.type);
+  if (!key) {
+    return false;
+  }
+  return (
+    resolveEventAlertImageUrl({
+      type: params.type,
+      media: params.media?.[key],
+      giftImageUrl: params.giftImageUrl,
+    }) != null
+  );
 }
 
 export type AlertDisplayPart =

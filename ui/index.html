@@ -101,7 +101,7 @@
                 <button type="button" role="menuitem" class="btn--with-hotkey" id="btn-clear-speech">読み上げの待ちを捨てる</button>
                 <button type="button" role="menuitem" class="btn--with-hotkey" id="btn-clear-pin">固定枠の待ちを捨てる</button>
                 <button type="button" role="menuitemcheckbox" aria-checked="false" class="btn--with-hotkey" id="btn-pause-speech">読み上げを一時停止</button>
-                <button type="button" role="menuitemcheckbox" aria-checked="false" class="btn--with-hotkey" id="btn-mute-comment-sound">新着音をミュート</button>
+                <button type="button" role="menuitemcheckbox" aria-checked="false" class="btn--with-hotkey" id="btn-mute-comment-sound">サウンドをミュート</button>
               </div>
             </div>
           </div>
@@ -450,7 +450,7 @@
                 </div>
               </label>
               <label class="field">
-                <span id="hotkey-mute-comment-sound-label">新着音をミュートするキー</span>
+                <span id="hotkey-mute-comment-sound-label">サウンドをミュートするキー</span>
                 <div class="hotkey-row">
                   <button class="hotkey-btn" id="hotkey-mute-comment-sound" type="button">F6</button>
                   <button class="btn btn--ghost hotkey-unset" id="hotkey-mute-comment-sound-unset" type="button">消す</button>
@@ -522,7 +522,7 @@
                 </label>
                 <label class="check">
                   <input type="radio" name="comment-notify-mode" value="sound" />
-                  <span id="comment-notify-sound-label">新着音</span>
+                  <span id="comment-notify-sound-label">サウンド</span>
                 </label>
               </div>
             </div>
@@ -539,10 +539,35 @@
             </div>
             <div id="comment-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" id="comment-sound-pick" type="button">音を選ぶ</button>
-                <button class="btn btn--ghost" id="comment-sound-reset" type="button">テンプレに戻す</button>
+                <button class="gift-chime-row__play" id="comment-sound-play" type="button" data-sound-preview="comment" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" id="comment-sound-pick" type="button">選択</button>
+                <button class="btn btn--ghost sound-template-reset" id="comment-sound-reset" type="button" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="comment-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span id="comment-sound-volume-label">音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    id="comment-sound-volume-number"
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    id="comment-sound-volume-range"
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" id="comment-sound-hint">読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。</p>
             </div>
             <div class="row">
@@ -644,10 +669,10 @@
               </div>
             </div>
             <div class="event-alert-block" data-event-alert="gift" hidden>
-              <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+              <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
               <div class="row event-alert-media-row">
                 <button class="btn btn--ghost" type="button" data-event-alert-pick="gift">画像を選ぶ</button>
-                <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="gift" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="gift" hidden aria-label="なしにする" title="なしにする">×</button>
                 <span class="hint" id="gift-alert-media-label"></span>
               </div>
               <label class="compact-field">
@@ -691,8 +716,9 @@
                 <div id="gift-chime-common-block" class="setting-block">
                   <h3>共通の音</h3>
                   <div class="row">
-                    <button class="btn btn--ghost" id="gift-chime-sound-pick" type="button">サウンドを選ぶ</button>
-                    <button class="btn btn--ghost" id="gift-chime-sound-reset" type="button">テンプレに戻す</button>
+                    <button class="gift-chime-row__play" id="gift-chime-sound-play" type="button" data-sound-preview="gift-common" aria-label="再生" title="再生"></button>
+                    <button class="btn btn--ghost" id="gift-chime-sound-pick" type="button">選択</button>
+                    <button class="btn btn--ghost sound-template-reset" id="gift-chime-sound-reset" type="button" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                     <span class="hint" id="gift-chime-sound-label">テンプレ音</span>
                   </div>
                   <label class="field gift-chime-common-volume">
@@ -880,10 +906,10 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="follow" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="follow">画像を選ぶ</button>
-                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="follow" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="follow" hidden aria-label="なしにする" title="なしにする">×</button>
                   <span class="hint" id="follow-alert-media-label"></span>
                 </div>
               <label class="compact-field">
@@ -916,10 +942,35 @@
             </div>
             <div id="follow-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" type="button" data-event-sound-pick="follow">音を選ぶ</button>
-                <button class="btn btn--ghost" type="button" data-event-sound-reset="follow">テンプレに戻す</button>
+                <button class="gift-chime-row__play" type="button" data-event-sound-play="follow" data-sound-preview="event:follow" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" type="button" data-event-sound-pick="follow">選択</button>
+                <button class="btn btn--ghost sound-template-reset" type="button" data-event-sound-reset="follow" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="follow-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span data-event-sound-volume-label>音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    data-event-sound-volume-number="follow"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    data-event-sound-volume-range="follow"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" data-event-sound-hint>読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。</p>
             </div>
             <div class="row">
@@ -936,10 +987,10 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="share" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="share">画像を選ぶ</button>
-                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="share" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="share" hidden aria-label="なしにする" title="なしにする">×</button>
                   <span class="hint" id="share-alert-media-label"></span>
                 </div>
               <label class="compact-field">
@@ -972,10 +1023,35 @@
             </div>
             <div id="share-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" type="button" data-event-sound-pick="share">音を選ぶ</button>
-                <button class="btn btn--ghost" type="button" data-event-sound-reset="share">テンプレに戻す</button>
+                <button class="gift-chime-row__play" type="button" data-event-sound-play="share" data-sound-preview="event:share" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" type="button" data-event-sound-pick="share">選択</button>
+                <button class="btn btn--ghost sound-template-reset" type="button" data-event-sound-reset="share" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="share-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span data-event-sound-volume-label>音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    data-event-sound-volume-number="share"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    data-event-sound-volume-range="share"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" data-event-sound-hint>読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。</p>
             </div>
             <div class="row">
@@ -992,10 +1068,10 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="superFan" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="superFan">画像を選ぶ</button>
-                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="superFan" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="superFan" hidden aria-label="なしにする" title="なしにする">×</button>
                   <span class="hint" id="superFan-alert-media-label"></span>
                 </div>
               <label class="compact-field">
@@ -1037,10 +1113,35 @@
             </div>
             <div id="superFan-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" type="button" data-event-sound-pick="superFan">音を選ぶ</button>
-                <button class="btn btn--ghost" type="button" data-event-sound-reset="superFan">テンプレに戻す</button>
+                <button class="gift-chime-row__play" type="button" data-event-sound-play="superFan" data-sound-preview="event:superFan" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" type="button" data-event-sound-pick="superFan">選択</button>
+                <button class="btn btn--ghost sound-template-reset" type="button" data-event-sound-reset="superFan" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="superFan-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span data-event-sound-volume-label>音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    data-event-sound-volume-number="superFan"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    data-event-sound-volume-range="superFan"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" data-event-sound-hint data-event-sound-hint-locked="1">読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。加入とボックスで共通です。</p>
             </div>
             <div class="row">
@@ -1058,10 +1159,10 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="envelope" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="envelope">画像を選ぶ</button>
-                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="envelope" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="envelope" hidden aria-label="なしにする" title="なしにする">×</button>
                   <span class="hint" id="envelope-alert-media-label"></span>
                 </div>
               <label class="compact-field">
@@ -1095,10 +1196,35 @@
             </div>
             <div id="envelope-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" type="button" data-event-sound-pick="envelope">音を選ぶ</button>
-                <button class="btn btn--ghost" type="button" data-event-sound-reset="envelope">テンプレに戻す</button>
+                <button class="gift-chime-row__play" type="button" data-event-sound-play="envelope" data-sound-preview="event:envelope" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" type="button" data-event-sound-pick="envelope">選択</button>
+                <button class="btn btn--ghost sound-template-reset" type="button" data-event-sound-reset="envelope" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="envelope-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span data-event-sound-volume-label>音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    data-event-sound-volume-number="envelope"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    data-event-sound-volume-range="envelope"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" data-event-sound-hint>読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。</p>
             </div>
             <div class="row">
@@ -1115,10 +1241,10 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="portal" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="portal">画像を選ぶ</button>
-                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="portal" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="portal" hidden aria-label="なしにする" title="なしにする">×</button>
                   <span class="hint" id="portal-alert-media-label"></span>
                 </div>
               <label class="compact-field">
@@ -1152,10 +1278,35 @@
             </div>
             <div id="portal-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" type="button" data-event-sound-pick="portal">音を選ぶ</button>
-                <button class="btn btn--ghost" type="button" data-event-sound-reset="portal">テンプレに戻す</button>
+                <button class="gift-chime-row__play" type="button" data-event-sound-play="portal" data-sound-preview="event:portal" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" type="button" data-event-sound-pick="portal">選択</button>
+                <button class="btn btn--ghost sound-template-reset" type="button" data-event-sound-reset="portal" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="portal-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span data-event-sound-volume-label>音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    data-event-sound-volume-number="portal"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    data-event-sound-volume-range="portal"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" data-event-sound-hint>読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。</p>
             </div>
             <div class="row">
@@ -1172,10 +1323,10 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="like" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="like">画像を選ぶ</button>
-                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="like" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="like" hidden aria-label="なしにする" title="なしにする">×</button>
                   <span class="hint" id="like-alert-media-label"></span>
                 </div>
               <label class="compact-field">
@@ -1214,10 +1365,35 @@
             </div>
             <div id="like-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" type="button" data-event-sound-pick="like">音を選ぶ</button>
-                <button class="btn btn--ghost" type="button" data-event-sound-reset="like">テンプレに戻す</button>
+                <button class="gift-chime-row__play" type="button" data-event-sound-play="like" data-sound-preview="event:like" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" type="button" data-event-sound-pick="like">選択</button>
+                <button class="btn btn--ghost sound-template-reset" type="button" data-event-sound-reset="like" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="like-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span data-event-sound-volume-label>音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    data-event-sound-volume-number="like"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    data-event-sound-volume-range="like"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" data-event-sound-hint>読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。</p>
             </div>
             <div class="row">
@@ -1234,10 +1410,10 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="member" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="member">画像を選ぶ</button>
-                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="member" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                  <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="member" hidden aria-label="なしにする" title="なしにする">×</button>
                   <span class="hint" id="member-alert-media-label"></span>
                 </div>
               <label class="compact-field">
@@ -1279,10 +1455,35 @@
             </div>
             <div id="member-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
-                <button class="btn btn--ghost" type="button" data-event-sound-pick="member">音を選ぶ</button>
-                <button class="btn btn--ghost" type="button" data-event-sound-reset="member">テンプレに戻す</button>
+                <button class="gift-chime-row__play" type="button" data-event-sound-play="member" data-sound-preview="event:member" aria-label="再生" title="再生"></button>
+                <button class="btn btn--ghost" type="button" data-event-sound-pick="member">選択</button>
+                <button class="btn btn--ghost sound-template-reset" type="button" data-event-sound-reset="member" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
                 <span class="hint" id="member-sound-label">テンプレ音</span>
               </div>
+              <label class="field gift-chime-common-volume">
+                <span data-event-sound-volume-label>音量</span>
+                <div class="gift-chime-row__volume">
+                  <input
+                    type="number"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    inputmode="numeric"
+                    data-event-sound-volume-number="member"
+                    aria-label="音量（数値）"
+                  />
+                  <input
+                    type="range"
+                    min="0"
+                    max="500"
+                    step="1"
+                    value="100"
+                    data-event-sound-volume-range="member"
+                    aria-label="音量"
+                  />
+                </div>
+              </label>
               <p class="hint" data-event-sound-hint data-event-sound-hint-locked="1">読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。通常とポータル経由で共通です。</p>
             </div>
             <div class="row">

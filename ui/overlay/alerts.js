@@ -231,7 +231,8 @@
     }
     const displayText = typeof raw.displayText === 'string' ? raw.displayText.trim() : '';
     const imageUrl = typeof raw.imageUrl === 'string' && raw.imageUrl ? raw.imageUrl : null;
-    if (!displayText && !imageUrl) {
+    // 画像未設定は文言だけでも出さない（設定の「なし」と同じ）
+    if (!imageUrl) {
       return;
     }
     const user =

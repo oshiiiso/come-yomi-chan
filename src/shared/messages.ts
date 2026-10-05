@@ -71,18 +71,18 @@ export const MSG = {
     invalidSpeechChars: '読み上げの文字数上限は 10〜400 にしてください',
     invalidMaxQueue: '待ちの上限は 1〜100 にしてください',
     invalidHotkeySame:
-      '飛ばす・読み上げ待ち捨て・固定枠待ち捨て・一時停止・新着音ミュートのキーは別にしてください',
+      '飛ばす・読み上げ待ち捨て・固定枠待ち捨て・一時停止・サウンドミュートのキーは別にしてください',
     invalidPinSec: '固定枠の表示時間は 1〜120 秒で指定してください',
     invalidEventAlertSec: 'イベントアラートの表示時間は 1〜120 秒で指定してください',
     eventAlertLabel: 'イベントアラート',
     eventAlertHint:
-      '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。',
+      '別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。',
     eventAlertMediaAuto: '自動',
     eventAlertMediaTemplate: 'テンプレ',
     eventAlertMediaFile: 'ファイル',
     eventAlertMediaNone: 'なし',
     eventAlertMediaAutoHint:
-      '初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、テンプレに戻すで初期化できます。',
+      '初期は画像なしです。画像を選ぶとアラートに出ます。× でなしに戻せます。画像がないときはオンでもソースには何も出ません。',
     eventAlertTemplateNames: {
       gift: 'ギフト用テンプレ',
       follow: 'フォロー用テンプレ',
@@ -94,12 +94,12 @@ export const MSG = {
       member: '入室用テンプレ',
     },
     eventAlertPickMedia: '画像を選ぶ',
-    eventAlertResetTemplate: 'テンプレに戻す',
+    eventAlertResetTemplate: 'なしにする',
     eventAlertSecLabel: '表示時間',
     eventAlertChatUrlTitle: 'コメント列（固定枠あり）',
     eventAlertAlertsUrlTitle: 'イベントアラート',
     eventAlertAlertsUrlHint:
-      '中央に画像や GIF を出す用です。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+      '中央に画像や GIF を出す用です。画像を選んでいない種類は、オンでも何も出ません。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
     pickAlertMediaTitle: 'アラート用の画像・GIFを選ぶ',
     pickAlertMediaFilter: '画像',
     pickAlertMediaFailed: 'アラート画像の取り込みに失敗しました',
@@ -144,26 +144,27 @@ export const MSG = {
     nicknameAddNeedBoth: 'TikTok ID と呼び方の両方を入れてください',
     listAlreadyExists: 'すでにあります',
     listEmpty: 'まだありません',
+    listRemoveLabel: '削除',
     soundResetTemplate: 'テンプレに戻す',
-    giftChimeSoundResetHint: '右クリックでテンプレ音に戻します',
+    giftChimeSoundResetHint: '× でテンプレに戻す',
     hotkeyTitle: 'ショートカット',
     hotkeySkipLabel: '読み上げを飛ばすキー',
     hotkeyClearLabel: '読み上げの待ちを捨てるキー',
     hotkeyClearPinLabel: '固定枠の待ちを捨てるキー',
     hotkeyPauseLabel: '読み上げを一時停止するキー',
-    hotkeyMuteCommentSoundLabel: '新着音をミュートするキー',
+    hotkeyMuteCommentSoundLabel: 'サウンドをミュートするキー',
     skipSpeechButton: '読み上げを飛ばす',
     clearSpeechButton: '読み上げの待ちを捨てる',
     clearPinButton: '固定枠の待ちを捨てる',
     pauseSpeechButton: '読み上げを一時停止',
     resumeSpeechButton: '読み上げを再開',
-    muteCommentSoundButton: '新着音をミュート',
-    unmuteCommentSoundButton: '新着音ミュート解除',
+    muteCommentSoundButton: 'サウンドをミュート',
+    unmuteCommentSoundButton: 'サウンドミュート解除',
     operationsMenu: '操作',
     speechPaused: '読み上げを一時停止しました',
     speechResumed: '読み上げを再開しました',
-    commentSoundMuted: 'コメント新着音を一時ミュートしました',
-    commentSoundUnmuted: 'コメント新着音のミュートを解除しました',
+    commentSoundMuted: 'コメントサウンドを一時ミュートしました',
+    commentSoundUnmuted: 'コメントサウンドのミュートを解除しました',
     hotkeyPress: 'キーを押す',
     hotkeyUnset: '消す',
     hotkeyHint:
@@ -428,7 +429,7 @@ export const MSG = {
       '読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。',
     commentNotifyModeLabel: 'コメントの出し方',
     commentNotifySpeak: '読み上げ',
-    commentNotifySound: '新着音',
+    commentNotifySound: 'サウンド',
     eventNotifySpeak: '読み上げ',
     eventNotifySound: 'サウンド',
     eventSoundHint:
@@ -604,6 +605,7 @@ export function getRendererCopy(): {
     nicknameAddNeedBoth: string;
     listAlreadyExists: string;
     listEmpty: string;
+    listRemoveLabel: string;
     soundResetTemplate: string;
     giftChimeSoundResetHint: string;
     hotkeyTitle: string;
@@ -901,6 +903,7 @@ export function getRendererCopy(): {
     nicknameAddNeedBoth: MSG.ui.nicknameAddNeedBoth,
     listAlreadyExists: MSG.ui.listAlreadyExists,
     listEmpty: MSG.ui.listEmpty,
+    listRemoveLabel: MSG.ui.listRemoveLabel,
     soundResetTemplate: MSG.ui.soundResetTemplate,
     giftChimeSoundResetHint: MSG.ui.giftChimeSoundResetHint,
     hotkeyTitle: MSG.ui.hotkeyTitle,

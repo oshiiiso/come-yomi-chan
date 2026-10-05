@@ -5,6 +5,7 @@ import { test } from 'node:test';
 import {
   buildAlertDisplayParts,
   defaultEventAlertEnabledFromSpeak,
+  defaultEventAlertMediaMap,
   EVENT_ALERT_QUEUE_MAX,
   normalizeEventAlertDisplayMs,
   normalizeEventAlertDisplayMsMap,
@@ -12,6 +13,7 @@ import {
   normalizeEventAlertMediaMap,
   resolveEventAlertDisplayMs,
   resolveEventAlertImageUrl,
+  shouldEmitEventAlert,
   shouldShowEventAlert,
 } from '../../shared/event-alert';
 import { DEFAULT_EVENT_TOGGLES } from '../../shared/types';
@@ -55,8 +57,22 @@ test('メディアの正規化', () => {
   });
   assert.deepEqual(media.gift, { kind: 'file', fileName: 'spark.gif' });
   assert.deepEqual(media.follow, { kind: 'none' });
-  assert.deepEqual(media.share, { kind: 'template', id: 'share' });
-  assert.deepEqual(media.like, { kind: 'template', id: 'like' });
+  assert.deepEqual(media.share, { kind: 'none' });
+  assert.deepEqual(media.like, { kind: 'none' });
+});
+
+test('アラート画像の初期値はなし', () => {
+  const media = defaultEventAlertMediaMap();
+  assert.deepEqual(media.gift, { kind: 'none' });
+  assert.deepEqual(media.follow, { kind: 'none' });
+  assert.equal(
+    shouldEmitEventAlert({
+      type: 'gift',
+      enabled: { ...defaultEventAlertEnabledFromSpeak(DEFAULT_EVENT_TOGGLES), gift: true },
+      media,
+    }),
+    false,
+  );
 });
 
 test('コメントはアラート対象外', () => {
@@ -120,6 +136,39 @@ test('アラート表示の判定', () => {
   assert.equal(
     shouldShowEventAlert('like', { ...defaultEventAlertEnabledFromSpeak(DEFAULT_EVENT_TOGGLES), like: false }),
     false,
+  );
+});
+
+test('画像なしのときはオンでもアラートを出さない', () => {
+  const enabled = { ...defaultEventAlertEnabledFromSpeak(DEFAULT_EVENT_TOGGLES), follow: true };
+  const media = defaultEventAlertMediaMap();
+  assert.equal(
+    shouldEmitEventAlert({ type: 'follow', enabled, media }),
+    false,
+  );
+  media.follow = { kind: 'file', fileName: 'hello.gif' };
+  assert.equal(
+    shouldEmitEventAlert({ type: 'follow', enabled, media }),
+    true,
+  );
+  media.gift = { kind: 'auto' };
+  assert.equal(
+    shouldEmitEventAlert({
+      type: 'gift',
+      enabled: { ...enabled, gift: true },
+      media,
+      giftImageUrl: '',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldEmitEventAlert({
+      type: 'gift',
+      enabled: { ...enabled, gift: true },
+      media,
+      giftImageUrl: '/media/gift?u=x',
+    }),
+    true,
   );
 });
 

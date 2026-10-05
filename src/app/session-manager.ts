@@ -42,13 +42,13 @@ import {
 import { containsNgWord, isListedUser } from '../shared/comment-filters';
 import { pickEventTemplates } from '../shared/event-templates';
 import { resolveEventSpeech, resolveShowDisplay } from '../shared/event-pipeline';
-import { isEventSoundType } from '../shared/event-notify';
+import { isEventSoundType, resolveEventSoundVolume } from '../shared/event-notify';
 import {
   buildAlertDisplayParts,
   canonicalEventAlertType,
   resolveEventAlertDisplayMs,
   resolveEventAlertImageUrl,
-  shouldShowEventAlert,
+  shouldEmitEventAlert,
 } from '../shared/event-alert';
 import { pruneUnreferencedAlertMediaFiles } from '../shared/alert-media-files';
 import { pruneUnreferencedSoundFiles } from '../shared/sound-files';
@@ -1113,7 +1113,12 @@ export class SessionManager extends EventEmitter {
       if (
         !toggle.display &&
         !toggle.speak &&
-        !shouldShowEventAlert(current.type, config.eventAlertEnabled)
+        !shouldEmitEventAlert({
+          type: current.type,
+          enabled: config.eventAlertEnabled,
+          media: config.eventAlertMedia,
+          giftImageUrl: current.giftImageUrl,
+        })
       ) {
         return;
       }
@@ -1266,6 +1271,7 @@ export class SessionManager extends EventEmitter {
             kind: 'comment',
             soundUrl,
             sound: config.commentSound,
+            volume: normalizeGiftChimeVolume(config.commentSoundVolume),
           });
           this.commentSoundAt = now;
         } catch (error) {
@@ -1293,6 +1299,7 @@ export class SessionManager extends EventEmitter {
               type: current.type,
               soundUrl,
               sound,
+              volume: resolveEventSoundVolume(current.type, config.eventSoundVolume),
             });
             this.eventSoundAt[current.type] = now;
           } catch (error) {
@@ -1352,7 +1359,13 @@ export class SessionManager extends EventEmitter {
     }
 
     const shouldAlert =
-      !options.silent && shouldShowEventAlert(current.type, config.eventAlertEnabled);
+      !options.silent &&
+      shouldEmitEventAlert({
+        type: current.type,
+        enabled: config.eventAlertEnabled,
+        media: config.eventAlertMedia,
+        giftImageUrl,
+      });
 
     if (!showDisplay && !shouldSpeak && !shouldAlert) {
       return;
@@ -1379,33 +1392,35 @@ export class SessionManager extends EventEmitter {
 
     if (shouldAlert) {
       const alertType = canonicalEventAlertType(current.type);
-      const media = alertType ? config.eventAlertMedia?.[alertType] : undefined;
-      const nameColor =
-        config.overlayNameColorEnabled !== false && user.nickname
-          ? nameColorForUser(
-              user.uniqueId,
-              user.nickname,
-              normalizeOverlayNameColors(config.overlayNameColors),
-            )
-          : null;
-      const displayParts = buildAlertDisplayParts(displayText, user.nickname, nameColor);
-      this.overlay.broadcastAlert({
+      const imageUrl = resolveEventAlertImageUrl({
         type: current.type,
-        displayText,
-        displayParts,
-        imageUrl: resolveEventAlertImageUrl({
-          type: current.type,
-          media,
-          giftImageUrl,
-        }),
-        displayMs: resolveEventAlertDisplayMs(
-          current.type,
-          config.eventAlertDisplayMsByType,
-          config.eventAlertDisplayMs,
-        ),
-        user,
-        nameColor,
+        media: alertType ? config.eventAlertMedia?.[alertType] : undefined,
+        giftImageUrl,
       });
+      if (imageUrl) {
+        const nameColor =
+          config.overlayNameColorEnabled !== false && user.nickname
+            ? nameColorForUser(
+                user.uniqueId,
+                user.nickname,
+                normalizeOverlayNameColors(config.overlayNameColors),
+              )
+            : null;
+        const displayParts = buildAlertDisplayParts(displayText, user.nickname, nameColor);
+        this.overlay.broadcastAlert({
+          type: current.type,
+          displayText,
+          displayParts,
+          imageUrl,
+          displayMs: resolveEventAlertDisplayMs(
+            current.type,
+            config.eventAlertDisplayMsByType,
+            config.eventAlertDisplayMs,
+          ),
+          user,
+          nameColor,
+        });
+      }
     }
 
     if (!shouldSpeak) {

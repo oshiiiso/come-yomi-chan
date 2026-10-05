@@ -97,8 +97,9 @@ function renderLineList(fieldId) {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'btn btn--ghost list-editor__remove';
-    remove.textContent = '削除';
+    remove.textContent = '×';
     remove.setAttribute('aria-label', `${line} を削除`);
+    remove.title = uiCopy.listRemoveLabel || '削除';
     remove.dataset.listRemove = fieldId;
     remove.dataset.index = String(index);
     row.append(text, remove);
@@ -165,8 +166,9 @@ function renderNicknameMapList() {
     const remove = document.createElement('button');
     remove.type = 'button';
     remove.className = 'btn btn--ghost list-editor__remove';
-    remove.textContent = '削除';
+    remove.textContent = '×';
     remove.setAttribute('aria-label', `@${entry.uniqueId} の呼び方を削除`);
+    remove.title = uiCopy.listRemoveLabel || '削除';
     remove.dataset.nicknameRemove = entry.uniqueId;
     row.append(text, remove);
     list.append(row);
@@ -211,8 +213,9 @@ function renderSpeechReplaceList() {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'btn btn--ghost list-editor__remove';
-      remove.textContent = '削除';
+      remove.textContent = '×';
       remove.setAttribute('aria-label', `「${entry.from}」の読み替えを削除`);
+      remove.title = uiCopy.listRemoveLabel || '削除';
       remove.dataset.speechReplaceRemove = String(i);
       row.append(text, remove);
       list.append(row);
@@ -754,7 +757,7 @@ function renderGiftSpeakList() {
     soundBtn.dataset.giftChimePick = id;
     soundBtn.textContent = uiCopy.giftChimeSelectSound || '選択';
     soundBtn.setAttribute('aria-label', `${giftName} のサウンドを選択`);
-    soundBtn.title = uiCopy.giftChimeSoundResetHint || '右クリックでテンプレ音に戻します';
+    soundBtn.title = uiCopy.giftChimeSoundResetHint || '× でテンプレに戻す';
     const soundName = document.createElement('span');
     soundName.className = 'gift-chime-row__sound-name';
     soundName.textContent = soundRefLabel(giftChimeByGiftId[id]);

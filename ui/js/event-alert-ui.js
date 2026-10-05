@@ -14,13 +14,13 @@ const DEFAULT_EVENT_ALERT_SEC = 4;
 /** @type {Record<string, { kind: string, fileName?: string, id?: string }>} */
 const eventAlertMediaRefs = {};
 
-function defaultAlertMediaRef(type) {
-  return { kind: 'template', id: type };
+function defaultAlertMediaRef() {
+  return { kind: 'none' };
 }
 
 function normalizeAlertMediaRefUi(raw, type) {
   if (!raw || typeof raw !== 'object') {
-    return defaultAlertMediaRef(type);
+    return defaultAlertMediaRef();
   }
   if (raw.kind === 'file' && typeof raw.fileName === 'string' && raw.fileName) {
     return { kind: 'file', fileName: raw.fileName };
@@ -33,7 +33,7 @@ function normalizeAlertMediaRefUi(raw, type) {
   if (raw.kind === 'auto' || raw.kind === 'none') {
     return { kind: raw.kind };
   }
-  return defaultAlertMediaRef(type);
+  return defaultAlertMediaRef();
 }
 
 function alertMediaLabel(ref, type) {
@@ -56,7 +56,7 @@ function paintAlertMediaLabel(type) {
   if (!el) {
     return;
   }
-  const ref = eventAlertMediaRefs[type] || defaultAlertMediaRef(type);
+  const ref = eventAlertMediaRefs[type] || defaultAlertMediaRef();
   const label = alertMediaLabel(ref, type);
   el.textContent = label;
   el.title = label;
@@ -67,11 +67,11 @@ function syncEventAlertResetButton(type) {
   if (!(reset instanceof HTMLElement)) {
     return;
   }
-  const ref = eventAlertMediaRefs[type] || defaultAlertMediaRef(type);
-  const isTemplate = ref.kind === 'template';
-  reset.hidden = isTemplate;
+  const ref = eventAlertMediaRefs[type] || defaultAlertMediaRef();
+  const isEmpty = ref.kind === 'none';
+  reset.hidden = isEmpty;
   if ('disabled' in reset) {
-    reset.disabled = isTemplate;
+    reset.disabled = isEmpty;
   }
 }
 
@@ -158,12 +158,12 @@ function fillEventAlertUi(config) {
     for (const el of document.querySelectorAll('[data-event-alert-hint]')) {
       el.textContent =
         uiCopy.eventAlertHint ||
-        '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替えできます。';
+        '別の配信ソース（イベントアラート用URL）に出します。初期は画像なしです。画像を選ぶと出ます。画像がないときはオンでもソースには何も出ません。';
     }
     for (const button of document.querySelectorAll('[data-event-alert-pick]')) {
       button.textContent = uiCopy.eventAlertPickMedia || '画像を選ぶ';
     }
-    const resetLabel = uiCopy.eventAlertResetTemplate || 'テンプレに戻す';
+    const resetLabel = uiCopy.eventAlertResetTemplate || 'なしにする';
     for (const button of document.querySelectorAll('[data-event-alert-reset]')) {
       button.textContent = '×';
       button.setAttribute('aria-label', resetLabel);
@@ -199,13 +199,15 @@ function collectEventAlertUi() {
   const eventAlertDisplayMsByType = {};
   for (const type of EVENT_ALERT_TYPES_UI) {
     eventAlertEnabled[type] = Boolean($(`alert-${type}`)?.checked);
-    const ref = eventAlertMediaRefs[type] || defaultAlertMediaRef(type);
+    const ref = eventAlertMediaRefs[type] || defaultAlertMediaRef();
     if (ref.kind === 'file' && ref.fileName) {
       eventAlertMedia[type] = { kind: 'file', fileName: ref.fileName };
     } else if (ref.kind === 'auto' || ref.kind === 'none') {
       eventAlertMedia[type] = { kind: ref.kind };
+    } else if (ref.kind === 'template') {
+      eventAlertMedia[type] = { kind: 'template', id: ref.id || type };
     } else {
-      eventAlertMedia[type] = { kind: 'template', id: type };
+      eventAlertMedia[type] = { kind: 'none' };
     }
     const secRaw = Number(eventAlertSecInput(type)?.value);
     const sec = Number.isFinite(secRaw) ? Math.trunc(secRaw) : DEFAULT_EVENT_ALERT_SEC;
@@ -253,7 +255,7 @@ async function pickEventAlertMedia(type) {
 }
 
 function resetEventAlertMedia(type) {
-  eventAlertMediaRefs[type] = defaultAlertMediaRef(type);
+  eventAlertMediaRefs[type] = defaultAlertMediaRef();
   syncEventAlertMediaUi(type);
   noteFormChanged();
 }

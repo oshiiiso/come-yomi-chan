@@ -6,6 +6,8 @@ import {
   normalizeEventNotifyMode,
   normalizeEventNotifyModeMap,
   normalizeEventSoundMap,
+  normalizeEventSoundVolumeMap,
+  resolveEventSoundVolume,
 } from '../../shared/event-notify';
 import { DEFAULT_SOUND_REF } from '../../shared/sound-ref';
 
@@ -36,4 +38,14 @@ test('サウンド対象のイベント種別を判定する', () => {
   assert.equal(isEventSoundType('member'), true);
   assert.equal(isEventSoundType('gift'), false);
   assert.equal(isEventSoundType('comment'), false);
+});
+
+test('イベントサウンド音量は 0〜500・欠けは100', () => {
+  const map = normalizeEventSoundVolumeMap({ follow: 250, like: -1, share: 999 });
+  assert.equal(map.follow, 250);
+  assert.equal(map.like, 0);
+  assert.equal(map.share, 500);
+  assert.equal(map.member, 100);
+  assert.equal(resolveEventSoundVolume('follow', map), 250);
+  assert.equal(resolveEventSoundVolume('portal', undefined), 100);
 });

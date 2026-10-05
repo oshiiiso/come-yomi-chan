@@ -80,9 +80,11 @@ import {
 } from './gift-notify';
 import {
   defaultEventSoundMap,
+  defaultEventSoundVolumeMap,
   DEFAULT_EVENT_NOTIFY_MODE,
   normalizeEventNotifyModeMap,
   normalizeEventSoundMap,
+  normalizeEventSoundVolumeMap,
 } from './event-notify';
 import {
   DEFAULT_EVENT_ALERT_MS,
@@ -220,8 +222,10 @@ export const DEFAULT_CONFIG: AppConfig = {
   commentNotifyMode: 'speak',
   commentSoundEnabled: false,
   commentSound: DEFAULT_SOUND_REF,
+  commentSoundVolume: DEFAULT_GIFT_CHIME_VOLUME,
   eventNotifyMode: { ...DEFAULT_EVENT_NOTIFY_MODE },
   eventSound: defaultEventSoundMap(),
+  eventSoundVolume: defaultEventSoundVolumeMap(),
   eventAlertEnabled: defaultEventAlertEnabledFromSpeak(DEFAULT_EVENT_TOGGLES),
   eventAlertMedia: defaultEventAlertMediaMap(),
   eventAlertDisplayMs: DEFAULT_EVENT_ALERT_MS,
@@ -436,8 +440,12 @@ export class ConfigStore {
       commentNotifyMode,
       commentSoundEnabled: commentNotifyMode === 'sound',
       commentSound: normalizeSoundRef(merged.commentSound, DEFAULT_SOUND_REF),
+      commentSoundVolume: normalizeGiftChimeVolume(
+        merged.commentSoundVolume ?? DEFAULT_GIFT_CHIME_VOLUME,
+      ),
       eventNotifyMode: normalizeEventNotifyModeMap(merged.eventNotifyMode),
       eventSound: normalizeEventSoundMap(merged.eventSound),
+      eventSoundVolume: normalizeEventSoundVolumeMap(merged.eventSoundVolume),
       eventAlertEnabled: normalizeEventAlertEnabledMap(merged.eventAlertEnabled, events),
       eventAlertMedia: normalizeEventAlertMediaMap(merged.eventAlertMedia),
       eventAlertDisplayMs: normalizeEventAlertDisplayMs(merged.eventAlertDisplayMs),
@@ -632,6 +640,7 @@ export class ConfigStore {
       giftChimeDiamondBands: partial.giftChimeDiamondBands ?? current.giftChimeDiamondBands,
       eventNotifyMode: partial.eventNotifyMode ?? current.eventNotifyMode,
       eventSound: partial.eventSound ?? current.eventSound,
+      eventSoundVolume: partial.eventSoundVolume ?? current.eventSoundVolume,
       eventAlertEnabled: partial.eventAlertEnabled ?? current.eventAlertEnabled,
       eventAlertMedia: partial.eventAlertMedia ?? current.eventAlertMedia,
       eventAlertDisplayMsByType:

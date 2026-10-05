@@ -209,8 +209,6 @@ function applyCopy(config) {
     ['gift-chime-col-gift', 'giftChimeColGift'],
     ['gift-chime-col-sound', 'giftChimeColSound'],
     ['gift-chime-col-volume', 'giftChimeColVolume'],
-    ['gift-chime-sound-reset', 'soundResetTemplate'],
-    ['comment-sound-reset', 'soundResetTemplate'],
     ['tab-look', 'settingsTabLook'],
     ['look-tab-hint', 'lookTabHint'],
     ['look-chat-title', 'lookChatTitle'],

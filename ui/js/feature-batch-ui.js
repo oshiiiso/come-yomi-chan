@@ -3,6 +3,7 @@
 let giftChimeSoundRef = { kind: 'template', id: 'gift' };
 let giftChimeVolume = 100;
 let commentSoundRef = { kind: 'template', id: 'default' };
+let commentSoundVolume = 100;
 const EVENT_SOUND_TYPES = [
   'follow',
   'share',
@@ -20,6 +21,16 @@ const eventSoundRefs = {
   portal: { kind: 'template', id: 'default' },
   like: { kind: 'template', id: 'default' },
   member: { kind: 'template', id: 'default' },
+};
+/** @type {Record<string, number>} */
+const eventSoundVolumes = {
+  follow: 100,
+  share: 100,
+  superFan: 100,
+  envelope: 100,
+  portal: 100,
+  like: 100,
+  member: 100,
 };
 let giftChimeDiamondBandsState = [];
 let configProfilesState = [];
@@ -83,6 +94,32 @@ function paintSoundLabel(id, ref) {
   el.textContent = soundRefLabel(ref);
 }
 
+function syncSoundTemplateResetButton(button, ref) {
+  if (!(button instanceof HTMLElement)) {
+    return;
+  }
+  const isTemplate = !ref || ref.kind !== 'file';
+  button.hidden = isTemplate;
+  if ('disabled' in button) {
+    button.disabled = isTemplate;
+  }
+  button.textContent = '×';
+  const label = uiCopy.soundResetTemplate || 'テンプレに戻す';
+  button.setAttribute('aria-label', label);
+  button.title = label;
+}
+
+function syncAllSoundTemplateResetButtons() {
+  syncSoundTemplateResetButton($('gift-chime-sound-reset'), giftChimeSoundRef);
+  syncSoundTemplateResetButton($('comment-sound-reset'), commentSoundRef);
+  for (const type of EVENT_SOUND_TYPES) {
+    syncSoundTemplateResetButton(
+      document.querySelector(`[data-event-sound-reset="${type}"]`),
+      eventSoundRefs[type],
+    );
+  }
+}
+
 function giftChimeMatchModeValue() {
   return document.querySelector('input[name="gift-chime-match-mode"]:checked')?.value === 'diamond'
     ? 'diamond'
@@ -117,6 +154,24 @@ function eventNotifyModeValue(type) {
   return document.querySelector(`input[name="${type}-notify-mode"]:checked`)?.value === 'sound'
     ? 'sound'
     : 'speak';
+}
+
+function eventSoundVolumeInputs(type) {
+  return {
+    number: document.querySelector(`[data-event-sound-volume-number="${type}"]`),
+    range: document.querySelector(`[data-event-sound-volume-range="${type}"]`),
+  };
+}
+
+function paintEventSoundVolume(type) {
+  const { number, range } = eventSoundVolumeInputs(type);
+  const value = String(normalizeGiftChimeVolumeUi(eventSoundVolumes[type]));
+  if (number instanceof HTMLInputElement) {
+    number.value = value;
+  }
+  if (range instanceof HTMLInputElement) {
+    range.value = value;
+  }
 }
 
 function syncEventNotifyModeUi(type) {
@@ -296,45 +351,24 @@ function validateGiftChimeDiamondBandsForm() {
   return '';
 }
 
-function bandTestDiamondCount(row) {
-  const minRaw = row.querySelector('[data-band-min]')?.value ?? '';
-  const maxRaw = row.querySelector('[data-band-max]')?.value ?? '';
-  let min = parseBandField(minRaw);
-  const max = parseBandField(maxRaw);
-  if (Number.isNaN(min) || Number.isNaN(max)) {
-    return null;
+function soundFromBandRow(row) {
+  if (!(row instanceof HTMLElement)) {
+    return { kind: 'template', id: 'gift' };
   }
-  if (min == null && max == null) {
-    return null;
+  if (row.dataset.soundKind === 'file') {
+    const fileName = String(row.dataset.soundFile || '').trim();
+    if (fileName) {
+      return { kind: 'file', fileName };
+    }
   }
-  if (min == null) {
-    min = 1;
-  }
-  return min;
+  return { kind: 'template', id: row.dataset.soundTemplate || 'gift' };
 }
 
-async function sendGiftChimeBandTest(row) {
-  const diamonds = bandTestDiamondCount(row);
-  if (diamonds == null) {
-    setToast(
-      uiCopy.invalidGiftChimeBandValue || 'ダイヤ数の帯は 0 以上の整数にしてください',
-      true,
-    );
-    return;
-  }
-  if (typeof flushFormSave !== 'function' || !window.liveTts?.sendTestEvent) {
-    setToast(uiCopy.giftChimeTestFailed || '効果音のテストに失敗しました', true);
-    return;
-  }
-  const saved = await flushFormSave();
-  if (!saved.ok) {
-    return;
-  }
-  const giftId = typeof selectedTestGiftId === 'function' ? selectedTestGiftId() : '';
-  const result = await window.liveTts.sendTestEvent('gift', 1, giftId, {
-    diamondCount: diamonds,
-  });
-  setToast(result.message, !result.ok);
+function volumeFromBandRow(row) {
+  const range = row?.querySelector?.('input[type="range"][data-band-volume]');
+  return normalizeGiftChimeVolumeUi(
+    range instanceof HTMLInputElement ? range.value : 100,
+  );
 }
 
 function renderGiftChimeBandList(bands) {
@@ -350,9 +384,8 @@ function renderGiftChimeBandList(bands) {
   const minPh = uiCopy.giftChimeDiamondMinPlaceholder || '例: 1';
   const maxPh = uiCopy.giftChimeDiamondMaxPlaceholder || '例: 10（空＝上限なし）';
   const volumeLabel = uiCopy.giftChimeVolumeLabel || '音量';
-  const testLabel = uiCopy.giftChimeDiamondBandTest || 'テスト送信';
   const removeLabel = uiCopy.giftChimeDiamondBandRemove || '削除';
-  for (const band of rows) {
+  for (const [bandIndex, band] of rows.entries()) {
     const li = document.createElement('li');
     li.className = 'gift-chime-band';
     const sound = normalizeSoundRefUi(band.sound, 'gift');
@@ -396,7 +429,7 @@ function renderGiftChimeBandList(bands) {
     soundBtn.className = 'btn btn--ghost gift-chime-band__sound-pick';
     soundBtn.textContent = uiCopy.giftChimeSelectSound || '選択';
     soundBtn.setAttribute('aria-label', 'この帯のサウンドを選択');
-    soundBtn.title = uiCopy.giftChimeSoundResetHint || '右クリックでテンプレ音に戻します';
+    soundBtn.title = uiCopy.giftChimeSoundResetHint || '× でテンプレに戻す';
     const soundName = document.createElement('span');
     soundName.className = 'gift-chime-band__sound-name';
     soundName.textContent = soundRefLabel(sound);
@@ -450,20 +483,27 @@ function renderGiftChimeBandList(bands) {
     const actions = document.createElement('div');
     actions.className = 'gift-chime-band__actions';
 
+    const previewId = `band:${bandIndex}`;
     const testBtn = document.createElement('button');
     testBtn.type = 'button';
-    testBtn.className = 'btn btn--ghost gift-chime-band__test';
-    testBtn.textContent = testLabel;
-    testBtn.setAttribute('aria-label', testLabel);
+    testBtn.className = 'gift-chime-row__play gift-chime-band__play';
+    testBtn.dataset.soundPreview = previewId;
+    if (typeof paintGiftChimePlayButton === 'function') {
+      paintGiftChimePlayButton(testBtn, '', isGiftChimePreviewPlaying(previewId));
+    } else {
+      testBtn.setAttribute('aria-label', uiCopy.giftChimeTestButton || '再生');
+      testBtn.title = uiCopy.giftChimeTestButton || '再生';
+    }
     testBtn.addEventListener('click', () => {
-      void sendGiftChimeBandTest(li);
+      void toggleGiftChimePreview(previewId, soundFromBandRow(li), volumeFromBandRow(li));
     });
 
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'btn btn--ghost gift-chime-band__remove';
-    removeBtn.textContent = removeLabel;
+    removeBtn.textContent = '×';
     removeBtn.setAttribute('aria-label', removeLabel);
+    removeBtn.title = removeLabel;
     removeBtn.addEventListener('click', () => {
       const index = [...list.children].indexOf(li);
       removeGiftChimeBandAt(index);
@@ -586,8 +626,11 @@ function fillGiftNotifyUi(config) {
   }
   commentSoundRef = normalizeSoundRefUi(config?.commentSound, 'default');
   paintSoundLabel('comment-sound-label', commentSoundRef);
+  commentSoundVolume = normalizeGiftChimeVolumeUi(config?.commentSoundVolume);
+  paintCommentSoundVolume();
   const modeMap = config?.eventNotifyMode || {};
   const soundMap = config?.eventSound || {};
+  const volumeMap = config?.eventSoundVolume || {};
   for (const type of EVENT_SOUND_TYPES) {
     const mode = modeMap[type] === 'sound' ? 'sound' : 'speak';
     for (const input of document.querySelectorAll(`input[name="${type}-notify-mode"]`)) {
@@ -595,6 +638,8 @@ function fillGiftNotifyUi(config) {
     }
     eventSoundRefs[type] = normalizeSoundRefUi(soundMap[type], 'default');
     paintSoundLabel(`${type}-sound-label`, eventSoundRefs[type]);
+    eventSoundVolumes[type] = normalizeGiftChimeVolumeUi(volumeMap[type]);
+    paintEventSoundVolume(type);
   }
   if (uiCopy) {
     const bandsHint = $('gift-chime-diamond-bands-hint');
@@ -610,6 +655,29 @@ function fillGiftNotifyUi(config) {
     const soundHint =
       uiCopy.eventSoundHint ||
       '読み上げの代わりにアプリ本体で鳴らします（配信ソースには鳴りません）。';
+    const volumeLabel = uiCopy.giftChimeVolumeLabel || '音量';
+    const pickLabel = uiCopy.giftChimeSelectSound || '選択';
+    for (const id of ['comment-sound-pick', 'gift-chime-sound-pick']) {
+      const pick = $(id);
+      if (pick) {
+        pick.textContent = pickLabel;
+      }
+    }
+    for (const el of document.querySelectorAll('[data-event-sound-pick]')) {
+      el.textContent = pickLabel;
+    }
+    const commentVolumeLabel = $('comment-sound-volume-label');
+    if (commentVolumeLabel) {
+      commentVolumeLabel.textContent = volumeLabel;
+    }
+    const commentVolumeNumber = $('comment-sound-volume-number');
+    if (commentVolumeNumber instanceof HTMLInputElement) {
+      commentVolumeNumber.setAttribute('aria-label', `${volumeLabel}（数値）`);
+    }
+    const commentVolumeRange = $('comment-sound-volume-range');
+    if (commentVolumeRange instanceof HTMLInputElement) {
+      commentVolumeRange.setAttribute('aria-label', volumeLabel);
+    }
     for (const el of document.querySelectorAll('[data-event-notify-speak-label]')) {
       el.textContent = speakLabel;
     }
@@ -621,10 +689,20 @@ function fillGiftNotifyUi(config) {
         el.textContent = soundHint;
       }
     }
-    for (const button of document.querySelectorAll('[data-event-sound-reset]')) {
-      button.textContent = uiCopy.soundResetTemplate || 'テンプレに戻す';
+    for (const el of document.querySelectorAll('[data-event-sound-volume-label]')) {
+      el.textContent = volumeLabel;
+    }
+    for (const type of EVENT_SOUND_TYPES) {
+      const { number, range } = eventSoundVolumeInputs(type);
+      if (number instanceof HTMLInputElement) {
+        number.setAttribute('aria-label', `${volumeLabel}（数値）`);
+      }
+      if (range instanceof HTMLInputElement) {
+        range.setAttribute('aria-label', volumeLabel);
+      }
     }
   }
+  syncAllSoundTemplateResetButtons();
   syncGiftNotifyModeUi();
   syncCommentNotifyModeUi();
   syncAllEventNotifyModeUi();
@@ -637,9 +715,11 @@ function collectGiftNotifyUi() {
       : 'speak';
   const eventNotifyMode = {};
   const eventSound = {};
+  const eventSoundVolume = {};
   for (const type of EVENT_SOUND_TYPES) {
     eventNotifyMode[type] = eventNotifyModeValue(type);
     eventSound[type] = { ...eventSoundRefs[type] };
+    eventSoundVolume[type] = normalizeGiftChimeVolumeUi(eventSoundVolumes[type]);
   }
   return {
     giftNotifyMode:
@@ -655,8 +735,10 @@ function collectGiftNotifyUi() {
     commentNotifyMode,
     commentSoundEnabled: commentNotifyMode === 'sound',
     commentSound: { ...commentSoundRef },
+    commentSoundVolume: normalizeGiftChimeVolumeUi(commentSoundVolume),
     eventNotifyMode,
     eventSound,
+    eventSoundVolume,
     ...(typeof collectEventAlertUi === 'function' ? collectEventAlertUi() : {}),
   };
 }
@@ -675,6 +757,7 @@ async function pickSoundInto(setter, labelId) {
   }
   setter({ kind: 'file', fileName: result.fileName });
   paintSoundLabel(labelId, { kind: 'file', fileName: result.fileName });
+  syncAllSoundTemplateResetButtons();
   noteFormChanged();
 }
 
@@ -703,6 +786,44 @@ function bindGiftChimeCommonVolumeControls() {
   const commit = () => {
     giftChimeVolume = normalizeGiftChimeVolumeUi(range.value ?? number.value);
     paintGiftChimeCommonVolume();
+    noteFormChanged();
+  };
+  range.addEventListener('input', commit);
+  number.addEventListener('input', () => {
+    const raw = number.value.trim();
+    if (raw === '' || raw === '-') {
+      return;
+    }
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) {
+      return;
+    }
+    range.value = String(Math.max(0, Math.min(500, Math.round(parsed))));
+  });
+  number.addEventListener('change', commit);
+}
+
+function paintCommentSoundVolume() {
+  const range = $('comment-sound-volume-range');
+  const number = $('comment-sound-volume-number');
+  const value = String(normalizeGiftChimeVolumeUi(commentSoundVolume));
+  if (range instanceof HTMLInputElement) {
+    range.value = value;
+  }
+  if (number instanceof HTMLInputElement) {
+    number.value = value;
+  }
+}
+
+function bindCommentSoundVolumeControls() {
+  const range = $('comment-sound-volume-range');
+  const number = $('comment-sound-volume-number');
+  if (!(range instanceof HTMLInputElement) || !(number instanceof HTMLInputElement)) {
+    return;
+  }
+  const commit = () => {
+    commentSoundVolume = normalizeGiftChimeVolumeUi(range.value ?? number.value);
+    paintCommentSoundVolume();
     noteFormChanged();
   };
   range.addEventListener('input', commit);
@@ -982,8 +1103,8 @@ function syncPauseMuteButtons() {
   }
   if (muteBtn) {
     const label = commentSoundMutedUi
-      ? uiCopy.unmuteCommentSoundButton || '新着音ミュート解除'
-      : uiCopy.muteCommentSoundButton || '新着音をミュート';
+      ? uiCopy.unmuteCommentSoundButton || 'サウンドミュート解除'
+      : uiCopy.muteCommentSoundButton || 'サウンドをミュート';
     muteBtn.setAttribute('role', 'menuitemcheckbox');
     muteBtn.setAttribute('aria-checked', commentSoundMutedUi ? 'true' : 'false');
     paintSpeechActionButton(muteBtn, label, muteKey);
@@ -1421,6 +1542,16 @@ function syncGiftChimePreviewButtons() {
     const id = button.dataset.giftChimeTest;
     paintGiftChimePlayButton(button, button.dataset.giftChimeName || '', isGiftChimePreviewPlaying(id));
   }
+  for (const button of document.querySelectorAll('[data-sound-preview]')) {
+    if (!(button instanceof HTMLElement)) {
+      continue;
+    }
+    if (button.dataset.giftChimeTest) {
+      continue;
+    }
+    const id = button.dataset.soundPreview;
+    paintGiftChimePlayButton(button, '', isGiftChimePreviewPlaying(id));
+  }
 }
 
 function stopGiftChimePreview() {
@@ -1461,11 +1592,9 @@ async function toggleGiftChimePreview(giftId, sound, volume) {
   };
   const url = typeof result.soundUrl === 'string' ? result.soundUrl.trim() : '';
   const templateId =
-    sound && sound.kind === 'template' && sound.id === 'default'
-      ? 'gift'
-      : sound && sound.kind === 'template'
-        ? sound.id
-        : 'gift';
+    sound && sound.kind === 'template' && (sound.id === 'gift' || sound.id === 'default')
+      ? sound.id
+      : 'gift';
   const stop = url
     ? playUrlWithGain(url, gain, () => undefined, onEnded)
     : playBuiltinAppChime(gain, onEnded, templateId);
@@ -1515,6 +1644,9 @@ function bindGiftNotifyAndProfiles() {
   $('gift-chime-band-add')?.addEventListener('click', () => {
     addGiftChimeBandRow();
   });
+  $('gift-chime-sound-play')?.addEventListener('click', () => {
+    void toggleGiftChimePreview('gift-common', giftChimeSoundRef, giftChimeVolume);
+  });
   $('gift-chime-sound-pick')?.addEventListener('click', () => {
     void pickSoundInto((ref) => {
       giftChimeSoundRef = ref;
@@ -1523,9 +1655,14 @@ function bindGiftNotifyAndProfiles() {
   $('gift-chime-sound-reset')?.addEventListener('click', () => {
     giftChimeSoundRef = { kind: 'template', id: 'gift' };
     paintSoundLabel('gift-chime-sound-label', giftChimeSoundRef);
+    syncAllSoundTemplateResetButtons();
     noteFormChanged();
   });
   bindGiftChimeCommonVolumeControls();
+  bindCommentSoundVolumeControls();
+  $('comment-sound-play')?.addEventListener('click', () => {
+    void toggleGiftChimePreview('comment', commentSoundRef, commentSoundVolume);
+  });
   $('comment-sound-pick')?.addEventListener('click', () => {
     void pickSoundInto((ref) => {
       commentSoundRef = ref;
@@ -1534,8 +1671,22 @@ function bindGiftNotifyAndProfiles() {
   $('comment-sound-reset')?.addEventListener('click', () => {
     commentSoundRef = { kind: 'template', id: 'default' };
     paintSoundLabel('comment-sound-label', commentSoundRef);
+    syncAllSoundTemplateResetButtons();
     noteFormChanged();
   });
+  for (const button of document.querySelectorAll('[data-event-sound-play]')) {
+    button.addEventListener('click', () => {
+      const type = button.dataset.eventSoundPlay;
+      if (!EVENT_SOUND_TYPES.includes(type)) {
+        return;
+      }
+      void toggleGiftChimePreview(
+        `event:${type}`,
+        eventSoundRefs[type],
+        eventSoundVolumes[type],
+      );
+    });
+  }
   for (const button of document.querySelectorAll('[data-event-sound-pick]')) {
     button.addEventListener('click', () => {
       const type = button.dataset.eventSoundPick;
@@ -1555,8 +1706,32 @@ function bindGiftNotifyAndProfiles() {
       }
       eventSoundRefs[type] = { kind: 'template', id: 'default' };
       paintSoundLabel(`${type}-sound-label`, eventSoundRefs[type]);
+      syncAllSoundTemplateResetButtons();
       noteFormChanged();
     });
+  }
+  for (const type of EVENT_SOUND_TYPES) {
+    const { number, range } = eventSoundVolumeInputs(type);
+    if (!(number instanceof HTMLInputElement) || !(range instanceof HTMLInputElement)) {
+      continue;
+    }
+    const commit = () => {
+      eventSoundVolumes[type] = syncGiftChimeVolumeInputs(range, number);
+      noteFormChanged();
+    };
+    range.addEventListener('input', commit);
+    number.addEventListener('input', () => {
+      const raw = number.value.trim();
+      if (raw === '' || raw === '-') {
+        return;
+      }
+      const parsed = Number.parseFloat(raw);
+      if (!Number.isFinite(parsed)) {
+        return;
+      }
+      range.value = String(Math.max(0, Math.min(500, Math.round(parsed))));
+    });
+    number.addEventListener('change', commit);
   }
   $('btn-profile-save')?.addEventListener('click', () => {
     void saveCurrentAsProfile();
