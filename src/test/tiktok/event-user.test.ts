@@ -56,6 +56,58 @@ test('uniqueId が無くても userId から取る', () => {
   assert.equal(user.nickname, '番号だけ');
 });
 
+test('宝箱は displayText のユーザー名を優先し、sendUserName（ID）にしない', () => {
+  const user = userFromEvent({
+    envelopeInfo: {
+      sendUserId: '7092344136195916805',
+      sendUserName: 'teamcj17',
+      sendUserAvatar: { urlList: ['https://p16.tiktokcdn.com/box.png'] },
+    },
+    common: {
+      displayText: {
+        pieces: [
+          {
+            userValue: {
+              user: {
+                id: '7092344136195916805',
+                displayId: 'teamcj17',
+                nickname: '⚽️ CJ ⚽️',
+                avatarThumb: { urlList: ['https://p16.tiktokcdn.com/face.png'] },
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(user.nickname, '⚽️ CJ ⚽️');
+  assert.equal(user.uniqueId, 'teamcj17');
+  assert.equal(user.avatarUrl, 'https://p16.tiktokcdn.com/face.png');
+});
+
+test('宝箱で displayText が無いときは sendUserName を名前にし、数字の sendUserId は出さない', () => {
+  const user = userFromEvent({
+    envelopeInfo: {
+      sendUserId: '7092344136195916805',
+      sendUserName: 'チームC',
+    },
+  });
+  assert.equal(user.nickname, 'チームC');
+  assert.equal(user.uniqueId, '7092344136195916805');
+});
+
+test('displayId があるときは数字の id よりハンドルを uniqueId にする', () => {
+  const user = userFromEvent({
+    user: {
+      id: '1234567890',
+      displayId: 'handle_user',
+      nickname: '表示名',
+    },
+  });
+  assert.equal(user.uniqueId, 'handle_user');
+  assert.equal(user.nickname, '表示名');
+});
+
 test('ファンクラブとスパファンの印をユーザーに載せる', () => {
   const user = userFromEvent({
     userIdentity: { isSubscriberOfAnchor: true },

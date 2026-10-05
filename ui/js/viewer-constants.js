@@ -1,5 +1,5 @@
 // src/shared/viewer-dock.ts / viewer-event.ts と同じ種類。bundler が無いので UI 側にも置く。
-const VIEWER_MAX_ROWS = 300;
+let VIEWER_MAX_ROWS = 1000;
 const EVENT_ORDER = [
   'comment',
   'gift',

@@ -26,6 +26,13 @@ const api = {
   previewTts: () => ipcRenderer.invoke('tts:preview'),
   skipSpeech: () => ipcRenderer.invoke('tts:skip'),
   clearSpeechQueue: () => ipcRenderer.invoke('tts:clear-queue'),
+  toggleSpeechPause: () => ipcRenderer.invoke('tts:toggle-pause'),
+  toggleCommentSoundMute: () => ipcRenderer.invoke('sound:toggle-comment-mute'),
+  listSoundFiles: () => ipcRenderer.invoke('sound:list'),
+  pickSoundFile: () => ipcRenderer.invoke('sound:pick'),
+  pickAlertMediaFile: () => ipcRenderer.invoke('alert-media:pick'),
+  previewSound: (sound: Record<string, unknown>, volume?: number) =>
+    ipcRenderer.invoke('sound:preview', sound, volume),
   sendTestEvent: (
     type: string,
     giftCount: number,
@@ -46,7 +53,8 @@ const api = {
   getTestGifts: () => ipcRenderer.invoke('tester:gifts'),
   refreshTestGifts: (uniqueId?: string) =>
     ipcRenderer.invoke('tester:gifts-refresh', uniqueId),
-  previewOverlay: (target?: string) => ipcRenderer.invoke('overlay:preview', target),
+  previewOverlay: (target?: string, streamSettings?: Record<string, unknown>) =>
+    ipcRenderer.invoke('overlay:preview', target, streamSettings),
   clearOverlay: () => ipcRenderer.invoke('overlay:clear'),
   clearOverlayPin: () => ipcRenderer.invoke('overlay:clear-pin'),
   copyOverlayUrl: (kind?: string) => ipcRenderer.invoke('overlay:copy-url', kind),
@@ -54,10 +62,19 @@ const api = {
   pickVoicevoxExe: () => ipcRenderer.invoke('tts:pick-voicevox'),
   launchVoicevox: () => ipcRenderer.invoke('tts:launch-voicevox'),
   getAppInfo: () => ipcRenderer.invoke('app:info'),
+  getViewerLog: () => ipcRenderer.invoke('viewer-log:get'),
+  saveViewerLog: (rows: unknown[]) => ipcRenderer.invoke('viewer-log:save', rows),
+  clearViewerLog: () => ipcRenderer.invoke('viewer-log:clear'),
+  clearViewerLogTypes: (types: string[]) => ipcRenderer.invoke('viewer-log:clear-types', types),
+  exportSpeechReplace: () => ipcRenderer.invoke('speech-replace:export'),
+  importSpeechReplace: () => ipcRenderer.invoke('speech-replace:import'),
   getHelpContent: () => ipcRenderer.invoke('help:content'),
   openHelp: (topic?: string) => ipcRenderer.invoke('help:open', topic),
   openExternal: (url: string) => ipcRenderer.invoke('app:open-external', url),
   closeWindow: () => ipcRenderer.invoke('window:close'),
+  minimizeWindow: () => ipcRenderer.invoke('window:minimize'),
+  toggleMaximizeWindow: () => ipcRenderer.invoke('window:toggle-maximize'),
+  isWindowMaximized: () => ipcRenderer.invoke('window:is-maximized'),
   fitWindow: (width: number, height: number, kind: 'main' | 'help') =>
     ipcRenderer.invoke('window:fit-content', width, height, kind),
   onStatusChanged: (callback: (payload: unknown) => void) =>
@@ -68,6 +85,12 @@ const api = {
     onChannel('app:notice', callback),
   onViewerEvent: (callback: (payload: unknown) => void) =>
     onChannel('viewer:event', callback),
+  onPlaySound: (callback: (payload: unknown) => void) =>
+    onChannel('sound:play', callback),
+  onSpeechAudioControl: (callback: (payload: unknown) => void) =>
+    onChannel('tts:audio-control', callback),
+  onWindowMaximizedChanged: (callback: (payload: unknown) => void) =>
+    onChannel('window:maximized-changed', callback),
 };
 
 contextBridge.exposeInMainWorld('liveTts', api);

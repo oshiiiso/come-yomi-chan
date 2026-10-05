@@ -5,8 +5,9 @@ export interface WindowSize {
   height: number;
   minWidth: number;
   minHeight: number;
-  maxWidth: number;
-  maxHeight: number;
+  /** 無いときはモニタ最大化を妨げない */
+  maxWidth?: number;
+  maxHeight?: number;
 }
 
 export const COMPACT_WINDOW_LAYOUT: WindowSize = {
@@ -14,8 +15,6 @@ export const COMPACT_WINDOW_LAYOUT: WindowSize = {
   height: 720,
   minWidth: 360,
   minHeight: 480,
-  maxWidth: 1920,
-  maxHeight: 1200,
 };
 
 export const WINDOW_LAYOUT: Record<WindowKind, WindowSize> = {
@@ -24,8 +23,6 @@ export const WINDOW_LAYOUT: Record<WindowKind, WindowSize> = {
     height: 820,
     minWidth: 800,
     minHeight: 600,
-    maxWidth: 1920,
-    maxHeight: 1200,
   },
   help: {
     width: 640,
@@ -36,3 +33,6 @@ export const WINDOW_LAYOUT: Record<WindowKind, WindowSize> = {
     maxHeight: 1000,
   },
 };
+
+/** Electron の上限解除用（実モニタより十分大きく） */
+export const WINDOW_SIZE_NO_MAX = 16384;

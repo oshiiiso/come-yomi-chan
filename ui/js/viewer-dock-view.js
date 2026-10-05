@@ -83,6 +83,16 @@ function renderViewerDock() {
         chips.textContent = paneTitleForTypes(node.types);
       }
       head.appendChild(chips);
+      const clearBtn = document.createElement('button');
+      clearBtn.type = 'button';
+      clearBtn.className = 'btn btn--ghost viewer-pane__clear';
+      clearBtn.dataset.viewerPaneClear = node.id;
+      clearBtn.dataset.viewerPaneTypes = node.types.join(',');
+      const clearLabel = uiCopy.viewerPaneClearLabel || 'この窓を消す';
+      clearBtn.textContent = '消す';
+      clearBtn.setAttribute('aria-label', clearLabel);
+      clearBtn.title = clearLabel;
+      head.appendChild(clearBtn);
       const empty = document.createElement('p');
       empty.className = 'viewer-pane__empty';
       empty.hidden = true;

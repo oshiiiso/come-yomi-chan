@@ -38,6 +38,7 @@ export function buildViewerStatusEvent(notice: ViewerStatusNotice, receivedAt: s
     user: EMPTY_VIEWER_USER,
     displayText: notice.text,
     comment: '',
+    commentEmotes: [],
     giftImageUrl: '',
     giftName: '',
     giftCount: 0,

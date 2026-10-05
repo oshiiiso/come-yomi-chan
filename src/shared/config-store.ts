@@ -1,6 +1,13 @@
 import Store from 'electron-store';
 import { APP_CONFIG } from './app-config';
-import { overlayPreviewUrl, overlayPublicUrl, overlayStudioUrl } from './overlay-url';
+import {
+  overlayAlertsPreviewUrl,
+  overlayAlertsPublicUrl,
+  overlayAlertsStudioUrl,
+  overlayPreviewUrl,
+  overlayPublicUrl,
+  overlayStudioUrl,
+} from './overlay-url';
 import { DEFAULT_OVERLAY_LOOK, overlayLookFromConfig, OVERLAY_FONTS, OVERLAY_LOOK_PRESETS } from './overlay-look';
 import { normalizeChatDisplayMs } from './chat-display';
 import { MSG } from './messages';
@@ -15,6 +22,7 @@ import {
   EventToggleMap,
 } from './types';
 import { normalizeCatalogGifts } from '../tiktok/gift-fields';
+import { resolveCachedTestGifts } from './permanent-gifts';
 import { resolveBlockedAndMutedUsers } from './comment-filters';
 import { DEFAULT_UI_THEME, normalizeUiTheme } from './ui-theme';
 import { clampSettingsPreviewPx, DEFAULT_SETTINGS_PREVIEW_PX } from './settings-layout';
@@ -38,15 +46,68 @@ import { parseConfigExport } from './config-transfer';
 import {
   DEFAULT_CLEAR_PIN_HOTKEY,
   DEFAULT_CLEAR_SPEECH_HOTKEY,
+  DEFAULT_MUTE_COMMENT_SOUND_HOTKEY,
+  DEFAULT_PAUSE_SPEECH_HOTKEY,
   DEFAULT_SKIP_SPEECH_HOTKEY,
   normalizeHotkey,
 } from './hotkeys';
 import {
   DEFAULT_OVERLAY_PIN,
   normalizeOverlayPinMs,
+  normalizeOverlayPinMsByType,
   normalizeOverlayPinTypes,
 } from './overlay-pin';
 import { DEFAULT_VIEWER_DOCK, normalizeViewerDock } from './viewer-dock';
+import {
+  DEFAULT_GIFT_SOUND_REF,
+  DEFAULT_SOUND_REF,
+  normalizeGiftSoundRef,
+  normalizeGiftSoundRefMap,
+  normalizeSoundRef,
+} from './sound-ref';
+import { normalizeNicknameMap } from './nickname-map';
+import {
+  DEFAULT_GIFT_CHIME_VOLUME,
+  normalizeGiftChimeDestinations,
+  normalizeGiftChimeDiamondBands,
+  normalizeGiftChimeMatchMode,
+  normalizeGiftChimeVolume,
+  normalizeGiftChimeVolumeById,
+  normalizeCommentNotifyMode,
+  normalizeGiftNotifyMode,
+  normalizeGiftSpeakById,
+  pruneGiftChimeVolumeById,
+} from './gift-notify';
+import {
+  defaultEventSoundMap,
+  DEFAULT_EVENT_NOTIFY_MODE,
+  normalizeEventNotifyModeMap,
+  normalizeEventSoundMap,
+} from './event-notify';
+import {
+  DEFAULT_EVENT_ALERT_MS,
+  defaultEventAlertDisplayMsMap,
+  defaultEventAlertEnabledFromSpeak,
+  defaultEventAlertMediaMap,
+  normalizeEventAlertDisplayMs,
+  normalizeEventAlertDisplayMsMap,
+  normalizeEventAlertEnabledMap,
+  normalizeEventAlertMediaMap,
+} from './event-alert';
+import { normalizeConfigProfiles } from './config-profiles';
+import {
+  DEFAULT_OVERLAY_NAME_COLOR_ENABLED,
+  DEFAULT_OVERLAY_NAME_COLORS,
+  OVERLAY_NAME_COLORS_BY_LOOK_PRESET,
+  normalizeOverlayNameColorEnabled,
+  normalizeOverlayNameColors,
+} from './overlay-name-colors';
+import { normalizeSpeechReplaceMap } from './speech-replace-map';
+import {
+  clampViewerLogMaxRows,
+  DEFAULT_VIEWER_LOG_MAX_ROWS,
+} from './viewer-log-persist';
+import { normalizeMainWindowBounds } from './window-bounds';
 
 type StoredConfig = AppConfig & { configVersion?: number };
 
@@ -54,7 +115,7 @@ type StoreSchema = {
   config: StoredConfig;
 };
 
-const CONFIG_VERSION = 3;
+const CONFIG_VERSION = 4;
 
 function overlayUrlFrom(port: number): string {
   return overlayPublicUrl(port);
@@ -110,6 +171,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   autoConnectOnStart: false,
   alwaysOnTop: false,
   compactViewer: false,
+  mainWindowBounds: null,
   ttsEngineId: 'windows',
   ttsVoice: '',
   ttsTestText: MSG.tester.speechDefault,
@@ -127,21 +189,45 @@ export const DEFAULT_CONFIG: AppConfig = {
   skipSpeechHotkey: DEFAULT_SKIP_SPEECH_HOTKEY,
   clearSpeechHotkey: DEFAULT_CLEAR_SPEECH_HOTKEY,
   clearPinHotkey: DEFAULT_CLEAR_PIN_HOTKEY,
+  pauseSpeechHotkey: DEFAULT_PAUSE_SPEECH_HOTKEY,
+  muteCommentSoundHotkey: DEFAULT_MUTE_COMMENT_SOUND_HOTKEY,
   ngWords: [],
   mutedUsers: [],
   blockedUsers: [],
+  nicknameMap: [],
   skipMentionSpeech: true,
   skipUrlSpeech: true,
   skipAnchorSpeech: false,
-  skipEmoteSpeech: false,
+  skipEmoteSpeech: true,
   speakFanSubOnly: false,
   speakFanMinLevel: DEFAULT_SPEAK_FAN_MIN_LEVEL,
+  speakFanClubComments: true,
   speakSubscriberComments: true,
   skipRepeatSpeech: false,
   repeatSpeechSec: DEFAULT_REPEAT_SPEECH_SEC,
   hideUserName: false,
   minGiftDiamonds: 0,
-  giftChimeDiamonds: 0,
+  giftNotifyMode: 'speak',
+  giftChimePlayApp: false,
+  giftChimePlayOverlay: false,
+  giftChimeMatchMode: 'gift',
+  giftChimeSound: DEFAULT_GIFT_SOUND_REF,
+  giftChimeVolume: DEFAULT_GIFT_CHIME_VOLUME,
+  giftChimeByGiftId: {},
+  giftChimeVolumeByGiftId: {},
+  giftSpeakByGiftId: {},
+  giftChimeDiamondBands: [],
+  commentNotifyMode: 'speak',
+  commentSoundEnabled: false,
+  commentSound: DEFAULT_SOUND_REF,
+  eventNotifyMode: { ...DEFAULT_EVENT_NOTIFY_MODE },
+  eventSound: defaultEventSoundMap(),
+  eventAlertEnabled: defaultEventAlertEnabledFromSpeak(DEFAULT_EVENT_TOGGLES),
+  eventAlertMedia: defaultEventAlertMediaMap(),
+  eventAlertDisplayMs: DEFAULT_EVENT_ALERT_MS,
+  eventAlertDisplayMsByType: defaultEventAlertDisplayMsMap(),
+  configProfiles: [],
+  activeConfigProfileId: '',
   likeMilestone: 100,
   chatMaxRows: 8,
   chatDisplayMs: 12000,
@@ -160,9 +246,12 @@ export const DEFAULT_CONFIG: AppConfig = {
   overlayMotionSpeed: DEFAULT_OVERLAY_LOOK.motionSpeed,
   overlayPinEnabled: DEFAULT_OVERLAY_PIN.enabled,
   overlayPinMs: DEFAULT_OVERLAY_PIN.displayMs,
+  overlayPinMsByType: { ...DEFAULT_OVERLAY_PIN.displayMsByType },
   overlayPinHold: DEFAULT_OVERLAY_PIN.hold,
   overlayPinTypes: { ...DEFAULT_OVERLAY_PIN.types },
   overlayPinPreview: DEFAULT_OVERLAY_PIN.previewPinned,
+  overlayNameColorEnabled: DEFAULT_OVERLAY_NAME_COLOR_ENABLED,
+  overlayNameColors: [...DEFAULT_OVERLAY_NAME_COLORS],
   uiTheme: DEFAULT_UI_THEME,
   settingsPreviewPx: DEFAULT_SETTINGS_PREVIEW_PX,
   viewerEventPanePx: DEFAULT_VIEWER_EVENT_PANE_PX,
@@ -171,6 +260,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   viewerFontSize: DEFAULT_VIEWER_FONT_SIZE,
   viewerDisplay: DEFAULT_VIEWER_DISPLAY,
   fanLevelLook: DEFAULT_FAN_LEVEL_LOOK,
+  speechReplaceMap: [],
+  viewerLogMaxRows: DEFAULT_VIEWER_LOG_MAX_ROWS,
   commentDisplayTemplate: MSG.template.commentDisplayDefault,
   commentSpeechTemplate: MSG.template.commentSpeechDefault,
   giftDisplayTemplate: MSG.template.giftDisplayDefault,
@@ -200,13 +291,17 @@ export const DEFAULT_CONFIG: AppConfig = {
 };
 
 export function resetConfigKeepingIdentity(
-  current: Pick<AppConfig, 'uniqueId' | 'confirmedUniqueId' | 'overlayPort'>,
+  current: Pick<
+    AppConfig,
+    'uniqueId' | 'confirmedUniqueId' | 'overlayPort' | 'mainWindowBounds'
+  >,
 ): AppConfig {
   return {
     ...DEFAULT_CONFIG,
     uniqueId: current.uniqueId,
     confirmedUniqueId: current.confirmedUniqueId,
     overlayPort: current.overlayPort,
+    mainWindowBounds: current.mainWindowBounds,
   };
 }
 
@@ -255,6 +350,17 @@ export class ConfigStore {
     const minimizeToTray = version >= 2 ? Boolean(merged.minimizeToTray) : false;
     const look = overlayLookFromConfig(merged);
     const userLists = resolveBlockedAndMutedUsers(raw ?? {});
+    const giftNotifyMode = normalizeGiftNotifyMode(merged.giftNotifyMode);
+    const giftChimeDest = normalizeGiftChimeDestinations({
+      mode: giftNotifyMode,
+      playApp: asBoolean(merged.giftChimePlayApp, DEFAULT_CONFIG.giftChimePlayApp),
+      playOverlay: asBoolean(
+        merged.giftChimePlayOverlay,
+        DEFAULT_CONFIG.giftChimePlayOverlay,
+      ),
+    });
+    const commentNotifyMode = normalizeCommentNotifyMode(merged.commentNotifyMode);
+    const events = normalizeEvents(merged.events);
 
     return {
       uniqueId: asString(merged.uniqueId, '').replace(/^@/, '').trim(),
@@ -264,6 +370,7 @@ export class ConfigStore {
       autoConnectOnStart: asBoolean(merged.autoConnectOnStart, DEFAULT_CONFIG.autoConnectOnStart),
       alwaysOnTop: asBoolean(merged.alwaysOnTop, DEFAULT_CONFIG.alwaysOnTop),
       compactViewer: asBoolean(merged.compactViewer, DEFAULT_CONFIG.compactViewer),
+      mainWindowBounds: normalizeMainWindowBounds(merged.mainWindowBounds),
       ttsEngineId: merged.ttsEngineId === 'voicevox' ? 'voicevox' : 'windows',
       ttsVoice: asString(merged.ttsVoice, ''),
       ttsTestText: asString(merged.ttsTestText, DEFAULT_CONFIG.ttsTestText).slice(0, 400),
@@ -284,15 +391,25 @@ export class ConfigStore {
       skipSpeechHotkey: normalizeHotkey(merged.skipSpeechHotkey, DEFAULT_SKIP_SPEECH_HOTKEY),
       clearSpeechHotkey: normalizeHotkey(merged.clearSpeechHotkey, DEFAULT_CLEAR_SPEECH_HOTKEY),
       clearPinHotkey: normalizeHotkey(merged.clearPinHotkey, DEFAULT_CLEAR_PIN_HOTKEY),
+      pauseSpeechHotkey: normalizeHotkey(merged.pauseSpeechHotkey, DEFAULT_PAUSE_SPEECH_HOTKEY),
+      muteCommentSoundHotkey: normalizeHotkey(
+        merged.muteCommentSoundHotkey,
+        DEFAULT_MUTE_COMMENT_SOUND_HOTKEY,
+      ),
       ngWords: normalizeNgWords(merged.ngWords),
       mutedUsers: userLists.mutedUsers,
       blockedUsers: userLists.blockedUsers,
+      nicknameMap: normalizeNicknameMap(merged.nicknameMap),
       skipMentionSpeech: asBoolean(merged.skipMentionSpeech, DEFAULT_CONFIG.skipMentionSpeech),
       skipUrlSpeech: asBoolean(merged.skipUrlSpeech, DEFAULT_CONFIG.skipUrlSpeech),
       skipAnchorSpeech: asBoolean(merged.skipAnchorSpeech, DEFAULT_CONFIG.skipAnchorSpeech),
       skipEmoteSpeech: asBoolean(merged.skipEmoteSpeech, DEFAULT_CONFIG.skipEmoteSpeech),
       speakFanSubOnly: asBoolean(merged.speakFanSubOnly, DEFAULT_CONFIG.speakFanSubOnly),
       speakFanMinLevel: clampSpeakFanMinLevel(merged.speakFanMinLevel),
+      speakFanClubComments: asBoolean(
+        merged.speakFanClubComments,
+        DEFAULT_CONFIG.speakFanClubComments,
+      ),
       speakSubscriberComments: asBoolean(
         merged.speakSubscriberComments,
         DEFAULT_CONFIG.speakSubscriberComments,
@@ -301,7 +418,35 @@ export class ConfigStore {
       repeatSpeechSec: clampRepeatSpeechSec(merged.repeatSpeechSec),
       hideUserName: asBoolean(merged.hideUserName, DEFAULT_CONFIG.hideUserName),
       minGiftDiamonds: clampInt(merged.minGiftDiamonds, 0, 0, 100000),
-      giftChimeDiamonds: clampInt(merged.giftChimeDiamonds, 0, 0, 100000),
+      giftNotifyMode,
+      giftChimePlayApp: giftChimeDest.playApp,
+      giftChimePlayOverlay: giftChimeDest.playOverlay,
+      giftChimeMatchMode: normalizeGiftChimeMatchMode(merged.giftChimeMatchMode),
+      giftChimeSound: normalizeGiftSoundRef(merged.giftChimeSound),
+      giftChimeVolume: normalizeGiftChimeVolume(
+        merged.giftChimeVolume ?? DEFAULT_GIFT_CHIME_VOLUME,
+      ),
+      giftChimeByGiftId: normalizeGiftSoundRefMap(merged.giftChimeByGiftId),
+      giftChimeVolumeByGiftId: pruneGiftChimeVolumeById(
+        normalizeGiftChimeVolumeById(merged.giftChimeVolumeByGiftId),
+        normalizeGiftSoundRefMap(merged.giftChimeByGiftId),
+      ),
+      giftSpeakByGiftId: normalizeGiftSpeakById(merged.giftSpeakByGiftId),
+      giftChimeDiamondBands: normalizeGiftChimeDiamondBands(merged.giftChimeDiamondBands),
+      commentNotifyMode,
+      commentSoundEnabled: commentNotifyMode === 'sound',
+      commentSound: normalizeSoundRef(merged.commentSound, DEFAULT_SOUND_REF),
+      eventNotifyMode: normalizeEventNotifyModeMap(merged.eventNotifyMode),
+      eventSound: normalizeEventSoundMap(merged.eventSound),
+      eventAlertEnabled: normalizeEventAlertEnabledMap(merged.eventAlertEnabled, events),
+      eventAlertMedia: normalizeEventAlertMediaMap(merged.eventAlertMedia),
+      eventAlertDisplayMs: normalizeEventAlertDisplayMs(merged.eventAlertDisplayMs),
+      eventAlertDisplayMsByType: normalizeEventAlertDisplayMsMap(
+        merged.eventAlertDisplayMsByType,
+        merged.eventAlertDisplayMs,
+      ),
+      configProfiles: normalizeConfigProfiles(merged.configProfiles),
+      activeConfigProfileId: asString(merged.activeConfigProfileId, '').slice(0, 80),
       likeMilestone: clampInt(merged.likeMilestone, DEFAULT_CONFIG.likeMilestone, 1, 100000),
       chatMaxRows: clampInt(merged.chatMaxRows, 8, 1, 50),
       chatDisplayMs: normalizeChatDisplayMs(merged.chatDisplayMs, DEFAULT_CONFIG.chatDisplayMs),
@@ -320,9 +465,12 @@ export class ConfigStore {
       overlayMotionSpeed: look.motionSpeed,
       overlayPinEnabled: asBoolean(merged.overlayPinEnabled, DEFAULT_CONFIG.overlayPinEnabled),
       overlayPinMs: normalizeOverlayPinMs(merged.overlayPinMs),
+      overlayPinMsByType: normalizeOverlayPinMsByType(merged.overlayPinMsByType),
       overlayPinHold: asBoolean(merged.overlayPinHold, DEFAULT_CONFIG.overlayPinHold),
       overlayPinTypes: normalizeOverlayPinTypes(merged.overlayPinTypes),
       overlayPinPreview: asBoolean(merged.overlayPinPreview, DEFAULT_CONFIG.overlayPinPreview),
+      overlayNameColorEnabled: normalizeOverlayNameColorEnabled(merged.overlayNameColorEnabled),
+      overlayNameColors: normalizeOverlayNameColors(merged.overlayNameColors),
       uiTheme: normalizeUiTheme(merged.uiTheme),
       settingsPreviewPx: clampSettingsPreviewPx(merged.settingsPreviewPx),
       viewerEventPanePx: clampViewerEventPanePx(merged.viewerEventPanePx),
@@ -331,6 +479,8 @@ export class ConfigStore {
       viewerFontSize: clampViewerFontSize(merged.viewerFontSize),
       viewerDisplay: normalizeViewerDisplay(merged.viewerDisplay),
       fanLevelLook: normalizeFanLevelLook(merged.fanLevelLook),
+      speechReplaceMap: normalizeSpeechReplaceMap(merged.speechReplaceMap),
+      viewerLogMaxRows: clampViewerLogMaxRows(merged.viewerLogMaxRows),
       commentDisplayTemplate: asString(
         merged.commentDisplayTemplate,
         DEFAULT_CONFIG.commentDisplayTemplate,
@@ -427,8 +577,8 @@ export class ConfigStore {
         merged.memberSpeechTemplate,
         DEFAULT_CONFIG.memberSpeechTemplate,
       ),
-      events: normalizeEvents(merged.events),
-      cachedTestGifts: normalizeCatalogGifts(merged.cachedTestGifts),
+      events,
+      cachedTestGifts: resolveCachedTestGifts(merged.cachedTestGifts),
     };
   }
 
@@ -448,7 +598,11 @@ export class ConfigStore {
       overlayUrl: overlayUrlFrom(config.overlayPort),
       overlayStudioUrl: overlayStudioUrl(config.overlayPort),
       overlayPreviewUrl: overlayPreviewUrl(config.overlayPort),
+      overlayAlertsUrl: overlayAlertsPublicUrl(config.overlayPort),
+      overlayAlertsStudioUrl: overlayAlertsStudioUrl(config.overlayPort),
+      overlayAlertsPreviewUrl: overlayAlertsPreviewUrl(config.overlayPort),
       overlayLookPresets: OVERLAY_LOOK_PRESETS,
+      overlayNameColorPresets: OVERLAY_NAME_COLORS_BY_LOOK_PRESET,
       overlayFonts: OVERLAY_FONTS.map((font) => ({
         id: font.id,
         label: font.label,
@@ -471,6 +625,18 @@ export class ConfigStore {
       ngWords: partial.ngWords ?? current.ngWords,
       mutedUsers: partial.mutedUsers ?? current.mutedUsers,
       blockedUsers: partial.blockedUsers ?? current.blockedUsers,
+      nicknameMap: partial.nicknameMap ?? current.nicknameMap,
+      giftChimeByGiftId: partial.giftChimeByGiftId ?? current.giftChimeByGiftId,
+      giftChimeVolumeByGiftId: partial.giftChimeVolumeByGiftId ?? current.giftChimeVolumeByGiftId,
+      giftSpeakByGiftId: partial.giftSpeakByGiftId ?? current.giftSpeakByGiftId,
+      giftChimeDiamondBands: partial.giftChimeDiamondBands ?? current.giftChimeDiamondBands,
+      eventNotifyMode: partial.eventNotifyMode ?? current.eventNotifyMode,
+      eventSound: partial.eventSound ?? current.eventSound,
+      eventAlertEnabled: partial.eventAlertEnabled ?? current.eventAlertEnabled,
+      eventAlertMedia: partial.eventAlertMedia ?? current.eventAlertMedia,
+      eventAlertDisplayMsByType:
+        partial.eventAlertDisplayMsByType ?? current.eventAlertDisplayMsByType,
+      configProfiles: partial.configProfiles ?? current.configProfiles,
       viewerDisplay: partial.viewerDisplay ?? current.viewerDisplay,
       viewerDock: partial.viewerDock ?? current.viewerDock,
       fanLevelLook: partial.fanLevelLook ?? current.fanLevelLook,

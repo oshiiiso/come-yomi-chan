@@ -17,3 +17,9 @@ test('ウィンドウが狭いときは設定側の幅を残す', () => {
   assert.equal(clampSettingsPreviewPx(500, 600), 320);
   assert.equal(clampSettingsPreviewPx(240, 600), 240);
 });
+
+test('横並びに足りない幅では保存したいプレビュー幅を維持する', () => {
+  assert.equal(clampSettingsPreviewPx(380, 440), 380);
+  assert.equal(clampSettingsPreviewPx(500, 400), 500);
+  assert.equal(clampSettingsPreviewPx(180, 400), MIN_SETTINGS_PREVIEW_PX);
+});

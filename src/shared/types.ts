@@ -3,6 +3,24 @@ import type { FanLevelStep } from './fan-level-look';
 import type { ViewerDockNode } from './viewer-dock';
 import type { ViewerLayoutMode } from './viewer-layout';
 import type { ViewerRoomStats } from './viewer-room-stats';
+import type {
+  CommentNotifyMode,
+  GiftChimeDiamondBand,
+  GiftChimeMatchMode,
+  GiftNotifyMode,
+} from './gift-notify';
+import type { EventNotifyModeMap, EventSoundMap } from './event-notify';
+import type {
+  EventAlertDisplayMsMap,
+  EventAlertEnabledMap,
+  EventAlertMediaMap,
+} from './event-alert';
+import type { NicknameMapEntry } from './nickname-map';
+import type { SoundRef } from './sound-ref';
+import type { ConfigProfile } from './config-profiles';
+import type { SpeechReplaceEntry } from './speech-replace-map';
+import type { CommentEmote } from './comment-emotes';
+import type { MainWindowBounds } from './window-bounds';
 
 export type LiveConnectionState =
   | 'disconnected'
@@ -61,6 +79,8 @@ export interface AppConfig {
   autoConnectOnStart: boolean;
   alwaysOnTop: boolean;
   compactViewer: boolean;
+  /** メイン窓の位置・サイズ。未保存は null。 */
+  mainWindowBounds: MainWindowBounds | null;
   ttsEngineId: string;
   ttsVoice: string;
   ttsTestText: string;
@@ -78,21 +98,49 @@ export interface AppConfig {
   skipSpeechHotkey: string;
   clearSpeechHotkey: string;
   clearPinHotkey: string;
+  pauseSpeechHotkey: string;
+  muteCommentSoundHotkey: string;
   ngWords: string[];
   mutedUsers: string[];
   blockedUsers: string[];
+  nicknameMap: NicknameMapEntry[];
   skipMentionSpeech: boolean;
   skipUrlSpeech: boolean;
   skipAnchorSpeech: boolean;
   skipEmoteSpeech: boolean;
   speakFanSubOnly: boolean;
   speakFanMinLevel: number;
+  speakFanClubComments: boolean;
   speakSubscriberComments: boolean;
   skipRepeatSpeech: boolean;
   repeatSpeechSec: number;
   hideUserName: boolean;
   minGiftDiamonds: number;
-  giftChimeDiamonds: number;
+  giftNotifyMode: GiftNotifyMode;
+  giftChimePlayApp: boolean;
+  giftChimePlayOverlay: boolean;
+  giftChimeMatchMode: GiftChimeMatchMode;
+  giftChimeSound: SoundRef;
+  /** 共通／テンプレ音の音量。個別ファイル音は giftChimeVolumeByGiftId。 */
+  giftChimeVolume: number;
+  giftChimeByGiftId: Record<string, SoundRef>;
+  giftChimeVolumeByGiftId: Record<string, number>;
+  giftSpeakByGiftId: Record<string, boolean>;
+  giftChimeDiamondBands: GiftChimeDiamondBand[];
+  commentNotifyMode: CommentNotifyMode;
+  commentSoundEnabled: boolean;
+  commentSound: SoundRef;
+  /** フォローなどイベント種別ごとの読み上げ／サウンド。 */
+  eventNotifyMode: EventNotifyModeMap;
+  eventSound: EventSoundMap;
+  /** イベントアラート配信ソースに出すか。欠けは読み上げ（speak）と同じ。 */
+  eventAlertEnabled: EventAlertEnabledMap;
+  eventAlertMedia: EventAlertMediaMap;
+  /** @deprecated 種類別の eventAlertDisplayMsByType を使う。無いときの移行用。 */
+  eventAlertDisplayMs: number;
+  eventAlertDisplayMsByType: EventAlertDisplayMsMap;
+  configProfiles: ConfigProfile[];
+  activeConfigProfileId: string;
   likeMilestone: number;
   chatMaxRows: number;
   chatDisplayMs: number;
@@ -111,9 +159,12 @@ export interface AppConfig {
   overlayMotionSpeed: number;
   overlayPinEnabled: boolean;
   overlayPinMs: number;
+  overlayPinMsByType: Record<string, number>;
   overlayPinHold: boolean;
   overlayPinTypes: Record<string, boolean>;
   overlayPinPreview: boolean;
+  overlayNameColorEnabled: boolean;
+  overlayNameColors: string[];
   uiTheme: UiTheme;
   settingsPreviewPx: number;
   viewerEventPanePx: number;
@@ -122,6 +173,8 @@ export interface AppConfig {
   viewerFontSize: number;
   viewerDisplay: Record<OverlayEventType, boolean>;
   fanLevelLook: FanLevelStep[];
+  speechReplaceMap: SpeechReplaceEntry[];
+  viewerLogMaxRows: number;
   commentDisplayTemplate: string;
   commentSpeechTemplate: string;
   giftDisplayTemplate: string;
@@ -154,6 +207,9 @@ export interface AppConfigView extends AppConfig {
   overlayUrl: string;
   overlayStudioUrl: string;
   overlayPreviewUrl: string;
+  overlayAlertsUrl: string;
+  overlayAlertsStudioUrl: string;
+  overlayAlertsPreviewUrl: string;
   overlayLookPresets: Record<string, {
     theme: string;
     fontFamily: string;
@@ -166,6 +222,8 @@ export interface AppConfigView extends AppConfig {
     align: string;
     previewBackdrop: string;
   }>;
+  /** かんたん見た目プリセット ID → 名前色5色 */
+  overlayNameColorPresets: Record<string, [string, string, string, string, string]>;
   overlayFonts: Array<{ id: string; label: string; css: string }>;
   voicevoxCreditText: string;
   voicevoxExeSuggested: string;
@@ -183,6 +241,8 @@ export interface LiveStatus {
   lastUpdated: string;
   roomStats: ViewerRoomStats | null;
   streamStartedAtMs: number | null;
+  speechPaused: boolean;
+  commentSoundMuted: boolean;
 }
 
 export interface TtsVoiceInfo {
@@ -194,6 +254,8 @@ export interface TtsVoiceInfo {
 export interface OverlayUser {
   uniqueId: string;
   nickname: string;
+  /** 呼び方を差し替える前の TikTok 上の名前。無いときは nickname と同じ扱い。 */
+  sourceNickname?: string;
   avatarUrl: string;
   isFanClub: boolean;
   fanClubStatus: number;
@@ -208,7 +270,9 @@ export interface NormalizedLiveEvent {
   type: OverlayEventType;
   user: OverlayUser;
   comment: string;
+  commentEmotes: CommentEmote[];
   likeCount: number;
+  giftId: string;
   giftName: string;
   giftCount: number;
   giftImageUrl: string;
@@ -220,6 +284,8 @@ export interface OverlayPayload {
   type: OverlayEventType;
   user: OverlayUser;
   displayText: string;
+  comment: string;
+  commentEmotes: CommentEmote[];
   giftImageUrl: string;
   audioUrl: string | null;
   receivedAt: string;

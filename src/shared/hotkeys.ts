@@ -1,6 +1,8 @@
 export const DEFAULT_SKIP_SPEECH_HOTKEY = 'F8';
 export const DEFAULT_CLEAR_SPEECH_HOTKEY = 'F9';
 export const DEFAULT_CLEAR_PIN_HOTKEY = 'F10';
+export const DEFAULT_PAUSE_SPEECH_HOTKEY = 'F7';
+export const DEFAULT_MUTE_COMMENT_SOUND_HOTKEY = 'F6';
 
 const BLOCKED_KEYS = new Set([
   'Shift',

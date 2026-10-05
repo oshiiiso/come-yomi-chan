@@ -37,6 +37,21 @@ function patchSnapshotUserLists(mutedUsers, blockedUsers) {
   } catch {
     return;
   }
+  refreshAllLineLists();
+}
+
+function patchSnapshotNicknameMap(nicknameMap) {
+  if (!savedSnapshot) {
+    return;
+  }
+  try {
+    const snap = JSON.parse(savedSnapshot);
+    snap.nicknameMap = nicknameMap;
+    savedSnapshot = JSON.stringify(snap);
+    updateDirtyUi();
+  } catch {
+    return;
+  }
 }
 
 function applyWindowPrefUi(alwaysOnTop, compactViewer) {
@@ -49,10 +64,8 @@ function applyWindowPrefUi(alwaysOnTop, compactViewer) {
   }
   const alwaysOnTopBtn = $('btn-always-on-top');
   const compactBtn = $('btn-compact-viewer');
-  alwaysOnTopBtn?.classList.toggle('is-active', alwaysOnTop);
-  alwaysOnTopBtn?.setAttribute('aria-checked', alwaysOnTop ? 'true' : 'false');
-  compactBtn?.classList.toggle('is-active', compactViewer);
-  compactBtn?.setAttribute('aria-checked', compactViewer ? 'true' : 'false');
+  alwaysOnTopBtn?.setAttribute('aria-pressed', alwaysOnTop ? 'true' : 'false');
+  compactBtn?.setAttribute('aria-pressed', compactViewer ? 'true' : 'false');
 }
 
 function patchSnapshotWindowPrefs(alwaysOnTop, compactViewer) {
@@ -80,9 +93,6 @@ async function persistWindowPrefs(partial) {
       ? partial.compactViewer
       : Boolean($('compact-viewer')?.checked);
   applyWindowPrefUi(alwaysOnTop, compactViewer);
-  if (compactViewer) {
-    await requestAppMode('viewer');
-  }
   await persistConfigPartial({ alwaysOnTop, compactViewer }, (config) => {
     applyWindowPrefUi(Boolean(config.alwaysOnTop), Boolean(config.compactViewer));
     patchSnapshotWindowPrefs(Boolean(config.alwaysOnTop), Boolean(config.compactViewer));

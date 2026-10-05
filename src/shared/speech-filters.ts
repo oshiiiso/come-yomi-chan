@@ -53,6 +53,7 @@ export function shouldSkipRestrictedCommentSpeech(
   options: {
     enabled: boolean;
     minFanLevel: number;
+    speakFanClub: boolean;
     speakSubscriber: boolean;
   },
 ): boolean {
@@ -61,7 +62,10 @@ export function shouldSkipRestrictedCommentSpeech(
   }
   const rawLevel = Number(user?.fanClubLevel);
   const fanLevel = Number.isFinite(rawLevel) && rawLevel > 0 ? rawLevel : 0;
-  const fanOk = user?.isFanClub === true && fanLevel >= options.minFanLevel;
+  const fanOk =
+    options.speakFanClub &&
+    user?.isFanClub === true &&
+    fanLevel >= options.minFanLevel;
   const subOk = options.speakSubscriber && user?.isSuperFan === true;
   return !fanOk && !subOk;
 }

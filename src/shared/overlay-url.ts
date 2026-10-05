@@ -20,6 +20,10 @@ export function overlayPathUrl(host: string, port: number): string {
   return `http://${host}:${port}/overlay/`;
 }
 
+export function overlayAlertsPathUrl(host: string, port: number): string {
+  return `http://${host}:${port}/overlay/alerts/`;
+}
+
 export function overlayPublicUrl(port: number): string {
   return overlayPathUrl(normalizeOverlayPublicHost(APP_CONFIG.overlayPublicHost), port);
 }
@@ -30,4 +34,22 @@ export function overlayStudioUrl(port: number): string {
 
 export function overlayPreviewUrl(port: number): string {
   return overlayPathUrl(APP_CONFIG.overlayHost, port);
+}
+
+export function overlayAlertsPublicUrl(port: number): string {
+  return overlayAlertsPathUrl(
+    normalizeOverlayPublicHost(APP_CONFIG.overlayPublicHost),
+    port,
+  );
+}
+
+export function overlayAlertsStudioUrl(port: number): string {
+  return overlayAlertsPathUrl(
+    normalizeOverlayPublicHost(APP_CONFIG.overlayStudioHost),
+    port,
+  );
+}
+
+export function overlayAlertsPreviewUrl(port: number): string {
+  return overlayAlertsPathUrl(APP_CONFIG.overlayHost, port);
 }

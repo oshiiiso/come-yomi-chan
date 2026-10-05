@@ -29,6 +29,40 @@ function firstRecord(...values: unknown[]): Record<string, unknown> {
   return {};
 }
 
+/** TikTok uniqueId（英数字のハンドル）っぽいときだけ返す。数字だけの userId や表示名は除外。 */
+function asHandleId(value: unknown): string {
+  const text = asText(value).replace(/^@/, '');
+  if (!text || /^\d+$/.test(text) || /\s/.test(text) || /[^\w.]/.test(text)) {
+    return '';
+  }
+  return text;
+}
+
+/** common.displayText.pieces[].userValue.user などからユーザーを拾う（宝箱など user が無い通知用）。 */
+function usersFromDisplayText(text: unknown): Record<string, unknown>[] {
+  const record = asRecord(text);
+  const pieces = Array.isArray(record.pieces) ? record.pieces : [];
+  const out: Record<string, unknown>[] = [];
+  for (const piece of pieces) {
+    const userValue = asRecord(asRecord(piece).userValue);
+    const user = asRecord(userValue.user);
+    if (Object.keys(user).length > 0) {
+      out.push(user);
+    }
+  }
+  return out;
+}
+
+function usersFromEventTexts(raw: Record<string, unknown>): Record<string, unknown>[] {
+  const common = asRecord(raw.common);
+  const publicArea = asRecord(raw.publicAreaMsgCommon ?? raw.publicAreaMessageCommon);
+  return [
+    ...usersFromDisplayText(common.displayText),
+    ...usersFromDisplayText(raw.displayText),
+    ...usersFromDisplayText(publicArea.dynamicDisplayText),
+  ];
+}
+
 function pickAvatarUrl(user: Record<string, unknown>, raw: Record<string, unknown>): string {
   const envelope = asRecord(raw.envelopeInfo);
   return (
@@ -54,6 +88,7 @@ export function userFromEvent(
   const identity = asRecord(raw.userIdentity);
   const common = asRecord(raw.common);
   const envelope = asRecord(raw.envelopeInfo);
+  const textUsers = usersFromEventTexts(raw);
   const user = firstRecord(
     raw.user,
     raw.fromUser,
@@ -61,8 +96,10 @@ export function userFromEvent(
     raw.userInfo,
     identity.user,
     common.user,
+    ...textUsers,
   );
 
+  // ハンドル（displayId / uniqueId）を数字の userId より先に取る
   const uniqueId = (
     asText(user.uniqueId) ||
     asText(user.unique_id) ||
@@ -70,6 +107,8 @@ export function userFromEvent(
     asText(user.display_id) ||
     asText(raw.uniqueId) ||
     asText(raw.unique_id) ||
+    asHandleId(envelope.sendUserName) ||
+    asText(user.id) ||
     asText(user.userId) ||
     asText(raw.userId) ||
     asText(envelope.sendUserId)

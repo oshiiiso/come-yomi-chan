@@ -1,6 +1,6 @@
 {
   "name": "come-yomi-chan",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "TikTok LIVE のコメント画面と読み上げ（コメ読みちゃん）",
   "main": "dist/main/index.js",
   "author": "oshiiiso",
@@ -9,7 +9,8 @@
     "build": "tsc",
     "start": "npm run build && electron .",
     "dev": "tsc && electron .",
-    "test": "tsc && node --test \"dist/test/**/*.test.js\" && electron scripts/verify-preload.js",
+    "test": "tsc && node --test \"dist/test/**/*.test.js\" && electron scripts/verify-preload.js && electron scripts/verify-pin-leave.js",
+    "dump:gifts": "npm run build && node scripts/dump-gift-seed.cjs",
     "pack": "npm run build && electron-builder --dir",
     "dist": "npm run build && electron-builder --win zip",
     "dist:dir": "npm run build && electron-builder --win dir --publish never"

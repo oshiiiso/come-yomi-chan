@@ -105,17 +105,21 @@ export function normalizeTopGifters(
     if (!key || seen.has(key)) {
       continue;
     }
+    const coinCount = normalizeCoinCount(
+      entry.coinCount ??
+        entry.coin_count ??
+        entry.score ??
+        entry.diamondCount ??
+        entry.diamond_count,
+    );
+    if (coinCount < 1) {
+      continue;
+    }
     seen.add(key);
     out.push({
       uniqueId: user.uniqueId,
       nickname: user.nickname,
-      coinCount: normalizeCoinCount(
-        entry.coinCount ??
-          entry.coin_count ??
-          entry.score ??
-          entry.diamondCount ??
-          entry.diamond_count,
-      ),
+      coinCount,
     });
     if (out.length >= limit) {
       break;

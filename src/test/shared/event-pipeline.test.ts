@@ -238,10 +238,13 @@ test('連投は読み上げだけ飛ばす', () => {
   assert.equal(result.shouldSpeak, false);
 });
 
-test('ミュートした人は読まない', () => {
+test('ミュートは呼び方差し替え前の名前でも効く', () => {
   const result = resolveEventSpeech({
-    event: commentEvent('こんにちは'),
-    config: { ...DEFAULT_CONFIG, mutedUsers: ['tester'] },
+    event: commentEvent('こんにちは', {
+      ...viewer,
+      nickname: '本名',
+    }),
+    config: { ...DEFAULT_CONFIG, mutedUsers: ['本名'] },
     options: {},
     toggleSpeak: true,
     repeatWouldSkip: false,
@@ -260,4 +263,136 @@ test('ギフトの連投・メンション判定はコメント専用', () => {
     varsComment: '',
   });
   assert.equal(result.shouldSpeak, true);
+});
+
+test('サウンドモードのギフトは読まない', () => {
+  const result = resolveEventSpeech({
+    event: giftEvent(50),
+    config: { ...DEFAULT_CONFIG, giftNotifyMode: 'chime' },
+    options: {},
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: 'バラ',
+  });
+  assert.equal(result.shouldSpeak, false);
+});
+
+test('テスト送信でもサウンドモードは読まない', () => {
+  const result = resolveEventSpeech({
+    event: giftEvent(50),
+    config: { ...DEFAULT_CONFIG, giftNotifyMode: 'chime' },
+    options: { skipFilters: true, forceDisplay: true },
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: 'バラ',
+  });
+  assert.equal(result.shouldSpeak, false);
+});
+
+test('新着音モードのコメントは読まない', () => {
+  const result = resolveEventSpeech({
+    event: commentEvent('こんにちは'),
+    config: { ...DEFAULT_CONFIG, commentNotifyMode: 'sound' },
+    options: {},
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: 'こんにちは',
+  });
+  assert.equal(result.shouldSpeak, false);
+});
+
+test('新着音モードは forceSpeak でも読まない', () => {
+  const result = resolveEventSpeech({
+    event: commentEvent('こんにちは'),
+    config: { ...DEFAULT_CONFIG, commentNotifyMode: 'sound' },
+    options: { forceSpeak: true, skipFilters: true, forceDisplay: true },
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: 'こんにちは',
+  });
+  assert.equal(result.shouldSpeak, false);
+});
+
+test('イベントのサウンドモードは読まない', () => {
+  const result = resolveEventSpeech({
+    event: {
+      type: 'follow',
+      comment: '',
+      diamondCount: 0,
+      user: { uniqueId: 'u', nickname: 'n', isFanClub: false, isSuperFan: false, fanClubLevel: 0 },
+    },
+    config: {
+      ...DEFAULT_CONFIG,
+      eventNotifyMode: { ...DEFAULT_CONFIG.eventNotifyMode, follow: 'sound' },
+    },
+    options: {},
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: '',
+  });
+  assert.equal(result.shouldSpeak, false);
+});
+
+test('ギフトのサウンドモードでも宝箱は読み上げられる', () => {
+  const result = resolveEventSpeech({
+    event: {
+      type: 'envelope',
+      comment: '',
+      diamondCount: 100,
+      user: { uniqueId: 'u', nickname: 'n', isFanClub: false, isSuperFan: false, fanClubLevel: 0 },
+    },
+    config: { ...DEFAULT_CONFIG, giftNotifyMode: 'chime' },
+    options: {},
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: '',
+  });
+  assert.equal(result.shouldSpeak, true);
+});
+
+test('種別 OFF は読み上げモードの TTS には効かない', () => {
+  const result = resolveEventSpeech({
+    event: { ...giftEvent(999), giftId: 'rose' },
+    config: {
+      ...DEFAULT_CONFIG,
+      giftSpeakByGiftId: { rose: false },
+    },
+    options: { skipFilters: true, forceDisplay: true },
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: 'バラ',
+  });
+  assert.equal(result.shouldSpeak, true);
+});
+
+test('種別 OFF でも読み上げモードなら最低ダイヤで読む', () => {
+  const result = resolveEventSpeech({
+    event: { ...giftEvent(999), giftId: 'rose' },
+    config: {
+      ...DEFAULT_CONFIG,
+      minGiftDiamonds: 1,
+      giftSpeakByGiftId: { rose: false },
+    },
+    options: {},
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: 'バラ',
+  });
+  assert.equal(result.shouldSpeak, true);
+});
+
+test('サウンドモードの種別 OFF は読まない（もともと読まない）', () => {
+  const result = resolveEventSpeech({
+    event: { ...giftEvent(999), giftId: 'rose' },
+    config: {
+      ...DEFAULT_CONFIG,
+      giftNotifyMode: 'chime',
+      giftSpeakByGiftId: { rose: false },
+    },
+    options: {},
+    toggleSpeak: true,
+    repeatWouldSkip: false,
+    varsComment: 'バラ',
+  });
+  assert.equal(result.shouldSpeak, false);
 });

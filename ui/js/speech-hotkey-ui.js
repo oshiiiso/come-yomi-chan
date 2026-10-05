@@ -19,7 +19,10 @@ function speechActionLabel(label, key) {
 
 function paintSpeechActionButton(button, label, key) {
   const title = speechActionLabel(label, key);
-  button.replaceChildren(label);
+  const text = document.createElement('span');
+  text.className = 'btn__label';
+  text.textContent = label;
+  button.replaceChildren(text);
   if (key) {
     const chip = document.createElement('kbd');
     chip.className = 'hotkey-chip';
@@ -33,12 +36,22 @@ function syncSpeechHotkeyUi() {
   const skip = speechHotkeyValue('hotkey-skip-speech', DEFAULT_SKIP_SPEECH_HOTKEY);
   const clear = speechHotkeyValue('hotkey-clear-speech', DEFAULT_CLEAR_SPEECH_HOTKEY);
   const pin = speechHotkeyValue('hotkey-clear-pin', DEFAULT_CLEAR_PIN_HOTKEY);
+  const pause = speechHotkeyValue('hotkey-pause-speech', DEFAULT_PAUSE_SPEECH_HOTKEY);
+  const mute = speechHotkeyValue('hotkey-mute-comment-sound', DEFAULT_MUTE_COMMENT_SOUND_HOTKEY);
   paintHotkeyButton('hotkey-skip-speech', skip, hotkeyCapture === 'hotkey-skip-speech');
   paintHotkeyButton('hotkey-clear-speech', clear, hotkeyCapture === 'hotkey-clear-speech');
   paintHotkeyButton('hotkey-clear-pin', pin, hotkeyCapture === 'hotkey-clear-pin');
+  paintHotkeyButton('hotkey-pause-speech', pause, hotkeyCapture === 'hotkey-pause-speech');
+  paintHotkeyButton(
+    'hotkey-mute-comment-sound',
+    mute,
+    hotkeyCapture === 'hotkey-mute-comment-sound',
+  );
   const skipUnset = $('hotkey-skip-unset');
   const clearUnset = $('hotkey-clear-unset');
   const pinUnset = $('hotkey-clear-pin-unset');
+  const pauseUnset = $('hotkey-pause-unset');
+  const muteUnset = $('hotkey-mute-comment-sound-unset');
   if (skipUnset) {
     skipUnset.disabled = !skip;
   }
@@ -47,6 +60,12 @@ function syncSpeechHotkeyUi() {
   }
   if (pinUnset) {
     pinUnset.disabled = !pin;
+  }
+  if (pauseUnset) {
+    pauseUnset.disabled = !pause;
+  }
+  if (muteUnset) {
+    muteUnset.disabled = !mute;
   }
   const skipBtn = $('btn-skip-speech');
   const clearBtn = $('btn-clear-speech');
@@ -59,6 +78,9 @@ function syncSpeechHotkeyUi() {
   }
   if (pinBtn) {
     paintSpeechActionButton(pinBtn, uiCopy.clearPinButton || '固定枠の待ちを捨てる', pin);
+  }
+  if (typeof syncPauseMuteButtons === 'function') {
+    syncPauseMuteButtons();
   }
 }
 
@@ -86,6 +108,16 @@ function fillSpeechHotkeys(config) {
   paintHotkeyButton(
     'hotkey-clear-pin',
     normalizeHotkey(config.clearPinHotkey, DEFAULT_CLEAR_PIN_HOTKEY),
+    false,
+  );
+  paintHotkeyButton(
+    'hotkey-pause-speech',
+    normalizeHotkey(config.pauseSpeechHotkey, DEFAULT_PAUSE_SPEECH_HOTKEY),
+    false,
+  );
+  paintHotkeyButton(
+    'hotkey-mute-comment-sound',
+    normalizeHotkey(config.muteCommentSoundHotkey, DEFAULT_MUTE_COMMENT_SOUND_HOTKEY),
     false,
   );
   syncSpeechHotkeyUi();

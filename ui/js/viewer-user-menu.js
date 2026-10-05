@@ -28,6 +28,7 @@ function removeViewerItemsForUser(user) {
 function showViewerUserMenu(event, item) {
   const uniqueId = item.dataset.uniqueId || '';
   const nickname = item.dataset.nickname || '';
+  const displayName = item.dataset.displayName || nickname;
   const displayText =
     item.dataset.displayText || item.querySelector('.viewer__text')?.textContent || '';
   if (!listedUserIdFrom({ uniqueId, nickname }) && !displayText) {
@@ -41,21 +42,32 @@ function showViewerUserMenu(event, item) {
   const copyNicknameBtn = $('viewer-user-menu-copy-nickname');
   const muteBtn = $('viewer-user-menu-mute');
   const blockBtn = $('viewer-user-menu-block');
+  const nicknameBtn = $('viewer-user-menu-nickname');
+  const nicknameClearBtn = $('viewer-user-menu-nickname-clear');
   if (!menu || !copyBtn || !copyIdBtn || !copyNicknameBtn || !muteBtn || !blockBtn) {
     return;
   }
   const user = { uniqueId, nickname };
   const muted = savedConfig?.mutedUsers ?? parseUserLines($('muted-users')?.value);
   const blocked = savedConfig?.blockedUsers ?? parseUserLines($('blocked-users')?.value);
+  const nickMap =
+    typeof collectNicknameMap === 'function'
+      ? collectNicknameMap()
+      : savedConfig?.nicknameMap || [];
+  const idValue = uniqueId.replace(/^@/, '').trim();
+  const hasNickname =
+    Boolean(idValue) &&
+    nickMap.some((entry) => entry.uniqueId.toLowerCase() === idValue.toLowerCase());
   const isMuted = userListHas(muted, user);
   const isBlocked = userListHas(blocked, user);
   const hasUser = Boolean(listedUserIdFrom(user));
-  const idValue = uniqueId.replace(/^@/, '').trim();
   menu.dataset.uniqueId = uniqueId;
   menu.dataset.nickname = nickname;
   menu.dataset.displayText = displayText;
   if (label) {
-    label.textContent = uniqueId ? `@${uniqueId}` : nickname || uiCopy.viewerCopyComment;
+    label.textContent = uniqueId
+      ? `@${uniqueId}${displayName && displayName !== nickname ? `（${displayName}）` : ''}`
+      : displayName || nickname || uiCopy.viewerCopyComment;
   }
   copyBtn.textContent = uiCopy.viewerCopyComment;
   copyBtn.disabled = !displayText;
@@ -67,6 +79,14 @@ function showViewerUserMenu(event, item) {
   blockBtn.textContent = isBlocked ? uiCopy.viewerUnblockUser : uiCopy.viewerBlockUser;
   muteBtn.hidden = !hasUser;
   blockBtn.hidden = !hasUser;
+  if (nicknameBtn) {
+    nicknameBtn.textContent = uiCopy.nicknameRename || '呼び方を変える';
+    nicknameBtn.hidden = !idValue;
+  }
+  if (nicknameClearBtn) {
+    nicknameClearBtn.textContent = uiCopy.nicknameClear || '呼び方を消す';
+    nicknameClearBtn.hidden = !hasNickname;
+  }
   menu.hidden = false;
   const pad = 8;
   const left = Math.min(event.clientX, window.innerWidth - menu.offsetWidth - pad);
@@ -173,4 +193,44 @@ async function applyViewerUserAction(kind) {
   setToast(
     formatUserCopy(wasMuted ? uiCopy.viewerUserUnmuted : uiCopy.viewerUserMuted, name),
   );
+}
+
+async function applyViewerNicknameAction(kind) {
+  const menu = $('viewer-user-menu');
+  const uniqueId = String(menu?.dataset.uniqueId || '')
+    .replace(/^@/, '')
+    .trim();
+  const nickname = String(menu?.dataset.nickname || '').trim();
+  hideViewerUserMenu();
+  if (!uniqueId) {
+    setToast(uiCopy.viewerUserMissing, true);
+    return;
+  }
+  let map =
+    typeof collectNicknameMap === 'function'
+      ? collectNicknameMap()
+      : savedConfig?.nicknameMap || [];
+  if (kind === 'clear') {
+    map = removeNicknameMapUi(map, uniqueId);
+  } else {
+    const current =
+      map.find((entry) => entry.uniqueId.toLowerCase() === uniqueId.toLowerCase())
+        ?.displayName || nickname;
+    const nextName = window.prompt(uiCopy.nicknamePrompt || '読み上げと画面に出す名前', current);
+    if (nextName == null) {
+      return;
+    }
+    const trimmed = String(nextName).trim();
+    map = trimmed
+      ? upsertNicknameMapUi(map, uniqueId, trimmed)
+      : removeNicknameMapUi(map, uniqueId);
+  }
+  setNicknameMapEntries(map);
+  const result = await persistConfigPartial({ nicknameMap: map }, (config) => {
+    setNicknameMapEntries(config.nicknameMap ?? map);
+    patchSnapshotNicknameMap(config.nicknameMap ?? map);
+  });
+  if (!result.ok) {
+    setToast(result.message || uiCopy.saveFailed || '保存に失敗しました', true);
+  }
 }

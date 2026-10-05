@@ -70,6 +70,19 @@ export class TtsQueue {
     }
   }
 
+  private paused = false;
+
+  isPaused(): boolean {
+    return this.paused;
+  }
+
+  setPaused(paused: boolean): void {
+    this.paused = paused;
+    if (!paused) {
+      void this.pump();
+    }
+  }
+
   private insertJob(job: QueueJob): void {
     if (!job.priority) {
       this.pending.push(job);
@@ -93,12 +106,12 @@ export class TtsQueue {
   }
 
   private async pump(): Promise<void> {
-    if (this.pumping) {
+    if (this.pumping || this.paused) {
       return;
     }
     this.pumping = true;
     try {
-      while (this.pending.length > 0) {
+      while (this.pending.length > 0 && !this.paused) {
         const job = this.pending.shift();
         if (!job) {
           break;
@@ -112,7 +125,7 @@ export class TtsQueue {
       }
     } finally {
       this.pumping = false;
-      if (this.pending.length > 0) {
+      if (this.pending.length > 0 && !this.paused) {
         void this.pump();
       }
     }

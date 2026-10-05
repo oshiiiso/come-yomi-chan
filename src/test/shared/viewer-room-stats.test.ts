@@ -97,6 +97,16 @@ test('上位ギフトは上限と重複を除く', () => {
   );
 });
 
+test('上位ギフトは 0 ダイヤを出さない', () => {
+  const list = normalizeTopGifters([
+    { user: { uniqueId: 'zero', nickname: 'ゼロ' }, coinCount: 0 },
+    { user: { uniqueId: 'missing', nickname: 'なし' } },
+    { user: { uniqueId: 'ok', nickname: 'あり' }, coinCount: 3 },
+    { user: { uniqueId: 'score0', nickname: 'スコア0' }, score: 0 },
+  ]);
+  assert.deepEqual(list, [{ uniqueId: 'ok', nickname: 'あり', coinCount: 3 }]);
+});
+
 test('同じ統計なら更新不要と判定できる', () => {
   const stats = parseViewerRoomStats({ viewerCount: 10, ranksList: [] });
   assert.equal(sameViewerRoomStats(stats, stats), true);

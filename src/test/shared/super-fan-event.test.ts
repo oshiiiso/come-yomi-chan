@@ -4,7 +4,6 @@ import {
   SUPER_FAN_JOIN_DEDUPE_MS,
   SuperFanJoinDedupe,
   isSuperFanBoxEvent,
-  shouldPlayGiftChime,
 } from '../../shared/super-fan-event';
 
 test('ギフト名があるスーパーファンはボックス', () => {
@@ -26,18 +25,4 @@ test('別人の加入は捨てない', () => {
   const dedupe = new SuperFanJoinDedupe();
   assert.equal(dedupe.shouldSkip({ uniqueId: 'alice' }, 1_000), false);
   assert.equal(dedupe.shouldSkip({ uniqueId: 'bob' }, 1_100), false);
-});
-
-test('高いギフトだけチャイムする', () => {
-  assert.equal(shouldPlayGiftChime({ type: 'gift', diamondCount: 99 }, 100), false);
-  assert.equal(shouldPlayGiftChime({ type: 'gift', diamondCount: 100 }, 100), true);
-  assert.equal(shouldPlayGiftChime({ type: 'envelope', diamondCount: 120 }, 100), true);
-  assert.equal(
-    shouldPlayGiftChime({ type: 'superFan', giftName: 'スーパーファンボックス', diamondCount: 200 }, 100),
-    true,
-  );
-  assert.equal(shouldPlayGiftChime({ type: 'superFan', giftName: '', diamondCount: 200 }, 100), false);
-  assert.equal(shouldPlayGiftChime({ type: 'portal', giftName: 'ポータル', diamondCount: 200 }, 100), true);
-  assert.equal(shouldPlayGiftChime({ type: 'member', giftName: 'ポータル', diamondCount: 200 }, 100), false);
-  assert.equal(shouldPlayGiftChime({ type: 'gift', diamondCount: 999 }, 0), false);
 });

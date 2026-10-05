@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>コメ読みちゃん イベントアラート</title>
+    <script>
+      (() => {
+        const params = new URLSearchParams(location.search);
+        if (params.has('preview')) {
+          document.documentElement.dataset.preview = '1';
+          document.documentElement.dataset.backdrop = params.get('backdrop') || 'checker';
+        }
+      })();
+    </script>
+    <link rel="stylesheet" href="/overlay/alerts.css?v=textshadow5" />
+  </head>
+  <body>
+    <div class="alert-root" id="alert-root" aria-live="polite">
+      <div class="alert-stage" id="alert-stage" hidden>
+        <div class="alert-media-wrap" id="alert-media-wrap" hidden>
+          <img class="alert-media" id="alert-media" alt="" hidden />
+          <div class="alert-media-svg" id="alert-media-svg" hidden></div>
+        </div>
+        <p class="alert-text" id="alert-text"></p>
+      </div>
+    </div>
+    <script src="/overlay/alerts.js?v=textshadow5"></script>
+  </body>
+</html>

@@ -7,8 +7,10 @@ import {
   canHoldOverlayPin,
   normalizeOverlayPin,
   normalizeOverlayPinMs,
+  normalizeOverlayPinMsByType,
   normalizeOverlayPinTypes,
   overlayPinFromConfig,
+  resolveOverlayPinDisplayMs,
   shouldPinOverlayType,
   splitOverlayPinQueue,
   takeOverlayPinQueue,
@@ -83,6 +85,19 @@ test('種類を外したら待ちのその種類は固定枠から外す', () =>
   assert.deepEqual(off.rest.map((item) => item.type), ['gift', 'follow']);
 });
 
+test('種類別秒数は有効なものだけ残し、解決は hold 中は共通秒数', () => {
+  assert.deepEqual(normalizeOverlayPinMsByType(undefined), {});
+  assert.deepEqual(
+    normalizeOverlayPinMsByType({ gift: 5000, follow: '8000', like: 50, portal: 200_000 }),
+    { gift: 5000, follow: 8000 },
+  );
+  const byType = { gift: 6000, follow: 7000 };
+  assert.equal(resolveOverlayPinDisplayMs('gift', 4000, byType, false), 6000);
+  assert.equal(resolveOverlayPinDisplayMs('member', 4000, byType, false), 4000);
+  assert.equal(resolveOverlayPinDisplayMs('gift', 4000, byType, true), 4000);
+  assert.equal(resolveOverlayPinDisplayMs('subscribe', 4000, { superFan: 9000 }, false), 9000);
+});
+
 test('設定からの固定枠は hold 以外を初期値で埋める', () => {
   const pin = overlayPinFromConfig({
     overlayPinMs: '8000',
@@ -96,4 +111,8 @@ test('設定からの固定枠は hold 以外を初期値で埋める', () => {
   assert.equal(pin.types.member, true);
   assert.equal(overlayPinFromConfig({ overlayPinEnabled: false }).enabled, false);
   assert.deepEqual(normalizeOverlayPin(undefined), DEFAULT_OVERLAY_PIN);
+  const withByType = overlayPinFromConfig({
+    overlayPinMsByType: { gift: 10000, follow: 999 },
+  });
+  assert.deepEqual(withByType.displayMsByType, { gift: 10000 });
 });

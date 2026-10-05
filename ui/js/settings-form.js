@@ -56,6 +56,19 @@ function applyCopy(config) {
       el.textContent = uiCopy.eventDisplayLabel;
     }
   }
+  if (uiCopy.eventSpeakLabel) {
+    for (const el of document.querySelectorAll('[data-event-speak-label]')) {
+      el.textContent = uiCopy.eventSpeakLabel;
+    }
+  }
+  const giftSpeakListHint = $('gift-speak-list-hint');
+  if (giftSpeakListHint && uiCopy.giftSpeakListHint) {
+    giftSpeakListHint.textContent = uiCopy.giftSpeakListHint;
+  }
+  const previewFont = $('preview-font');
+  if (previewFont && uiCopy.previewZoomLabel) {
+    previewFont.setAttribute('aria-label', uiCopy.previewZoomLabel);
+  }
   const fontGroup = $('viewer-font');
   if (fontGroup && uiCopy.viewerFontSizeLabel) {
     fontGroup.setAttribute('aria-label', uiCopy.viewerFontSizeLabel);
@@ -78,11 +91,27 @@ function applyCopy(config) {
   }
   const alwaysOnTopBtn = $('btn-always-on-top');
   if (alwaysOnTopBtn && uiCopy.alwaysOnTopMenu) {
-    alwaysOnTopBtn.textContent = uiCopy.alwaysOnTopMenu;
+    alwaysOnTopBtn.title = uiCopy.alwaysOnTopMenu;
+    alwaysOnTopBtn.setAttribute('aria-label', uiCopy.alwaysOnTopMenu);
   }
   const compactBtn = $('btn-compact-viewer');
   if (compactBtn && uiCopy.compactMenu) {
-    compactBtn.textContent = uiCopy.compactMenu;
+    compactBtn.title = uiCopy.compactMenu;
+    compactBtn.setAttribute('aria-label', uiCopy.compactMenu);
+  }
+  if (typeof syncMaximizeChrome === 'function') {
+    const maximized = $('btn-maximize')?.getAttribute('aria-pressed') === 'true';
+    syncMaximizeChrome(maximized);
+  }
+  const minimizeBtn = $('btn-minimize');
+  if (minimizeBtn && uiCopy.minimizeWindow) {
+    minimizeBtn.title = uiCopy.minimizeWindow;
+    minimizeBtn.setAttribute('aria-label', uiCopy.minimizeWindow);
+  }
+  const closeBtn = $('btn-close');
+  if (closeBtn && uiCopy.closeWindow) {
+    closeBtn.title = uiCopy.closeWindow;
+    closeBtn.setAttribute('aria-label', uiCopy.closeWindow);
   }
   const previewSamples = $('btn-viewer-preview-samples');
   if (previewSamples && uiCopy.viewerPreviewSamples) {
@@ -116,14 +145,29 @@ function applyCopy(config) {
   if (clearLog && uiCopy.viewerClearLog) {
     clearLog.textContent = uiCopy.viewerClearLog;
   }
+  for (const button of document.querySelectorAll('[data-viewer-pane-clear]')) {
+    const label = uiCopy.viewerPaneClearLabel || 'この窓を消す';
+    button.setAttribute('aria-label', label);
+    button.title = label;
+  }
+  const speechFormat = $('speech-replace-format-hint');
+  if (speechFormat && uiCopy.speechReplaceFormatHint) {
+    speechFormat.textContent = uiCopy.speechReplaceFormatHint;
+  }
   const pairs = [
     ['speak-fan-sub-only-label', 'speakFanSubOnlyLabel'],
     ['speak-fan-sub-only-hint', 'speakFanSubOnlyHint'],
     ['speak-fan-min-level-label', 'speakFanMinLevelLabel'],
+    ['speak-fan-club-comments-label', 'speakFanClubCommentsLabel'],
+    ['speak-fan-club-comments-hint', 'speakFanClubCommentsHint'],
     ['speak-subscriber-comments-label', 'speakSubscriberCommentsLabel'],
     ['speak-subscriber-comments-hint', 'speakSubscriberCommentsHint'],
     ['fan-level-look-label', 'fanLevelLookLabel'],
     ['fan-level-look-hint', 'fanLevelLookHint'],
+    ['comment-badge-title', 'commentBadgeTitle'],
+    ['comment-sound-hint', 'commentSoundHint'],
+    ['comment-notify-speak-label', 'commentNotifySpeak'],
+    ['comment-notify-sound-label', 'commentNotifySound'],
     ['skip-repeat-speech-label', 'skipRepeatSpeechLabel'],
     ['skip-repeat-speech-hint', 'skipRepeatSpeechHint'],
     ['reset-config-hint', 'resetConfigHint'],
@@ -131,14 +175,42 @@ function applyCopy(config) {
     ['transfer-config-hint', 'transferConfigHint'],
     ['btn-export-config', 'exportConfigLabel'],
     ['btn-import-config', 'importConfigLabel'],
+    ['config-profile-hint', 'profileHint'],
+    ['config-profile-name-label', 'profileNameLabel'],
+    ['config-profile-select-label', 'profileSelectLabel'],
+    ['btn-profile-save', 'profileSaveButton'],
+    ['btn-profile-apply', 'profileApplyButton'],
+    ['btn-profile-delete', 'profileDeleteButton'],
     ['hotkey-title', 'hotkeyTitle'],
     ['hotkey-skip-label', 'hotkeySkipLabel'],
     ['hotkey-clear-label', 'hotkeyClearLabel'],
     ['hotkey-clear-pin-label', 'hotkeyClearPinLabel'],
+    ['hotkey-pause-label', 'hotkeyPauseLabel'],
+    ['hotkey-mute-comment-sound-label', 'hotkeyMuteCommentSoundLabel'],
     ['hotkey-skip-unset', 'hotkeyUnset'],
     ['hotkey-clear-unset', 'hotkeyUnset'],
     ['hotkey-clear-pin-unset', 'hotkeyUnset'],
+    ['hotkey-pause-unset', 'hotkeyUnset'],
+    ['hotkey-mute-comment-sound-unset', 'hotkeyUnset'],
     ['hotkey-hint', 'hotkeyHint'],
+    ['menu-ops-btn', 'operationsMenu'],
+    ['viewer-user-menu-nickname', 'nicknameRename'],
+    ['viewer-user-menu-nickname-clear', 'nicknameClear'],
+    ['gift-chime-destination-hint', 'giftChimeDestinationHint'],
+    ['gift-chime-common-volume-label', 'giftChimeCommonVolumeLabel'],
+    ['gift-chime-common-volume-hint', 'giftChimeCommonVolumeHint'],
+    ['gift-speak-search-label', 'giftSpeakSearchLabel'],
+    ['gift-speak-enable-all', 'giftSpeakEnableAll'],
+    ['gift-speak-enable-none', 'giftSpeakEnableNone'],
+    ['gift-test-hint', 'giftTestHint'],
+    ['gift-catalog-reload-hint', 'giftCatalogReloadHint'],
+    ['btn-reload-gifts', 'giftCatalogReloadButton'],
+    ['gift-chime-col-enable', 'giftChimeColEnable'],
+    ['gift-chime-col-gift', 'giftChimeColGift'],
+    ['gift-chime-col-sound', 'giftChimeColSound'],
+    ['gift-chime-col-volume', 'giftChimeColVolume'],
+    ['gift-chime-sound-reset', 'soundResetTemplate'],
+    ['comment-sound-reset', 'soundResetTemplate'],
     ['tab-look', 'settingsTabLook'],
     ['look-tab-hint', 'lookTabHint'],
     ['look-chat-title', 'lookChatTitle'],
@@ -165,6 +237,25 @@ function applyCopy(config) {
       el.textContent = uiCopy[key];
     }
   }
+  const commentNotifyMode = $('comment-notify-mode');
+  if (commentNotifyMode && uiCopy.commentNotifyModeLabel) {
+    commentNotifyMode.setAttribute('aria-label', uiCopy.commentNotifyModeLabel);
+  }
+  const commonVolumeLabel = uiCopy.giftChimeCommonVolumeLabel || '';
+  if (commonVolumeLabel) {
+    const commonRange = $('gift-chime-common-volume-range');
+    const commonNumber = $('gift-chime-common-volume-number');
+    if (commonRange) {
+      commonRange.setAttribute('aria-label', commonVolumeLabel);
+    }
+    if (commonNumber) {
+      commonNumber.setAttribute('aria-label', `${commonVolumeLabel}（数値）`);
+    }
+  }
+  const profileName = $('config-profile-name');
+  if (profileName && uiCopy.profileNamePlaceholder) {
+    profileName.placeholder = uiCopy.profileNamePlaceholder;
+  }
   syncRepeatSpeechOptions();
   fillMotionSelect($('look-motion')?.value);
   syncMotionSpeedButtons(selectedMotionSpeed());
@@ -180,6 +271,15 @@ function fillConfig(config) {
   $('overlay-studio-url').textContent = config.overlayStudioUrl ?? '';
   if ($('overlay-local-url')) {
     $('overlay-local-url').textContent = config.overlayPreviewUrl ?? '';
+  }
+  if ($('overlay-alerts-url')) {
+    $('overlay-alerts-url').textContent = config.overlayAlertsUrl ?? '';
+  }
+  if ($('overlay-alerts-local-url')) {
+    $('overlay-alerts-local-url').textContent = config.overlayAlertsPreviewUrl ?? '';
+  }
+  if ($('overlay-alerts-studio-url')) {
+    $('overlay-alerts-studio-url').textContent = config.overlayAlertsStudioUrl ?? '';
   }
   $('chat-max-rows').value = String(config.chatMaxRows ?? 8);
   fillDisplayTime(config.chatDisplayMs);
@@ -225,6 +325,9 @@ function fillConfig(config) {
   $('member-display').value = config.memberDisplayTemplate ?? '';
   $('member-speech').value = config.memberSpeechTemplate ?? '';
   $('min-gift-diamonds').value = String(config.minGiftDiamonds ?? 0);
+  fillNicknameMap(config);
+  fillGiftSpeakMaps(config);
+  fillProfilesUi(config);
   $('like-milestone').value = String(config.likeMilestone ?? 10);
   $('tts-engine').value = config.ttsEngineId === 'voicevox' ? 'voicevox' : 'windows';
   $('voicevox-host').value = config.voicevoxHost ?? '127.0.0.1';
@@ -239,6 +342,7 @@ function fillConfig(config) {
   $('ng-words').value = (config.ngWords ?? []).join('\n');
   $('blocked-users').value = (config.blockedUsers ?? []).join('\n');
   $('muted-users').value = (config.mutedUsers ?? []).join('\n');
+  refreshAllLineLists();
   $('skip-mention-speech').checked = config.skipMentionSpeech !== false;
   $('skip-url-speech').checked = config.skipUrlSpeech !== false;
   if ($('skip-anchor-speech')) {
@@ -250,6 +354,9 @@ function fillConfig(config) {
   if ($('speak-fan-sub-only')) {
     $('speak-fan-sub-only').checked = Boolean(config.speakFanSubOnly);
   }
+  if ($('speak-fan-club-comments')) {
+    $('speak-fan-club-comments').checked = config.speakFanClubComments !== false;
+  }
   if ($('speak-fan-min-level')) {
     $('speak-fan-min-level').value = String(config.speakFanMinLevel ?? 1);
   }
@@ -259,6 +366,9 @@ function fillConfig(config) {
   fanLevelLook = normalizeFanLevelLook(config.fanLevelLook);
   renderFanLevelLook();
   syncSpeakFanOptions();
+  if (typeof syncCommentNotifyModeUi === 'function') {
+    syncCommentNotifyModeUi();
+  }
   if (config.viewerDock) {
     viewerDock = cloneDock(config.viewerDock);
   }
@@ -279,6 +389,13 @@ function fillConfig(config) {
   if ($('tts-voice').options.length > 0) {
     $('tts-voice').value = config.ttsVoice ?? '';
   }
+  if ($('viewer-log-max-rows')) {
+    $('viewer-log-max-rows').value = String(config.viewerLogMaxRows ?? 1000);
+    if (typeof VIEWER_MAX_ROWS !== 'undefined') {
+      VIEWER_MAX_ROWS = config.viewerLogMaxRows ?? 1000;
+    }
+  }
+  fillSpeechReplaceMap(config.speechReplaceMap ?? []);
 
   const events = config.events ?? {};
   for (const key of EVENT_ORDER) {
@@ -293,6 +410,11 @@ function fillConfig(config) {
     }
   }
 
+  fillGiftNotifyUi(config);
+  if (typeof fillEventAlertUi === 'function') {
+    fillEventAlertUi(config);
+  }
+
   syncSettingsPreview();
   updateTtsEngineUi();
   syncViewerEmpty();
@@ -301,6 +423,50 @@ function fillConfig(config) {
   applyViewerDisplay(config.viewerDisplay);
   applyViewerLayout(config.viewerLayout, false);
   applyViewerFontSize(config.viewerFontSize);
+}
+
+function readOverlayStreamSettings() {
+  const config = collectConfig();
+  return {
+    chatMaxRows: config.chatMaxRows,
+    chatDisplayMs: config.chatDisplayMs,
+    overlayCustomCss: config.overlayCustomCss,
+    hideUserName: config.hideUserName,
+    maxDisplayChars: config.maxDisplayChars,
+    overlayTheme: config.overlayTheme,
+    overlayFontSize: config.overlayFontSize,
+    overlayBgOpacity: config.overlayBgOpacity,
+    overlayShowAvatar: config.overlayShowAvatar,
+    overlayGiftIconSize: config.overlayGiftIconSize,
+    overlayItemRadius: config.overlayItemRadius,
+    overlayNeonHue: config.overlayNeonHue,
+    overlayAlign: config.overlayAlign,
+    overlayPreviewBackdrop: config.overlayPreviewBackdrop,
+    overlayFontFamily: config.overlayFontFamily,
+    overlayMotion: config.overlayMotion,
+    overlayMotionSpeed: config.overlayMotionSpeed,
+    overlayPinEnabled: config.overlayPinEnabled,
+    overlayPinMs: config.overlayPinMs,
+    overlayPinMsByType: config.overlayPinMsByType,
+    overlayPinHold: config.overlayPinHold,
+    overlayPinTypes: config.overlayPinTypes,
+    overlayPinPreview: config.overlayPinPreview,
+    overlayNameColorEnabled: config.overlayNameColorEnabled,
+    overlayNameColors: config.overlayNameColors,
+    commentDisplayTemplate: config.commentDisplayTemplate,
+    giftDisplayTemplate: config.giftDisplayTemplate,
+    followDisplayTemplate: config.followDisplayTemplate,
+    shareDisplayTemplate: config.shareDisplayTemplate,
+    subscribeDisplayTemplate: config.subscribeDisplayTemplate,
+    superFanDisplayTemplate: config.superFanDisplayTemplate,
+    superFanBoxDisplayTemplate: config.superFanBoxDisplayTemplate,
+    envelopeDisplayTemplate: config.envelopeDisplayTemplate,
+    portalDisplayTemplate: config.portalDisplayTemplate,
+    portalJoinDisplayTemplate: config.portalJoinDisplayTemplate,
+    likeDisplayTemplate: config.likeDisplayTemplate,
+    memberDisplayTemplate: config.memberDisplayTemplate,
+    likeMilestone: config.likeMilestone,
+  };
 }
 
 function collectConfig() {
@@ -339,7 +505,9 @@ function collectConfig() {
     overlayPinMs: Math.round(Number($('look-pin-sec')?.value) * 1000),
     overlayPinHold: Boolean($('look-pin-hold')?.checked),
     overlayPinTypes: collectPinTypes(),
+    overlayPinMsByType: collectPinMsByType(),
     overlayPinPreview: $('look-pin-preview')?.checked !== false,
+    ...currentNameColorSettings(),
     maxDisplayChars: Number($('max-display-chars').value),
     hideUserName: $('hide-user-name').checked,
     maxSpeechChars: Number($('max-speech-chars').value),
@@ -347,6 +515,11 @@ function collectConfig() {
     skipSpeechHotkey: speechHotkeyValue('hotkey-skip-speech', DEFAULT_SKIP_SPEECH_HOTKEY),
     clearSpeechHotkey: speechHotkeyValue('hotkey-clear-speech', DEFAULT_CLEAR_SPEECH_HOTKEY),
     clearPinHotkey: speechHotkeyValue('hotkey-clear-pin', DEFAULT_CLEAR_PIN_HOTKEY),
+    pauseSpeechHotkey: speechHotkeyValue('hotkey-pause-speech', DEFAULT_PAUSE_SPEECH_HOTKEY),
+    muteCommentSoundHotkey: speechHotkeyValue(
+      'hotkey-mute-comment-sound',
+      DEFAULT_MUTE_COMMENT_SOUND_HOTKEY,
+    ),
     commentDisplayTemplate: $('comment-display').value,
     commentSpeechTemplate: $('comment-speech').value,
     giftDisplayTemplate: $('gift-display').value,
@@ -372,6 +545,14 @@ function collectConfig() {
     memberDisplayTemplate: $('member-display').value,
     memberSpeechTemplate: $('member-speech').value,
     minGiftDiamonds: Number($('min-gift-diamonds').value),
+    ...collectGiftNotifyUi(),
+    giftSpeakByGiftId: collectGiftSpeakByGiftId(),
+    giftChimeByGiftId: collectGiftChimeByGiftId(),
+    giftChimeVolumeByGiftId: collectGiftChimeVolumeByGiftId(),
+    nicknameMap: collectNicknameMap(),
+    speechReplaceMap: collectSpeechReplaceMap(),
+    viewerLogMaxRows: Number($('viewer-log-max-rows')?.value) || 1000,
+    ...collectProfilesUi(),
     alwaysOnTop: Boolean($('always-on-top')?.checked),
     compactViewer: Boolean($('compact-viewer')?.checked),
     likeMilestone: Number($('like-milestone').value),
@@ -398,6 +579,7 @@ function collectConfig() {
     skipEmoteSpeech: Boolean($('skip-emote-speech')?.checked),
     speakFanSubOnly: Boolean($('speak-fan-sub-only')?.checked),
     speakFanMinLevel: Number($('speak-fan-min-level')?.value || 1),
+    speakFanClubComments: Boolean($('speak-fan-club-comments')?.checked),
     speakSubscriberComments: Boolean($('speak-subscriber-comments')?.checked),
     skipRepeatSpeech: Boolean($('skip-repeat-speech')?.checked),
     repeatSpeechSec: Number($('repeat-speech-sec')?.value || 6),
@@ -437,6 +619,10 @@ function isStaleFormToast() {
     uiCopy.invalidSpeechChars,
     uiCopy.invalidMaxQueue,
     uiCopy.invalidPinSec,
+    uiCopy.invalidGiftChimeBandOverlap,
+    uiCopy.invalidGiftChimeBandRange,
+    uiCopy.invalidGiftChimeBandValue,
+    uiCopy.invalidSpeakFanSubEmpty,
     uiCopy.invalidHotkeySame,
   ];
   return validation.includes(text) && !validateForm();
@@ -493,10 +679,38 @@ function validateForm() {
     }
   }
 
+  if (typeof validateEventAlertForm === 'function') {
+    const alertError = validateEventAlertForm();
+    if (alertError) {
+      return alertError;
+    }
+  }
+  if (typeof validateGiftChimeDiamondBandsForm === 'function') {
+    const bandError = validateGiftChimeDiamondBandsForm();
+    if (bandError) {
+      return bandError;
+    }
+  }
+
+  if (
+    $('speak-fan-sub-only')?.checked &&
+    !$('speak-fan-club-comments')?.checked &&
+    !$('speak-subscriber-comments')?.checked
+  ) {
+    return uiCopy.invalidSpeakFanSubEmpty;
+  }
+
   const skipHotkey = speechHotkeyValue('hotkey-skip-speech', DEFAULT_SKIP_SPEECH_HOTKEY);
   const clearHotkey = speechHotkeyValue('hotkey-clear-speech', DEFAULT_CLEAR_SPEECH_HOTKEY);
   const pinHotkey = speechHotkeyValue('hotkey-clear-pin', DEFAULT_CLEAR_PIN_HOTKEY);
-  const usedHotkeys = [skipHotkey, clearHotkey, pinHotkey].filter(Boolean);
+  const pauseHotkey = speechHotkeyValue('hotkey-pause-speech', DEFAULT_PAUSE_SPEECH_HOTKEY);
+  const muteHotkey = speechHotkeyValue(
+    'hotkey-mute-comment-sound',
+    DEFAULT_MUTE_COMMENT_SOUND_HOTKEY,
+  );
+  const usedHotkeys = [skipHotkey, clearHotkey, pinHotkey, pauseHotkey, muteHotkey].filter(
+    Boolean,
+  );
   if (new Set(usedHotkeys).size !== usedHotkeys.length) {
     return uiCopy.invalidHotkeySame;
   }
@@ -543,9 +757,15 @@ function syncDisplayTimeUi() {
 function syncSpeakFanOptions() {
   const box = $('speak-fan-sub-options');
   const enabled = Boolean($('speak-fan-sub-only')?.checked);
+  const fanClubOn = Boolean($('speak-fan-club-comments')?.checked);
   box?.classList.toggle('is-disabled', !enabled);
+  if ($('speak-fan-club-comments')) {
+    $('speak-fan-club-comments').disabled = !enabled;
+  }
+  const minField = $('speak-fan-min-level-field');
+  minField?.classList.toggle('is-disabled', !enabled || !fanClubOn);
   if ($('speak-fan-min-level')) {
-    $('speak-fan-min-level').disabled = !enabled;
+    $('speak-fan-min-level').disabled = !enabled || !fanClubOn;
   }
   if ($('speak-subscriber-comments')) {
     $('speak-subscriber-comments').disabled = !enabled;

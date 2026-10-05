@@ -11,9 +11,12 @@ export const OVERLAY_PIN_QUEUE_MAX = 80;
 
 export type OverlayPinTypeMap = Record<OverlayPinType, boolean>;
 
+export type OverlayPinMsByType = Partial<Record<OverlayPinType, number>>;
+
 export interface OverlayPinOptions {
   enabled: boolean;
   displayMs: number;
+  displayMsByType: OverlayPinMsByType;
   hold: boolean;
   types: OverlayPinTypeMap;
   previewPinned: boolean;
@@ -33,6 +36,7 @@ export const DEFAULT_OVERLAY_PIN_TYPES: OverlayPinTypeMap = {
 export const DEFAULT_OVERLAY_PIN: OverlayPinOptions = {
   enabled: true,
   displayMs: DEFAULT_OVERLAY_PIN_MS,
+  displayMsByType: {},
   hold: false,
   types: { ...DEFAULT_OVERLAY_PIN_TYPES },
   previewPinned: true,
@@ -45,6 +49,52 @@ export function normalizeOverlayPinMs(value: unknown): number {
   }
   const ms = Math.trunc(parsed);
   return Math.min(MAX_OVERLAY_PIN_MS, Math.max(MIN_OVERLAY_PIN_MS, ms));
+}
+
+export function normalizeOverlayPinMsByType(raw: unknown): OverlayPinMsByType {
+  const record = raw && typeof raw === 'object' && !Array.isArray(raw)
+    ? (raw as Record<string, unknown>)
+    : {};
+  const next: OverlayPinMsByType = {};
+  for (const type of OVERLAY_PIN_TYPES) {
+    if (!(type in record)) {
+      continue;
+    }
+    const parsed =
+      typeof record[type] === 'number'
+        ? record[type]
+        : Number.parseInt(String(record[type] ?? ''), 10);
+    if (!Number.isFinite(parsed)) {
+      continue;
+    }
+    const ms = Math.trunc(parsed as number);
+    if (ms < MIN_OVERLAY_PIN_MS || ms > MAX_OVERLAY_PIN_MS) {
+      continue;
+    }
+    next[type] = ms;
+  }
+  return next;
+}
+
+export function resolveOverlayPinDisplayMs(
+  type: unknown,
+  commonMs: number,
+  byType: OverlayPinMsByType = {},
+  hold = false,
+): number {
+  const baseMs = normalizeOverlayPinMs(commonMs);
+  if (hold === true) {
+    return baseMs;
+  }
+  if (typeof type !== 'string') {
+    return baseMs;
+  }
+  const key = canonicalOverlayType(type as OverlayEventType);
+  if (!(OVERLAY_PIN_TYPES as readonly string[]).includes(key)) {
+    return baseMs;
+  }
+  const typed = byType[key as OverlayPinType];
+  return typeof typed === 'number' ? typed : baseMs;
 }
 
 export function normalizeOverlayPinTypes(raw: unknown): OverlayPinTypeMap {
@@ -68,6 +118,7 @@ export function normalizeOverlayPin(raw: Partial<OverlayPinOptions> | undefined)
   return {
     enabled: merged.enabled !== false,
     displayMs: normalizeOverlayPinMs(merged.displayMs),
+    displayMsByType: normalizeOverlayPinMsByType(merged.displayMsByType),
     hold: merged.hold === true,
     types: normalizeOverlayPinTypes(merged.types),
     previewPinned: merged.previewPinned !== false,
@@ -77,6 +128,7 @@ export function normalizeOverlayPin(raw: Partial<OverlayPinOptions> | undefined)
 export function overlayPinFromConfig(config: {
   overlayPinEnabled?: unknown;
   overlayPinMs?: unknown;
+  overlayPinMsByType?: unknown;
   overlayPinHold?: unknown;
   overlayPinTypes?: unknown;
   overlayPinPreview?: unknown;
@@ -84,6 +136,7 @@ export function overlayPinFromConfig(config: {
   return normalizeOverlayPin({
     enabled: config.overlayPinEnabled as boolean,
     displayMs: config.overlayPinMs as number,
+    displayMsByType: config.overlayPinMsByType as OverlayPinMsByType,
     hold: config.overlayPinHold as boolean,
     types: config.overlayPinTypes as OverlayPinTypeMap,
     previewPinned: config.overlayPinPreview as boolean,

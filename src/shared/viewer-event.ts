@@ -1,3 +1,4 @@
+import type { CommentEmote } from './comment-emotes';
 import { OverlayEventType, OverlayUser } from './types';
 
 export type ViewerStatusKind = 'connected' | 'disconnected';
@@ -51,6 +52,7 @@ export interface ViewerEvent {
   user: OverlayUser;
   displayText: string;
   comment: string;
+  commentEmotes: CommentEmote[];
   giftImageUrl: string;
   giftName: string;
   giftCount: number;

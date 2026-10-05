@@ -160,4 +160,13 @@ function applyStatus(status) {
   }
   applyViewerRoomStats(nextStatus);
   syncViewerEmpty();
+  if (typeof nextStatus.speechPaused === 'boolean') {
+    speechPausedUi = nextStatus.speechPaused;
+  }
+  if (typeof nextStatus.commentSoundMuted === 'boolean') {
+    commentSoundMutedUi = nextStatus.commentSoundMuted;
+  }
+  if (typeof syncPauseMuteButtons === 'function') {
+    syncPauseMuteButtons();
+  }
 }

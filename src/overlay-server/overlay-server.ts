@@ -5,6 +5,7 @@ import { WebSocket, WebSocketServer } from 'ws';
 import { APP_CONFIG } from '../shared/app-config';
 import { getErrorMessage } from '../shared/error-utils';
 import { getLogger } from '../shared/logging-config';
+import type { OverlaySamplePlan } from '../app/overlay-sample-plan';
 import { OverlayLook, DEFAULT_OVERLAY_LOOK, overlayFontCss } from '../shared/overlay-look';
 import { DEFAULT_OVERLAY_PIN, OverlayPinOptions } from '../shared/overlay-pin';
 import { OverlayPayload } from '../shared/types';
@@ -15,8 +16,13 @@ import {
   GiftImageCache,
   isAllowedGiftImageUrl,
 } from './gift-image-proxy';
+import { soundFilePath, getSoundsDir } from '../shared/sound-files';
+import { alertMediaFilePath, getAlertMediaDir } from '../shared/alert-media-files';
+import { DEFAULT_EVENT_ALERT_MS } from '../shared/event-alert';
 
 const logger = getLogger('overlay-server');
+
+export type OverlayClientRole = 'chat' | 'alerts';
 
 export function isPreviewOverlayRequest(rawUrl: string | undefined): boolean {
   if (!rawUrl) {
@@ -30,13 +36,31 @@ export function isPreviewOverlayRequest(rawUrl: string | undefined): boolean {
   }
 }
 
+export function overlayClientRoleFromUrl(rawUrl: string | undefined): OverlayClientRole {
+  if (!rawUrl) {
+    return 'chat';
+  }
+  try {
+    const url = new URL(rawUrl, 'http://overlay.local');
+    return url.searchParams.get('role') === 'alerts' ? 'alerts' : 'chat';
+  } catch {
+    return 'chat';
+  }
+}
+
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.png': 'image/png',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.gif': 'image/gif',
+  '.webp': 'image/webp',
   '.svg': 'image/svg+xml',
   '.wav': 'audio/wav',
+  '.mp3': 'audio/mpeg',
+  '.ogg': 'audio/ogg',
 };
 
 interface StoredAudio {
@@ -53,10 +77,15 @@ export class OverlayServer {
   private customCss = '';
   private look = DEFAULT_OVERLAY_LOOK;
   private pin = DEFAULT_OVERLAY_PIN;
+  private hideUserName = false;
+  private nameColorEnabled = true;
+  private nameColors: string[] = [];
+  private eventAlertDisplayMs = DEFAULT_EVENT_ALERT_MS;
   private audioSeq = 0;
   private lastNoClientWarnAt = 0;
   private readonly giftImages = new GiftImageCache();
   private readonly previewClients = new WeakSet<WebSocket>();
+  private readonly clientRoles = new WeakMap<WebSocket, OverlayClientRole>();
   private readonly maxAudioEntries = 40;
   private clientChangeHandler: (() => void) | null = null;
 
@@ -72,12 +101,23 @@ export class OverlayServer {
     customCss = '',
     look: OverlayLook = DEFAULT_OVERLAY_LOOK,
     pin: OverlayPinOptions = DEFAULT_OVERLAY_PIN,
+    hideUserName = false,
+    nameColorEnabled = true,
+    nameColors: string[] = [],
+    eventAlertDisplayMs: number = DEFAULT_EVENT_ALERT_MS,
   ): void {
     this.chatMaxRows = chatMaxRows;
     this.chatDisplayMs = chatDisplayMs;
     this.customCss = customCss;
     this.look = look;
     this.pin = pin;
+    this.hideUserName = hideUserName === true;
+    this.nameColorEnabled = nameColorEnabled !== false;
+    this.nameColors = Array.isArray(nameColors) ? nameColors : [];
+    this.eventAlertDisplayMs =
+      typeof eventAlertDisplayMs === 'number' && Number.isFinite(eventAlertDisplayMs)
+        ? Math.trunc(eventAlertDisplayMs)
+        : DEFAULT_EVENT_ALERT_MS;
     this.broadcastSettings();
   }
 
@@ -141,32 +181,90 @@ export class OverlayServer {
 
   broadcast(payload: OverlayPayload): void {
     this.warnIfNoClients();
-    this.sendAll({ kind: 'event', payload });
+    this.sendAll({ kind: 'event', payload }, { roles: ['chat'] });
+  }
+
+  broadcastAlert(payload: {
+    type: string;
+    displayText: string;
+    displayParts?: Array<
+      | { kind: 'text'; value: string }
+      | { kind: 'name'; value: string; color: string }
+    >;
+    imageUrl?: string | null;
+    displayMs?: number;
+    user?: OverlayPayload['user'];
+    nameColor?: string | null;
+  }): void {
+    const nameColor =
+      typeof payload.nameColor === 'string' && /^#[0-9a-fA-F]{6}$/.test(payload.nameColor)
+        ? payload.nameColor.toLowerCase()
+        : null;
+    const displayParts = Array.isArray(payload.displayParts) ? payload.displayParts : [];
+    this.sendAll(
+      {
+        kind: 'alert',
+        payload: {
+          type: payload.type,
+          displayText: payload.displayText,
+          displayParts,
+          imageUrl: typeof payload.imageUrl === 'string' && payload.imageUrl ? payload.imageUrl : null,
+          displayMs:
+            typeof payload.displayMs === 'number' && Number.isFinite(payload.displayMs)
+              ? Math.trunc(payload.displayMs)
+              : this.eventAlertDisplayMs,
+          user: payload.user ?? null,
+          nameColor,
+        },
+      },
+      { roles: ['alerts'] },
+    );
   }
 
   broadcastAudio(audioUrl: string): void {
     this.warnIfNoClients();
-    this.sendAll({ kind: 'audio', audioUrl });
+    this.sendAll({ kind: 'audio', audioUrl }, { roles: ['chat'] });
   }
 
-  broadcastChime(): void {
-    this.sendAll({ kind: 'chime' });
+  broadcastChime(soundUrl?: string | null, volume?: number): void {
+    this.sendAll(
+      {
+        kind: 'chime',
+        soundUrl: typeof soundUrl === 'string' && soundUrl ? soundUrl : null,
+        volume: typeof volume === 'number' && Number.isFinite(volume) ? volume : undefined,
+      },
+      { excludePreview: true, roles: ['chat'] },
+    );
   }
 
   clearChat(): void {
-    this.sendAll({ kind: 'clear' });
+    this.sendAll({ kind: 'clear' }, { roles: ['chat', 'alerts'] });
+  }
+
+  showSampleDisplay(plan: OverlaySamplePlan): void {
+    this.warnIfNoClients();
+    const { kind: _kind, ...settings } = this.settingsPayload();
+    this.sendAll(
+      {
+        kind: 'sample-display',
+        ...settings,
+        chatSamples: plan.chatSamples,
+        pinSamples: plan.pinSamples,
+      },
+      { excludePreview: true, roles: ['chat'] },
+    );
   }
 
   clearPin(): void {
-    this.sendAll({ kind: 'pin-control', action: 'clear' });
+    this.sendAll({ kind: 'pin-control', action: 'clear' }, { roles: ['chat'] });
   }
 
   skipPlayback(): void {
-    this.sendAll({ kind: 'audio-control', action: 'skip' });
+    this.sendAll({ kind: 'audio-control', action: 'skip' }, { roles: ['chat'] });
   }
 
   clearPendingAudio(): void {
-    this.sendAll({ kind: 'audio-control', action: 'clear-pending' });
+    this.sendAll({ kind: 'audio-control', action: 'clear-pending' }, { roles: ['chat'] });
   }
 
   clientCount(): number {
@@ -174,7 +272,22 @@ export class OverlayServer {
       return 0;
     }
     return [...this.wss.clients].filter(
-      (client) => client.readyState === WebSocket.OPEN && !this.previewClients.has(client),
+      (client) =>
+        client.readyState === WebSocket.OPEN &&
+        !this.previewClients.has(client) &&
+        this.clientRoles.get(client) !== 'alerts',
+    ).length;
+  }
+
+  alertClientCount(): number {
+    if (!this.wss) {
+      return 0;
+    }
+    return [...this.wss.clients].filter(
+      (client) =>
+        client.readyState === WebSocket.OPEN &&
+        !this.previewClients.has(client) &&
+        this.clientRoles.get(client) === 'alerts',
     ).length;
   }
 
@@ -196,6 +309,10 @@ export class OverlayServer {
       chatMaxRows: this.chatMaxRows,
       chatDisplayMs: this.chatDisplayMs,
       customCss: this.customCss,
+      hideUserName: this.hideUserName,
+      nameColorEnabled: this.nameColorEnabled,
+      nameColors: this.nameColors,
+      eventAlertDisplayMs: this.eventAlertDisplayMs,
       look: {
         ...this.look,
         fontCss: overlayFontCss(this.look.fontFamily),
@@ -204,7 +321,10 @@ export class OverlayServer {
     };
   }
 
-  private sendAll(message: Record<string, unknown>): void {
+  private sendAll(
+    message: Record<string, unknown>,
+    options: { excludePreview?: boolean; roles?: OverlayClientRole[] } = {},
+  ): void {
     let raw: string;
     try {
       raw = JSON.stringify(message);
@@ -213,9 +333,19 @@ export class OverlayServer {
       return;
     }
 
+    const roles = options.roles;
     this.wss?.clients.forEach((client) => {
       if (client.readyState !== WebSocket.OPEN) {
         return;
+      }
+      if (options.excludePreview && this.previewClients.has(client)) {
+        return;
+      }
+      if (roles && roles.length > 0) {
+        const role = this.clientRoles.get(client) ?? 'chat';
+        if (!roles.includes(role)) {
+          return;
+        }
       }
       try {
         client.send(raw);
@@ -258,6 +388,7 @@ export class OverlayServer {
     });
     const wss = new WebSocketServer({ server, path: '/overlay/ws' });
     wss.on('connection', (socket, req) => {
+      this.clientRoles.set(socket, overlayClientRoleFromUrl(req.url));
       if (isPreviewOverlayRequest(req.url)) {
         this.previewClients.add(socket);
       }
@@ -343,6 +474,17 @@ export class OverlayServer {
         return;
       }
 
+      if (url.pathname === '/overlay/alerts') {
+        res.writeHead(302, { Location: `/overlay/alerts/${url.search}` });
+        res.end();
+        return;
+      }
+
+      if (url.pathname === '/overlay/alerts/') {
+        this.serveFile(path.join(this.overlayDir, 'alerts.html'), res);
+        return;
+      }
+
       if (url.pathname === '/overlay.js' || url.pathname === '/overlay.css') {
         this.serveFile(path.join(this.overlayDir, path.basename(url.pathname)), res);
         return;
@@ -353,6 +495,10 @@ export class OverlayServer {
         if (relative === 'ws') {
           return;
         }
+        if (relative === 'alerts' || relative === 'alerts/') {
+          this.serveFile(path.join(this.overlayDir, 'alerts.html'), res);
+          return;
+        }
         const safe = path.normalize(relative).replace(/^(\.\.(\/|\\|$))+/, '');
         this.serveFile(path.join(this.overlayDir, safe), res);
         return;
@@ -360,6 +506,18 @@ export class OverlayServer {
 
       if (url.pathname === '/media/gift') {
         await this.serveGiftImage(url.searchParams.get('u') ?? '', res);
+        return;
+      }
+
+      if (url.pathname.startsWith('/media/alerts/')) {
+        const name = decodeURIComponent(url.pathname.slice('/media/alerts/'.length));
+        const full = alertMediaFilePath(name);
+        if (!full || !fs.existsSync(full)) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        this.serveAlertMediaFile(full, res);
         return;
       }
 
@@ -379,6 +537,18 @@ export class OverlayServer {
           'Content-Length': entry.buffer.length,
         });
         res.end(entry.buffer);
+        return;
+      }
+
+      if (url.pathname.startsWith('/sounds/')) {
+        const name = decodeURIComponent(url.pathname.slice('/sounds/'.length));
+        const full = soundFilePath(name);
+        if (!full || !fs.existsSync(full)) {
+          res.writeHead(404);
+          res.end();
+          return;
+        }
+        this.serveSoundFile(full, res);
         return;
       }
 
@@ -434,6 +604,58 @@ export class OverlayServer {
       'Content-Length': fetched.buffer.length,
     });
     res.end(fetched.buffer);
+  }
+
+  private serveSoundFile(filePath: string, res: http.ServerResponse): void {
+    this.serveDataFile(filePath, getSoundsDir(), res, '効果音ファイルの読み込みに失敗しました');
+  }
+
+  private serveAlertMediaFile(filePath: string, res: http.ServerResponse): void {
+    this.serveDataFile(
+      filePath,
+      getAlertMediaDir(),
+      res,
+      'アラート画像の読み込みに失敗しました',
+    );
+  }
+
+  private serveDataFile(
+    filePath: string,
+    rootDir: string,
+    res: http.ServerResponse,
+    errorLabel: string,
+  ): void {
+    const resolved = path.resolve(filePath);
+    const root = path.resolve(rootDir);
+    const relative = path.relative(root, resolved);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      res.writeHead(403);
+      res.end();
+      return;
+    }
+
+    if (!fs.existsSync(resolved) || fs.statSync(resolved).isDirectory()) {
+      res.writeHead(404);
+      res.end();
+      return;
+    }
+
+    const ext = path.extname(resolved).toLowerCase();
+    const mime = MIME[ext] ?? 'application/octet-stream';
+    res.writeHead(200, {
+      'Content-Type': mime,
+      'Cache-Control': 'no-store',
+      'Access-Control-Allow-Origin': '*',
+    });
+    const stream = fs.createReadStream(resolved);
+    stream.on('error', (error) => {
+      logger.error(`${errorLabel}: ${getErrorMessage(error)}`);
+      if (!res.headersSent) {
+        res.writeHead(500);
+      }
+      res.end();
+    });
+    stream.pipe(res);
   }
 
   private serveFile(filePath: string, res: http.ServerResponse): void {

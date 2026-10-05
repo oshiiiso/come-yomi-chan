@@ -44,7 +44,7 @@ export interface OverlayLook {
 
 export const DEFAULT_NEON_HUE = 280;
 export const MIN_OVERLAY_FONT_SIZE = 10;
-export const MAX_OVERLAY_FONT_SIZE = 30;
+export const MAX_OVERLAY_FONT_SIZE = 60;
 
 export const DEFAULT_OVERLAY_LOOK: OverlayLook = {
   theme: 'dark',

@@ -49,6 +49,25 @@ async function init() {
     window.liveTts.openHelp();
   });
   bindTitlebarMenus();
+  bindWindowChrome();
+  bindListEditors();
+  bindGiftNotifyAndProfiles();
+  if (typeof window.liveTts.onPlaySound === 'function') {
+    window.liveTts.onPlaySound((payload) => {
+      if (typeof handleAppPlaySound === 'function') {
+        handleAppPlaySound(payload);
+      } else {
+        playAppSound(payload);
+      }
+    });
+  }
+  if (typeof window.liveTts.onSpeechAudioControl === 'function') {
+    window.liveTts.onSpeechAudioControl((payload) => {
+      if (typeof handleAppSpeechAudioControl === 'function') {
+        handleAppSpeechAudioControl(payload);
+      }
+    });
+  }
   window.liveTts.onStatusChanged(applyStatus);
   window.liveTts.onConfigChanged((next) => {
     if (configEchoWait > 0) {
@@ -60,6 +79,9 @@ async function init() {
       return;
     }
     savedConfig = next;
+    if (next?.viewerLogMaxRows) {
+      VIEWER_MAX_ROWS = next.viewerLogMaxRows;
+    }
     fillConfig(next);
     markClean();
   });
@@ -81,12 +103,46 @@ async function init() {
   ]);
   savedConfig = config;
   fillConfig(config);
+  // コメントログの復元
+  if (typeof window.liveTts.getViewerLog === 'function') {
+    try {
+      const storedRows = await window.liveTts.getViewerLog();
+      if (Array.isArray(storedRows) && storedRows.length > 0) {
+        VIEWER_MAX_ROWS = config?.viewerLogMaxRows ?? 1000;
+        for (const row of storedRows) {
+          if (row && typeof row === 'object' && row.receivedAt && row.type) {
+            appendViewerEvent({
+              type: row.type,
+              receivedAt: row.receivedAt,
+              displayText: row.displayText || '',
+              comment: row.comment || '',
+              giftName: row.giftName || '',
+              giftCount: row.giftCount || 0,
+              diamondCount: row.diamondCount || 0,
+              giftImageUrl: row.giftImageUrl || '',
+              user: {
+                uniqueId: row.uniqueId || '',
+                nickname: row.nickname || '',
+                avatarUrl: row.avatarUrl || '',
+                isFanClub: row.badges?.isFanClub === true,
+                fanClubStatus: 0,
+                isSuperFan: row.badges?.isSuperFan === true,
+                fanClubLevel: row.badges?.fanClubLevel ?? 0,
+                fanClubName: row.badges?.fanClubName ?? '',
+                isModerator: row.badges?.isModerator === true,
+                isAnchor: row.badges?.isAnchor === true,
+              },
+            });
+          }
+        }
+      }
+    } catch {
+      // ログ復元エラーは無視
+    }
+  }
   applyStatus(status);
   await loadVoices();
   await loadTestGifts();
-  if ($('unique-id')?.value.trim()) {
-    void refreshTestGifts(false);
-  }
   markClean();
   activateAppMode('viewer');
   syncViewerEmpty();
@@ -112,9 +168,38 @@ async function init() {
     }
     syncViewerLatestButton();
   });
-  $('btn-viewer-clear').addEventListener('click', () => {
+  $('btn-viewer-clear').addEventListener('click', async () => {
+    const title = uiCopy.viewerLogClearTitle || 'コメントログを消しますか？';
+    if (!window.confirm(title)) return;
     clearViewerLog();
-    setToast(uiCopy.viewerCleared);
+    try {
+      await window.liveTts.clearViewerLog();
+    } catch { /* ignore */ }
+    setToast(uiCopy.viewerLogClearOk || 'コメントログを消しました');
+  });
+  $('view-viewer')?.addEventListener('click', async (event) => {
+    const button = event.target.closest('[data-viewer-pane-clear]');
+    if (!(button instanceof HTMLElement)) {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    const title = uiCopy.viewerPaneClearTitle || 'この窓の行を消しますか？';
+    if (!window.confirm(title)) {
+      return;
+    }
+    const key = button.dataset.viewerPaneClear || '';
+    const fromAttr = String(button.dataset.viewerPaneTypes || '')
+      .split(',')
+      .map((item) => item.trim())
+      .filter(Boolean);
+    const types = clearViewerLogPane(key, fromAttr);
+    try {
+      if (types.length && typeof window.liveTts.clearViewerLogTypes === 'function') {
+        await window.liveTts.clearViewerLogTypes(types);
+      }
+    } catch { /* ignore */ }
+    setToast(uiCopy.viewerLogClearOk || 'コメントログを消しました');
   });
   const showViewerSamples = async () => {
     const result = await window.liveTts.previewOverlay('viewer');
@@ -131,7 +216,9 @@ async function init() {
     setToast(uiCopy.viewerCleared);
   });
   const showOverlaySamples = async () => {
-    const result = await window.liveTts.previewOverlay('overlay');
+    const streamSettings =
+      typeof readOverlayStreamSettings === 'function' ? readOverlayStreamSettings() : undefined;
+    const result = await window.liveTts.previewOverlay('overlay', streamSettings);
     setToast(result?.message || uiCopy.overlayPreviewSamples, !result?.ok);
   };
   const clearOverlayChat = async () => {
@@ -168,6 +255,67 @@ async function init() {
     }
     setToast(result?.message || uiCopy.viewerLogSaved, !result?.ok);
   });
+
+  // --- 読み替え辞書 ---
+  $('speech-replace-add')?.addEventListener('click', () => {
+    const fromInput = $('speech-replace-from');
+    const toInput = $('speech-replace-to');
+    const from = fromInput?.value.trim() ?? '';
+    const to = toInput?.value ?? '';
+    if (!from) return;
+    if (speechReplaceEntries.length >= SPEECH_REPLACE_MAX) {
+      setToast(uiCopy.speechReplaceOverLimit || '上限に達しました', true);
+      return;
+    }
+    const existing = speechReplaceEntries.findIndex((e) => e.from === from);
+    if (existing >= 0) speechReplaceEntries.splice(existing, 1);
+    speechReplaceEntries.push({ from, to });
+    renderSpeechReplaceList();
+    if (fromInput) fromInput.value = '';
+    if (toInput) toInput.value = '';
+    noteFormChanged();
+  });
+  $('speech-replace-clear-all')?.addEventListener('click', () => {
+    if (speechReplaceEntries.length === 0) return;
+    if (!window.confirm(uiCopy.speechReplaceClearAllTitle || '読み替え辞書を全部消しますか？')) return;
+    speechReplaceEntries.length = 0;
+    renderSpeechReplaceList();
+    noteFormChanged();
+  });
+  $('speech-replace-export')?.addEventListener('click', async () => {
+    const saved = await flushFormSave();
+    if (!saved?.ok) return;
+    const result = await window.liveTts.exportSpeechReplace();
+    if (result?.canceled) return;
+    setToast(result?.ok ? (uiCopy.speechReplaceExportOk || '書き出しました') : (uiCopy.speechReplaceExportFailed || '書き出しに失敗しました'), !result?.ok);
+  });
+  $('speech-replace-import')?.addEventListener('click', async () => {
+    const result = await window.liveTts.importSpeechReplace();
+    if (result?.canceled) return;
+    if (result?.overLimit) {
+      setToast(uiCopy.speechReplaceImportOverLimit || '上限を超えています', true);
+      return;
+    }
+    if (!result?.ok) {
+      setToast(uiCopy.speechReplaceImportFailed || '読み込みに失敗しました', true);
+      return;
+    }
+    const lines = [];
+    lines.push(uiCopy.speechReplaceImportConfirm || '今の辞書を上書きします。');
+    if (result.skipped) {
+      const skippedText =
+        typeof uiCopy.speechReplaceImportSkipped === 'function'
+          ? uiCopy.speechReplaceImportSkipped(result.skipped)
+          : `不正な形式のため読み飛ばした行: ${result.skipped}`;
+      lines.push(skippedText);
+      lines.push(uiCopy.speechReplaceFormatExample || '例: w[タブ]わら または w,わら');
+    }
+    const confirmMsg = lines.join('\n');
+    if (!window.confirm(`${uiCopy.speechReplaceImportConfirmTitle || '読み替え辞書を読み込みますか？'}\n\n${confirmMsg}`)) return;
+    fillSpeechReplaceMap(result.entries ?? []);
+    noteFormChanged();
+    setToast(uiCopy.speechReplaceImportOk || '読み替え辞書を読み込みました');
+  });
   $('viewer-search')?.addEventListener('input', () => {
     viewerSearchQuery = $('viewer-search').value || '';
     applyViewerSearch();
@@ -203,6 +351,9 @@ async function init() {
     applyViewerLayout('custom', true);
   });
   $('speak-fan-sub-only')?.addEventListener('change', () => {
+    syncSpeakFanOptions();
+  });
+  $('speak-fan-club-comments')?.addEventListener('change', () => {
     syncSpeakFanOptions();
   });
   $('skip-repeat-speech')?.addEventListener('change', () => {
@@ -281,6 +432,12 @@ async function init() {
   $('viewer-user-menu-block')?.addEventListener('click', () => {
     void applyViewerUserAction('block');
   });
+  $('viewer-user-menu-nickname')?.addEventListener('click', () => {
+    void applyViewerNicknameAction('set');
+  });
+  $('viewer-user-menu-nickname-clear')?.addEventListener('click', () => {
+    void applyViewerNicknameAction('clear');
+  });
   document.addEventListener('click', (event) => {
     const menu = $('viewer-user-menu');
     if (!menu || menu.hidden || menu.contains(event.target)) {
@@ -323,10 +480,6 @@ async function init() {
   });
 
   document.querySelector('.panel')?.addEventListener('input', (event) => {
-    if (event.target?.id === 'test-gift') {
-      syncTestGiftIcon();
-      return;
-    }
     syncLookLabels();
     syncLookPresetButtons();
     syncDisplayTimeUi();
@@ -339,7 +492,6 @@ async function init() {
   });
   document.querySelector('.panel')?.addEventListener('change', (event) => {
     if (event.target?.id === 'test-gift') {
-      syncTestGiftIcon();
       return;
     }
     syncLookLabels();
@@ -358,14 +510,8 @@ async function init() {
     window.setTimeout(pushLookPreview, 200);
   });
   $('preview-font-size')?.addEventListener('input', () => {
-    const next = $('preview-font-size').value;
-    if ($('look-font-size')) {
-      $('look-font-size').value = next;
-    }
     syncLookLabels();
-    syncLookPresetButtons();
-    noteFormChanged();
-    pushLookPreview();
+    applyPreviewZoom();
   });
 
   for (const button of document.querySelectorAll('[data-look-preset]')) {
@@ -440,6 +586,22 @@ async function init() {
     const result = await window.liveTts.clearOverlayPin();
     setToast(result.message, !result.ok);
   };
+  const togglePauseNow = async () => {
+    const result = await window.liveTts.toggleSpeechPause();
+    if (result?.ok) {
+      speechPausedUi = Boolean(result.paused);
+      syncPauseMuteButtons();
+    }
+    setToast(result.message, !result.ok);
+  };
+  const toggleCommentMuteNow = async () => {
+    const result = await window.liveTts.toggleCommentSoundMute();
+    if (result?.ok) {
+      commentSoundMutedUi = Boolean(result.muted);
+      syncPauseMuteButtons();
+    }
+    setToast(result.message, !result.ok);
+  };
   $('btn-skip-speech').addEventListener('click', () => {
     void skipSpeechNow();
   });
@@ -449,12 +611,20 @@ async function init() {
   $('btn-clear-pin')?.addEventListener('click', () => {
     void clearPinNow();
   });
+  $('btn-pause-speech')?.addEventListener('click', () => {
+    void togglePauseNow();
+  });
+  $('btn-mute-comment-sound')?.addEventListener('click', () => {
+    void toggleCommentMuteNow();
+  });
   $('btn-always-on-top')?.addEventListener('click', () => {
-    void persistWindowPrefs({ alwaysOnTop: !$('btn-always-on-top').classList.contains('is-active') });
+    void persistWindowPrefs({
+      alwaysOnTop: $('btn-always-on-top')?.getAttribute('aria-pressed') !== 'true',
+    });
   });
   $('btn-compact-viewer')?.addEventListener('click', () => {
     void persistWindowPrefs({
-      compactViewer: !$('btn-compact-viewer').classList.contains('is-active'),
+      compactViewer: $('btn-compact-viewer')?.getAttribute('aria-pressed') !== 'true',
     });
   });
   $('hotkey-skip-speech')?.addEventListener('click', () => {
@@ -466,6 +636,12 @@ async function init() {
   $('hotkey-clear-pin')?.addEventListener('click', () => {
     startHotkeyCapture('hotkey-clear-pin');
   });
+  $('hotkey-pause-speech')?.addEventListener('click', () => {
+    startHotkeyCapture('hotkey-pause-speech');
+  });
+  $('hotkey-mute-comment-sound')?.addEventListener('click', () => {
+    startHotkeyCapture('hotkey-mute-comment-sound');
+  });
   $('hotkey-skip-unset')?.addEventListener('click', () => {
     unsetSpeechHotkey('hotkey-skip-speech');
   });
@@ -475,12 +651,23 @@ async function init() {
   $('hotkey-clear-pin-unset')?.addEventListener('click', () => {
     unsetSpeechHotkey('hotkey-clear-pin');
   });
+  $('hotkey-pause-unset')?.addEventListener('click', () => {
+    unsetSpeechHotkey('hotkey-pause-speech');
+  });
+  $('hotkey-mute-comment-sound-unset')?.addEventListener('click', () => {
+    unsetSpeechHotkey('hotkey-mute-comment-sound');
+  });
   window.addEventListener('keydown', (event) => {
     if (event.key === 'Escape' && !hotkeyCapture) {
       closeTitlebarMenus();
     }
     if (hotkeyCapture) {
       event.preventDefault();
+      if (event.key === 'Escape') {
+        hotkeyCapture = '';
+        syncSpeechHotkeyUi();
+        return;
+      }
       if (event.repeat) {
         return;
       }
@@ -492,6 +679,8 @@ async function init() {
         ['hotkey-skip-speech', DEFAULT_SKIP_SPEECH_HOTKEY],
         ['hotkey-clear-speech', DEFAULT_CLEAR_SPEECH_HOTKEY],
         ['hotkey-clear-pin', DEFAULT_CLEAR_PIN_HOTKEY],
+        ['hotkey-pause-speech', DEFAULT_PAUSE_SPEECH_HOTKEY],
+        ['hotkey-mute-comment-sound', DEFAULT_MUTE_COMMENT_SOUND_HOTKEY],
       ].filter(([id]) => id !== hotkeyCapture);
       if (others.some(([id, fallback]) => key === speechHotkeyValue(id, fallback))) {
         setToast(uiCopy.invalidHotkeySame, true);
@@ -513,6 +702,11 @@ async function init() {
     const skip = speechHotkeyValue('hotkey-skip-speech', DEFAULT_SKIP_SPEECH_HOTKEY);
     const clear = speechHotkeyValue('hotkey-clear-speech', DEFAULT_CLEAR_SPEECH_HOTKEY);
     const pin = speechHotkeyValue('hotkey-clear-pin', DEFAULT_CLEAR_PIN_HOTKEY);
+    const pause = speechHotkeyValue('hotkey-pause-speech', DEFAULT_PAUSE_SPEECH_HOTKEY);
+    const mute = speechHotkeyValue(
+      'hotkey-mute-comment-sound',
+      DEFAULT_MUTE_COMMENT_SOUND_HOTKEY,
+    );
     if (isHotkeyEvent(event, skip)) {
       event.preventDefault();
       void skipSpeechNow();
@@ -526,6 +720,16 @@ async function init() {
     if (isHotkeyEvent(event, pin)) {
       event.preventDefault();
       void clearPinNow();
+      return;
+    }
+    if (isHotkeyEvent(event, pause)) {
+      event.preventDefault();
+      void togglePauseNow();
+      return;
+    }
+    if (isHotkeyEvent(event, mute)) {
+      event.preventDefault();
+      void toggleCommentMuteNow();
     }
   });
   $('btn-copy-url').addEventListener('click', async () => {
@@ -540,6 +744,21 @@ async function init() {
     const result = await window.liveTts.copyOverlayUrl('local');
     setToast(result.message, !result.ok);
   });
+  $('btn-copy-alerts-url')?.addEventListener('click', async () => {
+    const result = await window.liveTts.copyOverlayUrl('alerts');
+    setToast(result.message, !result.ok);
+  });
+  $('btn-copy-alerts-obs-url')?.addEventListener('click', async () => {
+    const result = await window.liveTts.copyOverlayUrl('alerts-local');
+    setToast(result.message, !result.ok);
+  });
+  $('btn-copy-alerts-studio-url')?.addEventListener('click', async () => {
+    const result = await window.liveTts.copyOverlayUrl('alerts-studio');
+    setToast(result.message, !result.ok);
+  });
+  if (typeof bindEventAlertUi === 'function') {
+    bindEventAlertUi();
+  }
   async function applyReturnedConfig(result) {
     if (result.cancelled) {
       configEchoWait = Math.max(0, configEchoWait - 1);
@@ -555,7 +774,7 @@ async function init() {
       configEchoWait = Math.max(0, configEchoWait - 1);
     }
     if (result.message) {
-      setToast(result.message, !result.ok);
+    setToast(result.message, !result.ok);
     }
   }
 
@@ -584,8 +803,8 @@ async function init() {
   });
   $('btn-preview-tts').addEventListener('click', async () => {
     const saved = await flushFormSave();
-    if (!saved.ok) {
-      return;
+      if (!saved.ok) {
+        return;
     }
     const result = await window.liveTts.previewTts();
     setToast(result.message, !result.ok);

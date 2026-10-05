@@ -32,6 +32,8 @@ function samplePayload(displayText: string): OverlayPayload {
       isAnchor: false,
     },
     displayText,
+    comment: '',
+    commentEmotes: [],
     giftImageUrl: '',
     audioUrl: null,
     receivedAt: new Date().toISOString(),
@@ -104,6 +106,110 @@ test('イベントを WebSocket で配信する', async () => {
   assert.equal(event.payload.displayText, 'テストコメントです');
 });
 
+test('/overlay/alerts/ はアラート用HTMLを返す', async () => {
+  const response = await fetchPath('/overlay/alerts/', 'follow');
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /src="\/overlay\/alerts\.js(?:\?[^"]*)?"/);
+  assert.match(html, /href="\/overlay\/alerts\.css(?:\?[^"]*)?"/);
+  assert.match(html, /id="alert-stage"/);
+});
+
+test('アラート用テンプレSVGを返す', async () => {
+  const response = await fetchPath('/overlay/alert-templates/follow.svg', 'follow');
+  assert.equal(response.status, 200);
+  const body = await response.text();
+  assert.match(body, /<svg[\s\S]*<\/svg>/);
+  assert.match(body, /animate/i);
+});
+
+test('アラート通知は alerts ロールだけに届く', async () => {
+  const chat = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws?role=chat`);
+  const alerts = new WebSocket(
+    `ws://127.0.0.1:${server.getPort()}/overlay/ws?role=alerts`,
+  );
+  const chatMessages: unknown[] = [];
+  const alertMessages: unknown[] = [];
+
+  await Promise.all([
+    new Promise<void>((resolve, reject) => {
+      chat.once('open', () => resolve());
+      chat.once('error', reject);
+    }),
+    new Promise<void>((resolve, reject) => {
+      alerts.once('open', () => resolve());
+      alerts.once('error', reject);
+    }),
+  ]);
+
+  chat.on('message', (raw) => {
+    chatMessages.push(JSON.parse(String(raw)));
+  });
+  alerts.on('message', (raw) => {
+    alertMessages.push(JSON.parse(String(raw)));
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  server.broadcastAlert({
+    type: 'gift',
+    displayText: 'テストユーザーさんからバラ',
+    displayParts: [
+      { kind: 'name', value: 'テストユーザー', color: '#ff0000' },
+      { kind: 'text', value: 'さんからバラ' },
+    ],
+    imageUrl: '/overlay/gift-rose.svg',
+    displayMs: 4000,
+    nameColor: '#ff0000',
+    user: {
+      uniqueId: 'test_user',
+      nickname: 'テストユーザー',
+      avatarUrl: '',
+      isFanClub: false,
+      fanClubStatus: 0,
+      isSuperFan: false,
+      fanClubLevel: 0,
+      fanClubName: '',
+      isModerator: false,
+      isAnchor: false,
+    },
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  chat.close();
+  alerts.close();
+
+  const chatAlert = chatMessages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'alert',
+  );
+  const alertEvent = alertMessages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'alert',
+  ) as {
+    kind: string;
+    payload: {
+      displayText?: string;
+      nameColor?: string;
+      displayParts?: Array<{ kind: string; value: string; color?: string }>;
+    };
+  } | undefined;
+
+  assert.equal(chatAlert, undefined);
+  assert.ok(alertEvent);
+  assert.equal(alertEvent.payload.displayText, 'テストユーザーさんからバラ');
+  assert.equal(alertEvent.payload.nameColor, '#ff0000');
+  assert.deepEqual(alertEvent.payload.displayParts, [
+    { kind: 'name', value: 'テストユーザー', color: '#ff0000' },
+    { kind: 'text', value: 'さんからバラ' },
+  ]);
+});
+
 test('クリアは WebSocket でコメント列を空にする合図を送る', async () => {
   const socket = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
   const messages: unknown[] = [];
@@ -161,6 +267,37 @@ test('初期通知に固定枠の設定を含む', async () => {
   assert.equal(hello.pin?.types?.gift, true);
 });
 
+test('配信ソースサンプルは WebSocket で sample-display を送る', async () => {
+  const socket = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
+  const messages: unknown[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    socket.once('open', () => resolve());
+    socket.once('error', reject);
+  });
+
+  socket.on('message', (raw) => {
+    messages.push(JSON.parse(String(raw)));
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  server.showSampleDisplay({ chatSamples: [], pinSamples: [] });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  socket.close();
+
+  const sample = messages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'sample-display',
+  ) as { hideUserName?: boolean; chatSamples?: unknown[]; pinSamples?: unknown[] } | undefined;
+  assert.ok(sample);
+  assert.equal(sample.hideUserName, false);
+  assert.ok(Array.isArray(sample.chatSamples));
+  assert.ok(Array.isArray(sample.pinSamples));
+});
+
 test('固定枠クリアは WebSocket で合図を送る', async () => {
   const socket = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
   const messages: unknown[] = [];
@@ -191,7 +328,7 @@ test('固定枠クリアは WebSocket で合図を送る', async () => {
   assert.ok(cleared);
 });
 
-test('高いギフトのチャイム合図を送る', async () => {
+test('高いギフトのサウンド合図を送る', async () => {
   const socket = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
   const messages: unknown[] = [];
 
@@ -267,6 +404,29 @@ test('保存した wav を HTTP で返す', async () => {
   assert.equal(response.headers.get('content-type'), 'audio/wav');
   const body = Buffer.from(await response.arrayBuffer());
   assert.equal(body.toString(), 'RIFFTEST');
+});
+
+test('効果音ファイルは sounds ディレクトリから返す', async () => {
+  const fs = await import('node:fs');
+  const { getSoundsDir } = await import('../../shared/sound-files');
+  let dir: string;
+  try {
+    dir = getSoundsDir();
+  } catch {
+    return;
+  }
+  const name = `test-chime-${Date.now()}.wav`;
+  const full = path.join(dir, name);
+  fs.writeFileSync(full, Buffer.from('RIFFTEST'));
+  try {
+    const response = await fetchPath(`/sounds/${encodeURIComponent(name)}`, 'follow');
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get('content-type'), 'audio/wav');
+    const body = Buffer.from(await response.arrayBuffer());
+    assert.equal(body.toString(), 'RIFFTEST');
+  } finally {
+    fs.unlinkSync(full);
+  }
 });
 
 test('期限切れの wav は 404 になる', async () => {

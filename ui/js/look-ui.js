@@ -82,14 +82,17 @@ function currentLook() {
   };
 }
 
-function fillPinTypes(types) {
+function fillPinTypes(types, msByType) {
   const box = $('look-pin-types');
   if (!box) {
     return;
   }
   const current = normalizeOverlayPinTypes(types);
+  const currentMs = normalizeOverlayPinMsByType(msByType ?? {});
   box.replaceChildren();
   for (const type of OVERLAY_PIN_TYPES) {
+    const row = document.createElement('div');
+    row.className = 'pin-type-row';
     const label = document.createElement('label');
     label.className = 'viewer-display__check';
     const input = document.createElement('input');
@@ -97,8 +100,36 @@ function fillPinTypes(types) {
     input.dataset.pinType = type;
     input.checked = current[type] === true;
     label.append(input, (uiCopy.viewerTypes && uiCopy.viewerTypes[type]) || type);
-    box.appendChild(label);
+    const secInput = document.createElement('input');
+    secInput.type = 'number';
+    secInput.min = '1';
+    secInput.max = '120';
+    secInput.className = 'pin-type-sec';
+    secInput.dataset.pinTypeSec = type;
+    secInput.placeholder = uiCopy.overlayPinTypeSecPlaceholder || '共通';
+    secInput.title = uiCopy.overlayPinTypeSecHint || '秒 (空=共通)';
+    secInput.setAttribute('aria-label', `${(uiCopy.viewerTypes && uiCopy.viewerTypes[type]) || type} 秒`);
+    const ms = currentMs[type];
+    secInput.value = typeof ms === 'number' ? String(Math.round(ms / 1000)) : '';
+    row.append(label, secInput);
+    box.appendChild(row);
   }
+}
+
+function collectPinMsByType() {
+  const box = $('look-pin-types');
+  const result = {};
+  for (const type of OVERLAY_PIN_TYPES) {
+    const input = box?.querySelector(`[data-pin-type-sec="${type}"]`);
+    if (!input) continue;
+    const val = input.value.trim();
+    if (!val) continue;
+    const sec = Number(val);
+    if (Number.isFinite(sec) && sec >= 1 && sec <= 120) {
+      result[type] = Math.trunc(sec * 1000);
+    }
+  }
+  return result;
 }
 
 function collectPinTypes() {
@@ -116,6 +147,7 @@ function currentPin() {
   return {
     enabled: $('look-pin-enabled')?.checked !== false,
     displayMs: normalizeOverlayPinMs(Number.isFinite(sec) ? sec * 1000 : DEFAULT_OVERLAY_PIN_MS),
+    displayMsByType: collectPinMsByType(),
     hold: Boolean($('look-pin-hold')?.checked),
     types: collectPinTypes(),
     previewPinned: $('look-pin-preview')?.checked !== false,
@@ -124,10 +156,15 @@ function currentPin() {
 
 function syncPinOptions() {
   const on = $('look-pin-enabled')?.checked !== false;
+  const hold = $('look-pin-hold')?.checked === true;
   const box = $('look-pin-options');
   box?.classList.toggle('is-disabled', !on);
   for (const input of box?.querySelectorAll('input') ?? []) {
     input.disabled = !on;
+  }
+  // 「保持」ON 中は個別秒入力を無効化
+  for (const secInput of box?.querySelectorAll('.pin-type-sec') ?? []) {
+    secInput.disabled = !on || hold;
   }
 }
 
@@ -145,13 +182,90 @@ function fillPin(config) {
   if ($('look-pin-preview')) {
     $('look-pin-preview').checked = config.overlayPinPreview !== false;
   }
-  fillPinTypes(config.overlayPinTypes);
+  fillPinTypes(config.overlayPinTypes, config.overlayPinMsByType);
   syncPinOptions();
+}
+
+/** src/shared/overlay-name-colors.ts の DEFAULT / プリセットと同じ。 */
+const DEFAULT_NAME_COLORS_UI = ['#5eead4', '#93c5fd', '#fcd34d', '#f9a8d4', '#86efac'];
+/** @type {Record<string, string[]>} */
+let nameColorPresets = {
+  dark: [...DEFAULT_NAME_COLORS_UI],
+  light: ['#0f766e', '#1d4ed8', '#a16207', '#be185d', '#15803d'],
+  minimal: [...DEFAULT_NAME_COLORS_UI],
+  neon: ['#67e8f9', '#e879f9', '#f0abfc', '#fde047', '#86efac'],
+};
+
+function sameNameColorsUi(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+    return false;
+  }
+  return left.every((color, index) => color === right[index]);
+}
+
+function normalizeNameColorsUi(raw) {
+  const list = Array.isArray(raw) ? raw : [];
+  return DEFAULT_NAME_COLORS_UI.map((def, index) => {
+    const candidate = list[index];
+    return typeof candidate === 'string' && /^#[0-9a-fA-F]{6}$/.test(candidate)
+      ? candidate.toLowerCase()
+      : def;
+  });
+}
+
+function isAutoNameColorsUi(raw) {
+  const colors = normalizeNameColorsUi(raw);
+  if (sameNameColorsUi(colors, DEFAULT_NAME_COLORS_UI)) {
+    return true;
+  }
+  return Object.values(nameColorPresets).some((palette) => sameNameColorsUi(colors, palette));
+}
+
+function nameColorsForLookPresetUi(presetId) {
+  const palette = nameColorPresets[presetId];
+  return palette ? [...palette] : [...DEFAULT_NAME_COLORS_UI];
+}
+
+function resolveNameColorsForLookPresetUi(presetId, current) {
+  if (!isAutoNameColorsUi(current)) {
+    return null;
+  }
+  return nameColorsForLookPresetUi(presetId);
+}
+
+function fillNameColors(config) {
+  const enabledEl = $('look-name-color-enabled');
+  if (enabledEl) {
+    enabledEl.checked = config.overlayNameColorEnabled !== false;
+  }
+  const colors = normalizeNameColorsUi(config.overlayNameColors);
+  for (let i = 0; i < 5; i += 1) {
+    const el = document.getElementById(`look-name-color-${i}`);
+    if (el) {
+      el.value = colors[i];
+    }
+  }
+}
+
+function collectNameColors() {
+  return normalizeNameColorsUi(
+    Array.from({ length: 5 }, (_, i) => document.getElementById(`look-name-color-${i}`)?.value || ''),
+  );
+}
+
+function currentNameColorSettings() {
+  return {
+    overlayNameColorEnabled: $('look-name-color-enabled')?.checked !== false,
+    overlayNameColors: collectNameColors(),
+  };
 }
 
 function fillLook(config) {
   if (config.overlayLookPresets) {
     lookPresets = config.overlayLookPresets;
+  }
+  if (config.overlayNameColorPresets && typeof config.overlayNameColorPresets === 'object') {
+    nameColorPresets = { ...nameColorPresets, ...config.overlayNameColorPresets };
   }
   if (Array.isArray(config.overlayFonts) && config.overlayFonts.length > 0) {
     overlayFonts = config.overlayFonts;
@@ -177,27 +291,50 @@ function fillLook(config) {
   ) {
     fillPin(config);
   }
+  if (
+    Array.isArray(config.overlayNameColors) ||
+    typeof config.overlayNameColorEnabled === 'boolean'
+  ) {
+    fillNameColors(config);
+  }
   syncLookLabels();
   syncNeonHueField();
   syncLookPresetButtons();
 }
 
+function applyPreviewZoom() {
+  const percent = Number($('preview-font-size')?.value || 100);
+  const scale = Number.isFinite(percent) ? percent / 100 : 1;
+  const frame = document.querySelector('.preview-frame');
+  if (!frame) {
+    return;
+  }
+  if (scale === 1) {
+    frame.style.removeProperty('transform');
+    frame.style.removeProperty('transform-origin');
+  } else {
+    frame.style.transform = `scale(${scale})`;
+    frame.style.transformOrigin = 'top center';
+  }
+}
+
 function syncLookLabels() {
   const fontSize = $('look-font-size')?.value;
-  const previewFont = $('preview-font-size');
-  if (previewFont && fontSize != null && previewFont.value !== fontSize) {
-    previewFont.value = fontSize;
-  }
   setRangeLabel('look-font-size', fontSize, 'px');
-  setRangeLabel('preview-font-size', fontSize, 'px');
+  setRangeLabel('preview-font-size', $('preview-font-size')?.value, '%');
   setRangeLabel('look-bg-opacity', $('look-bg-opacity').value, '%');
   setRangeLabel('look-radius', $('look-radius').value, 'px');
   setRangeLabel('look-gift-size', $('look-gift-size').value, 'px');
   const hue = Number($('look-neon-hue')?.value);
   const swatch = $('look-neon-hue-value');
+  const hueInput = $('look-neon-hue');
   if (swatch) {
     const value = Number.isFinite(hue) ? hue : 280;
-    swatch.style.background = `hsl(${value} 90% 60%)`;
+    const color = `hsl(${value} 90% 60%)`;
+    swatch.style.background = color;
+    if (hueInput) {
+      hueInput.style.setProperty('--hue-thumb', color);
+    }
   }
 }
 
@@ -237,6 +374,8 @@ function applyLookPreset(id) {
   if (!preset) {
     return;
   }
+  const currentColors = collectNameColors();
+  const nextColors = resolveNameColorsForLookPresetUi(id, currentColors);
   fillLook({
     overlayTheme: preset.theme,
     overlayFontSize: preset.fontSize,
@@ -253,6 +392,8 @@ function applyLookPreset(id) {
     overlayFontFamily: $('look-font').value,
     overlayMotion: $('look-motion')?.value,
     overlayMotionSpeed: selectedMotionSpeed(),
+    overlayNameColorEnabled: $('look-name-color-enabled')?.checked !== false,
+    overlayNameColors: nextColors || currentColors,
   });
   noteFormChanged();
   pushLookPreview();
@@ -263,6 +404,7 @@ function pushLookPreview() {
   if (!frame?.contentWindow) {
     return;
   }
+  const nameSettings = currentNameColorSettings();
   frame.contentWindow.postMessage({
     kind: 'overlay-look',
     look: {
@@ -270,6 +412,9 @@ function pushLookPreview() {
       hideUserName: $('hide-user-name').checked,
     },
     pin: currentPin(),
+    nameColorEnabled: nameSettings.overlayNameColorEnabled,
+    nameColors: nameSettings.overlayNameColors,
+    customCss: $('overlay-css')?.value ?? '',
   }, '*');
 }
 
@@ -296,6 +441,7 @@ function syncSettingsPreview() {
   workspace?.classList.toggle('is-preview-hidden', !show);
   if (show) {
     refreshPreviewFrame(savedConfig?.overlayPreviewUrl || savedConfig?.overlayUrl);
+    applyPreviewZoom();
     return;
   }
   unloadPreviewFrame();

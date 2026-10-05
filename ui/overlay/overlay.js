@@ -8,6 +8,7 @@
 
   const audioQueue = [];
   let playing = false;
+  let audioEpoch = 0;
   let currentAudio = null;
   let finishCurrent = null;
   let chatMaxRows = 8;
@@ -30,6 +31,8 @@
   const PIN_QUEUE_MAX = 80;
   let pinEnabled = true;
   let pinDisplayMs = 4000;
+  let pinMsByType = {};
+  let pinCurrentDisplayMs = 4000;
   let pinHold = false;
   let pinPreviewPinned = true;
   let pinTypes = {
@@ -47,10 +50,22 @@
   let pinHoldWait = false;
   let pinLeaving = false;
   let pinSwitchTimer = 0;
+  let nameColorEnabled = true;
+  const DEFAULT_NAME_COLORS = ['#5eead4', '#93c5fd', '#fcd34d', '#f9a8d4', '#86efac'];
+  let nameColors = [...DEFAULT_NAME_COLORS];
   let connectGen = 0;
   let reconnectTimer = 0;
   let activeSocket = null;
+  let streamSampleActive = false;
+  let chatSampleQueue = [];
+  let chatSampleIndex = 0;
+  let chatSampleTimer = 0;
+  let pinSampleTemplates = [];
   const isPreview = new URLSearchParams(location.search).has('preview');
+
+  function usesOverlaySampleLoop() {
+    return isPreview || streamSampleActive;
+  }
 
   if (isPreview) {
     document.documentElement.dataset.preview = '1';
@@ -83,6 +98,12 @@
     for (const list of lookLists()) {
       list.dataset.motion = motionName;
       list.style.setProperty('--motion-ms', `${motionMs}ms`);
+      for (const item of list.children) {
+        if (item instanceof HTMLElement) {
+          item.dataset.motion = motionName;
+          item.style.setProperty('--motion-ms', `${motionMs}ms`);
+        }
+      }
     }
     return changed;
   }
@@ -97,6 +118,105 @@
       return 4000;
     }
     return Math.min(120000, Math.max(1000, Math.trunc(parsed)));
+  }
+
+  function normalizePinMsByType(raw) {
+    const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const next = {};
+    for (const type of PIN_TYPES) {
+      if (!(type in record)) continue;
+      const parsed =
+        typeof record[type] === 'number'
+          ? record[type]
+          : Number.parseInt(String(record[type] ?? ''), 10);
+      if (!Number.isFinite(parsed)) continue;
+      const ms = Math.trunc(parsed);
+      if (ms < 1000 || ms > 120000) continue;
+      next[type] = ms;
+    }
+    return next;
+  }
+
+  function resolveOverlayPinDisplayMs(type, commonMs, byType, hold) {
+    const baseMs = normalizePinMs(commonMs);
+    if (hold === true) return baseMs;
+    if (typeof type !== 'string') return baseMs;
+    const key = type === 'subscribe' ? 'superFan' : type;
+    if (!PIN_TYPES.includes(key)) return baseMs;
+    const typed = byType?.[key];
+    return typeof typed === 'number' ? typed : baseMs;
+  }
+
+  function nameColorIndex(uniqueId, nickname) {
+    const id = String(uniqueId ?? '').replace(/^@/, '').trim().toLowerCase();
+    const key = id || String(nickname ?? '').trim().toLowerCase();
+    if (!key) return 0;
+    let hash = 0;
+    for (let i = 0; i < key.length; i += 1) {
+      hash = (hash * 31 + key.charCodeAt(i)) | 0;
+    }
+    return Math.abs(hash) % DEFAULT_NAME_COLORS.length;
+  }
+
+  function nameColorForUser(uniqueId, nickname) {
+    const colors = nameColors.length === DEFAULT_NAME_COLORS.length
+      ? nameColors
+      : [...DEFAULT_NAME_COLORS];
+    return colors[nameColorIndex(uniqueId, nickname)];
+  }
+
+  function normalizeNameColors(raw) {
+    const list = Array.isArray(raw) ? raw : [];
+    return DEFAULT_NAME_COLORS.map((def, i) => {
+      const candidate = list[i];
+      return typeof candidate === 'string' && /^#[0-9a-fA-F]{6}$/.test(candidate)
+        ? candidate.toLowerCase()
+        : def;
+    });
+  }
+
+  function sameNameColors(left, right) {
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((color, index) => color === right[index]);
+  }
+
+  /** 名前色の設定を取り込み、変わったときだけ true。 */
+  function applyNameColorSettings(message) {
+    let changed = false;
+    if (typeof message?.nameColorEnabled === 'boolean') {
+      if (message.nameColorEnabled !== nameColorEnabled) {
+        nameColorEnabled = message.nameColorEnabled;
+        changed = true;
+      }
+    }
+    if (Array.isArray(message?.nameColors)) {
+      const next = normalizeNameColors(message.nameColors);
+      if (!sameNameColors(next, nameColors)) {
+        nameColors = next;
+        changed = true;
+      }
+    }
+    return changed;
+  }
+
+  /** 出ている行の名前色を今のパレットに合わせる。 */
+  function refreshColoredNames() {
+    for (const list of lookLists()) {
+      for (const nameEl of list.querySelectorAll('.chat__name')) {
+        if (!(nameEl instanceof HTMLElement)) {
+          continue;
+        }
+        if (!nameColorEnabled) {
+          nameEl.style.removeProperty('color');
+          continue;
+        }
+        const uniqueId = nameEl.dataset.uniqueId || '';
+        const nickname = nameEl.dataset.nickname || nameEl.textContent || '';
+        nameEl.style.color = nameColorForUser(uniqueId, nickname);
+      }
+    }
   }
 
   function normalizePinTypes(raw) {
@@ -140,6 +260,7 @@
     const enabledChanged = nextEnabled !== pinEnabled;
     pinEnabled = nextEnabled;
     pinDisplayMs = normalizePinMs(next.displayMs);
+    pinMsByType = normalizePinMsByType(next.displayMsByType);
     pinHold = next.hold === true;
     pinTypes = nextTypes;
     pinPreviewPinned = next.previewPinned !== false;
@@ -156,6 +277,11 @@
   function applyLook(look, replayPreview = false) {
     if (!look || typeof look !== 'object') {
       return;
+    }
+    if (look.hideUserName === true) {
+      hideUserName = true;
+    } else if (look.hideUserName === false) {
+      hideUserName = false;
     }
     const theme = typeof look.theme === 'string' ? look.theme : 'dark';
     const align = typeof look.align === 'string' ? look.align : 'full';
@@ -195,8 +321,12 @@
 
   function wsUrl() {
     const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const preview = isPreview ? '?preview=1' : '';
-    return `${protocol}//${location.host}/overlay/ws${preview}`;
+    const params = new URLSearchParams();
+    params.set('role', 'chat');
+    if (isPreview) {
+      params.set('preview', '1');
+    }
+    return `${protocol}//${location.host}/overlay/ws?${params.toString()}`;
   }
 
   function applyCustomCss(css) {
@@ -205,27 +335,123 @@
     }
   }
 
-  function applySettings(message) {
+  function applySettings(message, options = {}) {
     if (typeof message.chatMaxRows === 'number' && Number.isFinite(message.chatMaxRows)) {
       chatMaxRows = Math.min(50, Math.max(1, Math.trunc(message.chatMaxRows)));
     }
     if (typeof message.chatDisplayMs === 'number' && Number.isFinite(message.chatDisplayMs)) {
       chatDisplayMs = Math.max(0, Math.trunc(message.chatDisplayMs));
     }
+    if (typeof message.hideUserName === 'boolean') {
+      hideUserName = message.hideUserName;
+    }
     if (typeof message.customCss === 'string') {
       applyCustomCss(message.customCss);
     }
+    const nameColorChanged = applyNameColorSettings(message);
     if (message.look) {
       applyLook(message.look);
     }
     const previewChanged = applyPinSettings(message.pin);
     trimOverflow();
     flushPendingRows();
-    if (isPreview && previewChanged) {
+    if (nameColorChanged) {
+      refreshColoredNames();
+    }
+    if (options.skipSampleSeed) {
+      return;
+    }
+    if (isPreview && (previewChanged || nameColorChanged)) {
       seedPreviewSamples(true);
     } else {
       seedPreviewSamples();
     }
+  }
+
+  const SAMPLE_CHAT_INTERVAL_MIN_MS = 1000;
+  const SAMPLE_CHAT_INTERVAL_MAX_MS = 6000;
+
+  function randomSampleChatIntervalMs() {
+    const span = SAMPLE_CHAT_INTERVAL_MAX_MS - SAMPLE_CHAT_INTERVAL_MIN_MS + 1;
+    return SAMPLE_CHAT_INTERVAL_MIN_MS + Math.floor(Math.random() * span);
+  }
+
+  function stopChatSampleLoop() {
+    window.clearTimeout(chatSampleTimer);
+    chatSampleTimer = 0;
+  }
+
+  function resetSampleTemplates() {
+    stopChatSampleLoop();
+    chatSampleQueue = [];
+    chatSampleIndex = 0;
+    pinSampleTemplates = [];
+  }
+
+  function normalizeSamplePayload(raw) {
+    if (!raw || typeof raw !== 'object' || typeof raw.displayText !== 'string' || !raw.displayText) {
+      return null;
+    }
+    return raw;
+  }
+
+  function pushNextChatSample() {
+    if (chatSampleQueue.length === 0) {
+      return;
+    }
+    const payload = normalizeSamplePayload(
+      chatSampleQueue[chatSampleIndex % chatSampleQueue.length],
+    );
+    chatSampleIndex += 1;
+    if (!payload) {
+      return;
+    }
+    if (shouldPinType(payload.type)) {
+      enqueuePin(payload);
+      if (!pinLeaving && !pinShowing) {
+        pumpPin();
+      }
+      return;
+    }
+    addRow(payload);
+  }
+
+  function scheduleChatSampleAdvance() {
+    stopChatSampleLoop();
+    if (!usesOverlaySampleLoop() || chatSampleQueue.length === 0) {
+      return;
+    }
+    chatSampleTimer = window.setTimeout(() => {
+      chatSampleTimer = 0;
+      pushNextChatSample();
+      scheduleChatSampleAdvance();
+    }, randomSampleChatIntervalMs());
+  }
+
+  function applyStreamSampleDisplay(message) {
+    resetSampleTemplates();
+    resetPinState();
+    pendingRows.length = 0;
+    clearList(chat);
+    pinSampleTemplates = Array.isArray(message.pinSamples)
+      ? message.pinSamples.map(normalizeSamplePayload).filter(Boolean)
+      : [];
+    chatSampleQueue = Array.isArray(message.chatSamples)
+      ? message.chatSamples.map(normalizeSamplePayload).filter(Boolean)
+      : [];
+    chatSampleIndex = 0;
+    applySettings(message, { skipSampleSeed: true });
+    if (chatSampleQueue.length > 0) {
+      pushNextChatSample();
+      scheduleChatSampleAdvance();
+    }
+    if (pinSampleTemplates.length > 0) {
+      pinQueue.push(...pinSampleTemplates);
+    } else if (isPreview) {
+      refillPreviewPinQueue();
+    }
+    pumpPin();
+    trimOverflow();
   }
 
   function stopCurrentAudio() {
@@ -247,30 +473,217 @@
 
   let chimeContext = null;
 
-  function playGiftChime() {
+  function playGiftChime(soundUrl, volume) {
+    const gain =
+      typeof volume === 'number' && Number.isFinite(volume)
+        ? Math.max(0, Math.min(5, volume / 100))
+        : 0.85;
+    stopCurrentChime();
+    if (typeof soundUrl === 'string' && soundUrl.trim()) {
+      currentChimeStop = playUrlWithGain(soundUrl.trim(), gain, () => undefined, () => {
+        if (currentChimeStop) {
+          currentChimeStop = null;
+        }
+      });
+      return;
+    }
+    currentChimeStop = playBuiltinChime(gain, () => {
+      if (currentChimeStop) {
+        currentChimeStop = null;
+      }
+    });
+  }
+
+  let currentChimeStop = null;
+
+  function stopCurrentChime() {
+    if (typeof currentChimeStop === 'function') {
+      const stop = currentChimeStop;
+      currentChimeStop = null;
+      stop();
+    }
+  }
+
+  function playUrlWithGain(url, gain, onFail, onEnded) {
+    const safeGain = Math.max(0, Math.min(5, Number(gain) || 0));
+    const fail = typeof onFail === 'function' ? onFail : () => undefined;
+    const ended = typeof onEnded === 'function' ? onEnded : () => undefined;
+    let finished = false;
+    const finish = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      ended();
+    };
+    const stopAudio = (audio) => {
+      try {
+        audio.pause();
+        audio.removeAttribute('src');
+        audio.load();
+      } catch {
+        // ignore
+      }
+    };
+
+    if (safeGain <= 1) {
+      try {
+        const audio = new Audio(url);
+        audio.volume = safeGain;
+        audio.addEventListener('ended', finish);
+        audio.addEventListener('error', () => {
+          fail();
+          finish();
+        });
+        void audio.play().catch(() => {
+          fail();
+          finish();
+        });
+        return () => {
+          stopAudio(audio);
+          finish();
+        };
+      } catch {
+        fail();
+        finish();
+        return () => undefined;
+      }
+    }
+
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
     if (!AudioCtx) {
-      return;
+      fail();
+      finish();
+      return () => undefined;
     }
     if (!chimeContext) {
       chimeContext = new AudioCtx();
     }
-    if (chimeContext.state === 'suspended') {
-      void chimeContext.resume();
+    const ctx = chimeContext;
+    const abort = new AbortController();
+    let bufferSource = null;
+    let cancelled = false;
+
+    const startBoost = async () => {
+      try {
+        if (ctx.state === 'suspended') {
+          await ctx.resume();
+        }
+        const response = await fetch(url, {
+          mode: 'cors',
+          cache: 'no-store',
+          signal: abort.signal,
+        });
+        if (!response.ok) {
+          throw new Error(`sound fetch ${response.status}`);
+        }
+        const bytes = await response.arrayBuffer();
+        if (cancelled || finished) {
+          return;
+        }
+        const audioBuffer = await ctx.decodeAudioData(bytes.slice(0));
+        if (cancelled || finished) {
+          return;
+        }
+        bufferSource = ctx.createBufferSource();
+        const gainNode = ctx.createGain();
+        gainNode.gain.value = safeGain;
+        bufferSource.buffer = audioBuffer;
+        bufferSource.connect(gainNode);
+        gainNode.connect(ctx.destination);
+        bufferSource.onended = finish;
+        bufferSource.start();
+      } catch {
+        if (cancelled || finished) {
+          return;
+        }
+        fail();
+        finish();
+      }
+    };
+    void startBoost();
+
+    return () => {
+      cancelled = true;
+      abort.abort();
+      if (bufferSource) {
+        try {
+          bufferSource.stop();
+        } catch {
+          // ignore
+        }
+      }
+      finish();
+    };
+  }
+
+  /** ギフト用テンプレ（チャリン）。コメント新着音とは別。 */
+  function playBuiltinChime(gainScale, onEnded) {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) {
+      if (typeof onEnded === 'function') {
+        onEnded();
+      }
+      return () => undefined;
     }
-    const now = chimeContext.currentTime;
-    const osc = chimeContext.createOscillator();
-    const gain = chimeContext.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(880, now);
-    osc.frequency.exponentialRampToValueAtTime(1320, now + 0.08);
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.28);
-    osc.connect(gain);
-    gain.connect(chimeContext.destination);
-    osc.start(now);
-    osc.stop(now + 0.3);
+    if (!chimeContext) {
+      chimeContext = new AudioCtx();
+    }
+    const ctx = chimeContext;
+    const scale =
+      typeof gainScale === 'number' && Number.isFinite(gainScale)
+        ? Math.max(0, Math.min(5, gainScale))
+        : 0.85;
+    const oscillators = [];
+    let finished = false;
+    const finish = () => {
+      if (finished) {
+        return;
+      }
+      finished = true;
+      if (typeof onEnded === 'function') {
+        onEnded();
+      }
+    };
+    const start = () => {
+      const now = ctx.currentTime;
+      const makeDing = (freq, startAt, dur, peak) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.value = freq;
+        gain.gain.setValueAtTime(0.0001, now + startAt);
+        gain.gain.exponentialRampToValueAtTime(
+          Math.max(0.0001, peak * scale),
+          now + startAt + 0.012,
+        );
+        gain.gain.exponentialRampToValueAtTime(0.0001, now + startAt + dur);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now + startAt);
+        osc.stop(now + startAt + dur + 0.02);
+        oscillators.push(osc);
+        return osc;
+      };
+      makeDing(1568, 0, 0.11, 0.14);
+      const second = makeDing(2093, 0.045, 0.16, 0.11);
+      second.onended = finish;
+    };
+    if (ctx.state === 'suspended') {
+      void ctx.resume().then(start).catch(finish);
+    } else {
+      start();
+    }
+    return () => {
+      for (const osc of oscillators) {
+        try {
+          osc.stop();
+        } catch {
+          // ignore
+        }
+      }
+      finish();
+    };
   }
 
   function skipAudio() {
@@ -283,6 +696,7 @@
   }
 
   function clearPendingAudio() {
+    audioEpoch += 1;
     const pending = audioQueue.splice(0, audioQueue.length);
     for (const item of pending) {
       void Promise.resolve(item)
@@ -324,8 +738,12 @@
       return;
     }
     playing = true;
+    const epoch = audioEpoch;
     try {
       while (audioQueue.length > 0) {
+        if (epoch !== audioEpoch) {
+          break;
+        }
         const item = audioQueue.shift();
         let src = '';
         try {
@@ -333,6 +751,10 @@
         } catch (error) {
           const message = error instanceof Error ? error.message : String(error);
           console.warn(`音声の読み込みに失敗しました: ${message}`);
+          continue;
+        }
+        if (epoch !== audioEpoch) {
+          revokeIfBlob(src);
           continue;
         }
         try {
@@ -394,6 +816,9 @@
       window.clearTimeout(id);
     }
     item.removeAttribute('data-leave-timer');
+    if (item instanceof HTMLElement) {
+      item.style.removeProperty('opacity');
+    }
   }
 
   function onRowRemoved() {
@@ -408,6 +833,205 @@
   function rowMotionMs(item) {
     const ms = Number.parseInt(item.style.getPropertyValue('--motion-ms'), 10);
     return Number.isFinite(ms) ? ms : motionMs;
+  }
+
+  function pinPhaseMs() {
+    if (motionName === 'none' || motionMs <= 0) {
+      return 0;
+    }
+    if (pinCurrentDisplayMs >= motionMs * 2) {
+      return motionMs;
+    }
+    return Math.max(1, Math.trunc(pinCurrentDisplayMs / 2));
+  }
+
+  function pinAdvanceDelayMs() {
+    const phase = pinPhaseMs();
+    if (phase <= 0) {
+      return Math.max(0, pinCurrentDisplayMs);
+    }
+    return Math.max(phase, pinCurrentDisplayMs - phase);
+  }
+
+  function leaveMotionInName(item) {
+    const source = item instanceof HTMLElement ? item : null;
+    const list = pin instanceof HTMLOListElement ? pin : null;
+    const fromItem = source ? getComputedStyle(source).getPropertyValue('--motion-in').trim() : '';
+    if (fromItem) {
+      return fromItem;
+    }
+    if (list) {
+      return getComputedStyle(list).getPropertyValue('--motion-in').trim();
+    }
+    return '';
+  }
+
+  function pinLeaveDurationMs(enterAnim, fallbackMs) {
+    if (!enterAnim?.effect) {
+      return fallbackMs;
+    }
+    const timing = enterAnim.effect.getTiming();
+    if (typeof timing.duration === 'number' && timing.duration > 0) {
+      return timing.duration;
+    }
+    return fallbackMs;
+  }
+
+  function pinLeaveKeyframes(enterAnim) {
+    if (!enterAnim?.effect) {
+      return null;
+    }
+    try {
+      const keyframes = enterAnim.effect.getKeyframes();
+      return keyframes.length > 0 ? keyframes : null;
+    } catch {
+      return null;
+    }
+  }
+
+  function pinReverseKeyframes(keyframes) {
+    const sorted = [...keyframes].sort(
+      (left, right) =>
+        (left.offset ?? left.computedOffset ?? 0) - (right.offset ?? right.computedOffset ?? 0),
+    );
+    const first = sorted[0];
+    const last = sorted[sorted.length - 1];
+    const from = {};
+    const to = {};
+    for (const key of ['opacity', 'transform', 'filter']) {
+      if (last[key] != null) {
+        from[key] = last[key];
+      }
+      if (first[key] != null) {
+        to[key] = first[key];
+      }
+    }
+    return [from, to];
+  }
+
+  function preparePinLeaveItem(item) {
+    item.classList.add('is-leaving');
+    item.style.removeProperty('opacity');
+    item.style.setProperty('animation', 'none');
+  }
+
+  function pinLeaveFromRunning(enterAnim, item, ms) {
+    const style = getComputedStyle(item);
+    const transform = style.transform === 'none' ? undefined : style.transform;
+    const from = {
+      opacity: style.opacity,
+      transform,
+    };
+    const keyframes = pinLeaveKeyframes(enterAnim);
+    const first = keyframes?.[0];
+    if (!first) {
+      return null;
+    }
+    const to = {
+      opacity: first.opacity ?? '0',
+      transform: first.transform,
+    };
+    const currentTime =
+      typeof enterAnim.currentTime === 'number' && Number.isFinite(enterAnim.currentTime)
+        ? Math.max(1, Math.round(enterAnim.currentTime))
+        : ms;
+    preparePinLeaveItem(item);
+    return item.animate([from, to], {
+      duration: currentTime,
+      easing: 'ease-in',
+      fill: 'forwards',
+    });
+  }
+
+  function beginPinLeave(item, onDone) {
+    const finish = () => {
+      if (item.isConnected) {
+        item.remove();
+      }
+      if (typeof onDone === 'function') {
+        onDone();
+      }
+    };
+    if (!(item instanceof HTMLElement) || item.classList.contains('is-leaving')) {
+      return;
+    }
+    if (!item.isConnected) {
+      return;
+    }
+    clearRowTimer(item);
+    const ms = rowMotionMs(item);
+    if (rowMotion(item) === 'none' || ms <= 0) {
+      finish();
+      return;
+    }
+    if (!leaveMotionInName(item)) {
+      finish();
+      return;
+    }
+    let settled = false;
+    let fallback = 0;
+    const settle = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      if (fallback) {
+        window.clearTimeout(fallback);
+      }
+      finish();
+    };
+    const bindLeaveAnim = (leaveAnim, durationMs) => {
+      if (!leaveAnim) {
+        settle();
+        return;
+      }
+      leaveAnim.addEventListener('finish', settle, { once: true });
+      leaveAnim.addEventListener('cancel', settle, { once: true });
+      fallback = window.setTimeout(settle, durationMs + 100);
+      item.dataset.leaveTimer = String(fallback);
+    };
+
+    const enterAnim = item
+      .getAnimations()
+      .find((anim) => anim.animationName && anim.animationName !== 'none' && anim.effect);
+    const durationMs = pinLeaveDurationMs(enterAnim, ms);
+    let leaveAnim = null;
+    let leaveDurationMs = durationMs;
+
+    if (enterAnim?.effect && enterAnim.playState === 'running') {
+      leaveDurationMs = Math.max(
+        1,
+        Math.round(
+          typeof enterAnim.currentTime === 'number' && Number.isFinite(enterAnim.currentTime)
+            ? enterAnim.currentTime
+            : durationMs,
+        ),
+      );
+      leaveAnim = pinLeaveFromRunning(enterAnim, item, durationMs);
+      enterAnim.cancel();
+    } else {
+      const keyframes = pinLeaveKeyframes(enterAnim);
+      enterAnim?.cancel();
+      preparePinLeaveItem(item);
+      if (keyframes) {
+        leaveAnim = item.animate(pinReverseKeyframes(keyframes), {
+          duration: durationMs,
+          easing: 'ease-in',
+          fill: 'forwards',
+        });
+      }
+    }
+
+    if (!leaveAnim) {
+      preparePinLeaveItem(item);
+      leaveAnim = item.animate([{ opacity: 1 }, { opacity: 0 }], {
+        duration: durationMs,
+        easing: 'ease-in',
+        fill: 'forwards',
+      });
+    }
+
+    bindLeaveAnim(leaveAnim, leaveDurationMs);
   }
 
   function beginLeave(item, onDone) {
@@ -427,17 +1051,46 @@
     if (!item.isConnected) {
       return;
     }
+    if (pin instanceof HTMLOListElement && item.parentElement === pin) {
+      beginPinLeave(item, onDone);
+      return;
+    }
     clearRowTimer(item);
     const ms = rowMotionMs(item);
     if (rowMotion(item) === 'none' || ms <= 0) {
       finish();
       return;
     }
-    item.classList.add('is-leaving');
-    const done = window.setTimeout(() => {
+    let settled = false;
+    let fallback = 0;
+    const settle = () => {
+      if (settled) {
+        return;
+      }
+      settled = true;
+      item.removeEventListener('animationend', onAnimEnd);
+      if (fallback) {
+        window.clearTimeout(fallback);
+      }
       finish();
-    }, ms + 20);
-    item.dataset.leaveTimer = String(done);
+    };
+    const onAnimEnd = (event) => {
+      if (event.target !== item || event.pseudoElement) {
+        return;
+      }
+      settle();
+    };
+    for (const anim of item.getAnimations()) {
+      anim.cancel();
+    }
+    item.style.opacity = '1';
+    item.style.animation = 'none';
+    void item.offsetWidth;
+    item.style.removeProperty('animation');
+    item.classList.add('is-leaving');
+    item.addEventListener('animationend', onAnimEnd);
+    fallback = window.setTimeout(settle, ms + 100);
+    item.dataset.leaveTimer = String(fallback);
   }
 
   function trimOverflow() {
@@ -491,6 +1144,209 @@
     queueLatestRow(payload);
   }
 
+  // src/shared/comment-emotes.ts と同じ判定（配信ソースは単一 JS）
+  const EMOTE_ONLY_COMMENT = '絵文字';
+  const MAX_COMMENT_EMOTES = 32;
+
+  function normalizeOverlayCommentEmotes(emotes) {
+    if (!Array.isArray(emotes) || emotes.length === 0) {
+      return [];
+    }
+    const next = [];
+    for (const item of emotes) {
+      if (!item || typeof item !== 'object') {
+        continue;
+      }
+      const imageUrl = String(item.imageUrl || '').trim();
+      if (!imageUrl) {
+        continue;
+      }
+      const parsed = typeof item.index === 'number' ? item.index : Number(item.index);
+      const index = Number.isFinite(parsed) ? Math.max(0, Math.trunc(parsed)) : 0;
+      next.push({ index, imageUrl });
+      if (next.length >= MAX_COMMENT_EMOTES) {
+        break;
+      }
+    }
+    return next;
+  }
+
+  function buildOverlayCommentSegments(comment, emotes) {
+    const raw = String(comment || '');
+    const base = raw.trim() === EMOTE_ONLY_COMMENT ? '' : raw;
+    const list = normalizeOverlayCommentEmotes(emotes);
+    if (list.length === 0) {
+      return base ? [{ kind: 'text', text: base }] : [];
+    }
+    const ordered = list
+      .map((item, order) => ({
+        index: item.index > base.length ? base.length : item.index,
+        imageUrl: item.imageUrl,
+        order,
+      }))
+      .sort((a, b) => a.index - b.index || a.order - b.order);
+    const segments = [];
+    let cursor = 0;
+    for (const emote of ordered) {
+      if (emote.index > cursor) {
+        segments.push({ kind: 'text', text: base.slice(cursor, emote.index) });
+        cursor = emote.index;
+      }
+      segments.push({ kind: 'emote', imageUrl: emote.imageUrl });
+    }
+    if (cursor < base.length) {
+      segments.push({ kind: 'text', text: base.slice(cursor) });
+    }
+    return segments;
+  }
+
+  function createGiftImagePlaceholder(className) {
+    const el = document.createElement('span');
+    const base = String(className || '').trim();
+    el.className = base ? `${base} gift-icon--missing` : 'gift-icon--missing';
+    el.setAttribute('aria-hidden', 'true');
+    el.textContent = 'No';
+    return el;
+  }
+
+  function createGiftImage(src, className) {
+    const url = String(src || '').trim();
+    const classes = String(className || '').trim();
+    if (!url) {
+      return createGiftImagePlaceholder(classes);
+    }
+    const img = document.createElement('img');
+    img.className = classes;
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.decoding = 'async';
+    img.addEventListener('error', () => {
+      img.replaceWith(createGiftImagePlaceholder(classes));
+    });
+    img.src = url;
+    return img;
+  }
+
+  function appendOverlayEmoteImage(host, imageUrl) {
+    if (!(host instanceof HTMLElement) || !imageUrl) {
+      return;
+    }
+    const img = document.createElement('img');
+    img.className = 'chat__emote';
+    img.alt = '';
+    img.referrerPolicy = 'no-referrer';
+    img.decoding = 'async';
+    img.addEventListener('error', () => img.remove());
+    img.src = imageUrl;
+    host.appendChild(img);
+  }
+
+  function appendOverlayCommentSegments(host, segments) {
+    if (!(host instanceof HTMLElement)) {
+      return;
+    }
+    for (const segment of segments || []) {
+      if (!segment || typeof segment !== 'object') {
+        continue;
+      }
+      if (segment.kind === 'text') {
+        if (segment.text) {
+          host.appendChild(document.createTextNode(segment.text));
+        }
+        continue;
+      }
+      if (segment.kind === 'emote') {
+        appendOverlayEmoteImage(host, segment.imageUrl);
+      }
+    }
+  }
+
+  function appendColoredName(body, nickname, uniqueId) {
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'chat__name';
+    nameSpan.dataset.uniqueId = String(uniqueId || '');
+    nameSpan.dataset.nickname = String(nickname || '');
+    nameSpan.style.color = nameColorForUser(uniqueId, nickname);
+    nameSpan.textContent = nickname;
+    body.appendChild(nameSpan);
+  }
+
+  function appendPlainChatText(body, value) {
+    if (!value) {
+      return;
+    }
+    const textSpan = document.createElement('span');
+    textSpan.className = 'chat__text';
+    textSpan.textContent = value;
+    body.appendChild(textSpan);
+  }
+
+  function fillChatBody(body, payload) {
+    const nickname = payload.user?.nickname;
+    const displayText = String(payload.displayText || '');
+    const comment = String(payload.comment || '');
+    const emotes = normalizeOverlayCommentEmotes(payload.commentEmotes);
+    const segments =
+      emotes.length > 0 ? buildOverlayCommentSegments(comment, emotes) : [];
+    const needle =
+      comment && displayText.includes(comment)
+        ? comment
+        : emotes.length > 0 && displayText.includes(EMOTE_ONLY_COMMENT)
+          ? EMOTE_ONLY_COMMENT
+          : '';
+    const commentAt = needle ? displayText.indexOf(needle) : -1;
+
+    if (segments.length > 0 && commentAt >= 0) {
+      const before = displayText.slice(0, commentAt);
+      const after = displayText.slice(commentAt + needle.length);
+      const colorName =
+        nameColorEnabled &&
+        !hideUserName &&
+        nickname &&
+        before.includes(nickname);
+      if (colorName) {
+        const idx = before.indexOf(nickname);
+        appendPlainChatText(body, before.slice(0, idx));
+        appendColoredName(body, nickname, payload.user?.uniqueId);
+        appendPlainChatText(body, before.slice(idx + nickname.length));
+      } else if (before) {
+        appendPlainChatText(body, before);
+      }
+      const commentHost = document.createElement('span');
+      commentHost.className = 'chat__text';
+      appendOverlayCommentSegments(commentHost, segments);
+      body.appendChild(commentHost);
+      appendPlainChatText(body, after);
+      return;
+    }
+
+    if (
+      nameColorEnabled &&
+      !hideUserName &&
+      nickname &&
+      displayText.includes(nickname)
+    ) {
+      const idx = displayText.indexOf(nickname);
+      if (idx === 0) {
+        appendColoredName(body, nickname, payload.user?.uniqueId);
+        appendPlainChatText(body, displayText.slice(nickname.length));
+      } else {
+        appendPlainChatText(body, displayText.slice(0, idx));
+        appendColoredName(body, nickname, payload.user?.uniqueId);
+        appendPlainChatText(body, displayText.slice(idx + nickname.length));
+      }
+    } else {
+      body.textContent = displayText;
+    }
+
+    if (segments.length > 0) {
+      const host = document.createElement('span');
+      host.className = 'chat__text';
+      appendOverlayCommentSegments(host, segments);
+      body.appendChild(host);
+    }
+  }
+
   function appendRow(list, payload) {
     if (!payload?.displayText || !(list instanceof HTMLOListElement)) {
       return;
@@ -499,7 +1355,8 @@
     const item = document.createElement('li');
     item.className = `chat__item chat__item--${payload.type || 'comment'}`;
     item.dataset.motion = motionName;
-    item.style.setProperty('--motion-ms', `${motionMs}ms`);
+    const rowMs = list === pin ? pinPhaseMs() : motionMs;
+    item.style.setProperty('--motion-ms', `${rowMs}ms`);
 
     if ((isPreview || showAvatar) && payload.user && payload.user.avatarUrl) {
       const img = document.createElement('img');
@@ -511,31 +1368,40 @@
       item.appendChild(img);
     }
 
-    if ((payload.type === 'gift' || payload.type === 'portal') && payload.giftImageUrl) {
-      const gift = document.createElement('img');
-      gift.className = 'chat__gift';
-      gift.alt = '';
-      gift.referrerPolicy = 'no-referrer';
-      gift.decoding = 'async';
-      gift.addEventListener('error', () => gift.remove());
-      gift.src = payload.giftImageUrl;
-      item.appendChild(gift);
+    if (payload.type === 'gift' || payload.type === 'portal') {
+      item.appendChild(createGiftImage(payload.giftImageUrl || '', 'chat__gift'));
     }
 
     const body = document.createElement('div');
     body.className = 'chat__body';
-    body.textContent = payload.displayText;
+    fillChatBody(body, payload);
+
     item.appendChild(body);
     list.appendChild(item);
+    if (list === pin) {
+      item.addEventListener(
+        'animationend',
+        (event) => {
+          if (event.target !== item || event.pseudoElement || item.classList.contains('is-leaving')) {
+            return;
+          }
+          item.dataset.entered = '1';
+          item.style.opacity = '1';
+        },
+        { once: true },
+      );
+      return;
+    }
     if (list !== chat) {
       return;
     }
     trimOverflow();
 
-    if (chatDisplayMs > 0 && !isPreview) {
+    const leaveMs = chatDisplayMs;
+    if (leaveMs > 0 && (!isPreview || usesOverlaySampleLoop())) {
       const timer = window.setTimeout(() => {
         beginLeave(item);
-      }, chatDisplayMs);
+      }, leaveMs);
       item.dataset.leaveTimer = String(timer);
     }
   }
@@ -554,6 +1420,20 @@
     if (!(pin instanceof HTMLOListElement)) {
       return;
     }
+    if (pinLeaving) {
+      return;
+    }
+    const item = pin.firstElementChild;
+    if (item instanceof HTMLElement) {
+      if (item.classList.contains('is-leaving')) {
+        return;
+      }
+      leavePinThen(() => {
+        pin.hidden = true;
+        clearList(pin);
+      });
+      return;
+    }
     pin.hidden = true;
     clearList(pin);
   }
@@ -565,7 +1445,10 @@
     pinLeaving = false;
     pinShowing = false;
     pinHoldWait = false;
-    hidePinFrame();
+    if (pin instanceof HTMLOListElement) {
+      pin.hidden = true;
+      clearList(pin);
+    }
   }
 
   function enqueuePin(payload) {
@@ -622,7 +1505,21 @@
       return;
     }
     pin.hidden = false;
-    clearList(pin);
+    pinCurrentDisplayMs = resolveOverlayPinDisplayMs(payload.type, pinDisplayMs, pinMsByType, pinHold);
+    const existing = pin.firstElementChild;
+    if (existing instanceof HTMLElement) {
+      if (existing.classList.contains('is-leaving') || pinLeaving) {
+        return;
+      }
+      pinShowing = false;
+      leavePinThen(() => {
+        appendRow(pin, payload);
+        pinShowing = true;
+        pinHoldWait = false;
+        schedulePinAdvance();
+      });
+      return;
+    }
     appendRow(pin, payload);
     pinShowing = true;
     pinHoldWait = false;
@@ -634,7 +1531,7 @@
     pinSwitchTimer = window.setTimeout(() => {
       pinSwitchTimer = 0;
       advancePin();
-    }, pinDisplayMs);
+    }, pinAdvanceDelayMs());
   }
 
   function finishPinLeave() {
@@ -673,22 +1570,38 @@
     pinLeaving = true;
     window.clearTimeout(pinSwitchTimer);
     pinSwitchTimer = 0;
-    beginLeave(item, () => {
+    beginPinLeave(item, () => {
       pinLeaving = false;
       done();
     });
   }
 
-  function previewSampleUser() {
-    return { avatarUrl: '/overlay/preview-avatar.svg' };
+  function previewSampleUser(uniqueId = 'test_user') {
+    return {
+      uniqueId,
+      nickname: 'テストユーザー',
+      avatarUrl: '/overlay/preview-avatar.svg',
+    };
   }
 
-  function previewCommentSample() {
+  function previewCommentSample(uniqueId = 'test_user', comment = 'テストコメントです') {
     return {
       type: 'comment',
-      user: previewSampleUser(),
-      displayText: hideUserName ? 'テストコメントです' : 'テストユーザー: テストコメントです',
+      user: previewSampleUser(uniqueId),
+      comment,
+      displayText: hideUserName ? comment : `テストユーザー: ${comment}`,
     };
+  }
+
+  function previewCommentSamples() {
+    return [
+      previewCommentSample('test_user', 'テストコメントです'),
+      previewCommentSample('test_fan_4', 'ファンクラブのテストです'),
+      previewCommentSample('test_super', 'スーパーファンのテストです'),
+      previewCommentSample('test_fan_super', 'ファンでスパのテストです'),
+      previewCommentSample('test_mod', 'テストコメントです'),
+      previewCommentSample('test_anchor', 'テストコメントです'),
+    ];
   }
 
   function previewEventSample(type) {
@@ -725,11 +1638,26 @@
     return list;
   }
 
+  function buildPreviewChatSampleQueue() {
+    const queue = previewCommentSamples();
+    for (const type of PIN_TYPES) {
+      if (!shouldPinType(type)) {
+        queue.push(previewEventSample(type));
+      }
+    }
+    return queue;
+  }
+
   function refillPreviewPinQueue() {
-    if (!isPreview || pinQueue.length > 0) {
+    if (!usesOverlaySampleLoop() || pinQueue.length > 0) {
       return;
     }
-    const samples = previewPinnedSamples();
+    const samples =
+      pinSampleTemplates.length > 0
+        ? [...pinSampleTemplates]
+        : isPreview
+          ? previewPinnedSamples()
+          : [];
     if (samples.length === 0) {
       return;
     }
@@ -737,30 +1665,26 @@
   }
 
   function seedPreviewSamples(force = false) {
-    if (!isPreview) {
+    if (!usesOverlaySampleLoop()) {
       return;
     }
     if (!force && chat.children.length > 0) {
       return;
     }
+    stopChatSampleLoop();
     pendingRows.length = 0;
     resetPinState();
     clearList(chat);
-    const comment = previewCommentSample();
-    const samples = PIN_TYPES.map((type) => previewEventSample(type));
-    const pinned = samples.filter((row) => shouldPinType(row.type));
-    if (pinned.length === 0) {
-      appendRow(chat, comment);
-      appendRow(chat, previewEventSample('gift'));
-      appendRow(chat, previewEventSample('follow'));
-      trimOverflow();
-      return;
+
+    if (isPreview) {
+      chatSampleQueue = buildPreviewChatSampleQueue();
+      chatSampleIndex = 0;
+      pinSampleTemplates = previewPinnedSamples();
     }
-    appendRow(chat, comment);
-    for (const row of samples) {
-      if (!shouldPinType(row.type)) {
-        appendRow(chat, row);
-      }
+
+    if (chatSampleQueue.length > 0) {
+      pushNextChatSample();
+      scheduleChatSampleAdvance();
     }
     refillPreviewPinQueue();
     pumpPin();
@@ -792,6 +1716,8 @@
     }
 
     if (message.kind === 'clear') {
+      streamSampleActive = false;
+      resetSampleTemplates();
       pendingRows.length = 0;
       resetPinState();
       clearList(chat);
@@ -799,17 +1725,29 @@
       return;
     }
 
+    if (message.kind === 'sample-display') {
+      streamSampleActive = true;
+      applyStreamSampleDisplay(message);
+      return;
+    }
+
     if (message.kind === 'pin-control') {
       if (message.action === 'clear') {
         resetPinState();
-        if (isPreview) {
+        if (usesOverlaySampleLoop()) {
           seedPreviewSamples(true);
         }
       }
       return;
     }
 
-    if (isPreview && (message.kind === 'event' || message.kind === 'audio' || message.kind === 'chime' || message.kind === 'audio-control')) {
+    if (
+      usesOverlaySampleLoop() &&
+      (message.kind === 'event' ||
+        message.kind === 'audio' ||
+        message.kind === 'audio-control' ||
+        message.kind === 'chime')
+    ) {
       return;
     }
 
@@ -828,7 +1766,7 @@
     }
 
     if (message.kind === 'chime') {
-      playGiftChime();
+      playGiftChime(message.soundUrl, message.volume);
       return;
     }
 
@@ -893,10 +1831,17 @@
         return;
       }
       const nextHide = data.look?.hideUserName === true;
-      const nameChanged = nextHide !== hideUserName;
+      const hideChanged = nextHide !== hideUserName;
       hideUserName = nextHide;
+      if (typeof data.customCss === 'string') {
+        applyCustomCss(data.customCss);
+      }
+      const nameColorChanged = applyNameColorSettings(data);
+      if (nameColorChanged) {
+        refreshColoredNames();
+      }
       const previewChanged = applyPinSettings(data.pin);
-      applyLook(data.look, nameChanged || previewChanged);
+      applyLook(data.look, hideChanged || previewChanged || nameColorChanged);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.warn(`見た目の更新に失敗しました: ${detail}`);

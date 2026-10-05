@@ -33,7 +33,7 @@ test('コメント画面のレイアウトはまとめる・分ける・自由�
 });
 
 test('コメント画面の文字サイズは範囲内に収める', () => {
-  assert.equal(DEFAULT_VIEWER_FONT_SIZE, (MIN_VIEWER_FONT_SIZE + MAX_VIEWER_FONT_SIZE) / 2);
+  assert.equal(DEFAULT_VIEWER_FONT_SIZE, 20);
   assert.equal(clampViewerFontSize(undefined), DEFAULT_VIEWER_FONT_SIZE);
   assert.equal(clampViewerFontSize(18), 18);
   assert.equal(clampViewerFontSize(1), MIN_VIEWER_FONT_SIZE);

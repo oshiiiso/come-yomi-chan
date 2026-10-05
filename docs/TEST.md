@@ -6,7 +6,7 @@
 npm test
 ```
 
-`tsc` のあと `dist/test/**/*.test.js` を走らせ、最後に Electron で preload が載るかを見る。新しいテストを足したら `package.json` の列挙は不要。
+`tsc` のあと `dist/test/**/*.test.js` を走らせ、最後に Electron で preload が載るかと、固定枠の逆再生退場を見る。新しいテストを足したら `package.json` の列挙は不要。
 
 ## 配置
 
@@ -20,6 +20,7 @@ src/test/template/         # 表示・読み上げテンプレート
 src/test/tiktok/           # Webcast イベントの読み取り
 src/test/tts/              # 読み上げキューとエンジン周辺
 scripts/verify-preload.js  # Electron で preload が載るか
+scripts/verify-pin-leave.js  # Electron で固定枠の逆再生退場
 ```
 
 新しい `*.test.ts` は上のどれかに足す。`package.json` のファイル列挙は不要（`node --test` が `dist/test/**/*.test.js` を拾う）。
@@ -31,12 +32,13 @@ scripts/verify-preload.js  # Electron で preload が載るか
 | ファイル | 見ていること |
 |---|---|
 | `like-tracker.test.ts` | ユーザーごとのいいね累計。区切りをまたいだときだけ通知。reset と人数上限 |
+| `overlay-sample-plan.test.ts` | 配信ソースサンプルのコメント候補と固定枠候補の分離。名前を出さない設定がサンプル文言に効くこと |
 
 ### オーバーレイ（`src/test/overlay-server/`）
 
 | ファイル | 見ていること |
 |---|---|
-| `overlay-server.test.ts` | HTTP の配信、WebSocket のイベント／クリア／チャイム／読み上げ合図、wav の期限、プレビュー接続を本番に数えないこと、ポート変更失敗時に待ち受けが残ること |
+| `overlay-server.test.ts` | HTTP の配信、WebSocket のイベント／クリア／サウンド／読み上げ合図、wav の期限、プレビュー接続を本番に数えないこと、ポート変更失敗時に待ち受けが残ること |
 | `gift-image-proxy.test.ts` | TikTok CDN だけ許可、ローカル画像はそのまま、キャッシュ上限 |
 
 ローカル HTTP を立てる。本物の配信にはつながない。
@@ -45,23 +47,32 @@ scripts/verify-preload.js  # Electron で preload が載るか
 
 | ファイル | 見ていること |
 |---|---|
-| `event-pipeline.test.ts` | 表示する／読むの判定。ギフト扱い、最低ダイヤ、メンション、URL、連投、ミュート、配信者、テスト送信 |
+| `live-disconnect.test.ts` | 配信終了は切断、一時切断は待機。読み上げ待ちを捨てる設定変更の判定 |
+| `event-pipeline.test.ts` | 表示する／読むの判定。ギフト扱い、最低ダイヤ、サウンドモード、種別 OFF、テスト送信でもモード／種別を守る、メンション、URL、連投、ミュート、配信者、テスト送信 |
+| `gift-notify.test.ts` | ギフト通知モード、種別 OFF、サウンドの鳴らし先、ダイヤ帯の正規化・重複・一致、個別音／帯音の解決 |
+| `nickname-map.test.ts` | 呼び方辞書の正規化・解決・追加／削除 |
+| `config-profiles.test.ts` | プロファイルから ID・ポート除外、適用、書き出し／読み込み、件数上限 |
+| `sound-ref.test.ts` | 効果音参照の正規化と危険なファイル名の拒否 |
 | `comment-filters.test.ts` | NG ワード、メンション、絵文字コメント、URL 除去、ミュート／ブロック一覧 |
 | `speech-filters.test.ts` | ファン最低レベ、スパファン、連投間隔 |
 | `event-templates.test.ts` | 種別ごとの表示・読み上げテンプレ選択。旧 subscribe、ポータル投げ／経由 |
 | `portal-event.test.ts` | 種別 `portal` は投げ、ギフト名つき入室は経由 |
-| `super-fan-event.test.ts` | スパファンボックス判定、加入の短い重複捨て、高いギフトのチャイム |
+| `super-fan-event.test.ts` | スパファンボックス判定、加入の短い重複捨て |
 | `viewer-event.test.ts` | コメント画面の左右と表示チェック。旧メンバー通知はスパファンに従う |
 | `viewer-dock.test.ts` | コメント画面の窓配置。旧形式の寄せ、ポータル追加、表示オフ、ドッキング |
 | `viewer-guide.test.ts` | 未接続／待ち／接続済みで出す案内。本番の行があるときだけ隠す |
 | `viewer-layout.test.ts` | コメント画面の幅・レイアウト種別・文字サイズ |
+| `window-bounds.test.ts` | メイン窓の位置・サイズの正規化と画面外の戻し |
 | `viewer-status-line.test.ts` | 配信接続・切断の状態変化でコメント画面に出す行 |
 | `viewer-room-stats.test.ts` | ROOM_USER から視聴者数と上位ギフトを正規化する |
 | `settings-layout.test.ts` | 設定プレビュー幅 |
 | `chat-display.test.ts` | コメント表示時間（0 は無制限、1〜120 秒） |
 | `overlay-look.test.ts` | 見た目プリセットと壊れた設定の戻し |
 | `overlay-motion.test.ts` | 配信ソースの動きテンプレートと速さの正規化 |
-| `overlay-pin.test.ts` | 固定枠の秒数・種類・待ち上限。コメントは対象外、旧 subscribe はスパファン。種類を外した待ちと、固定枠オフ時の振り分け。出しっぱなしは枠が使えるときだけ |
+| `overlay-pin.test.ts` | 固定枠の秒数・種類別秒数・待ち上限。コメントは対象外、旧 subscribe はスパファン。種類を外した待ちと、固定枠オフ時の振り分け。出しっぱなしは枠が使えるときだけ |
+| `overlay-name-colors.test.ts` | 配信ソースの名前色5色の正規化とユーザーごとの色割り当て |
+| `speech-replace-map.test.ts` | 読み上げ用置換辞書の正規化・適用・テキスト解析・上限 |
+| `viewer-log-persist.test.ts` | コメント画面ログの復元行・件数上限・古い行の捨て |
 | `overlay-url.test.ts` | LIVE Studio 向け URL と公開ホスト |
 | `ui-theme.test.ts` | アプリの明るさ（system / dark / light） |
 | `fan-club-name.test.ts` | ファンクラブ名の整形と配信で覚えた名前 |
@@ -90,7 +101,7 @@ scripts/verify-preload.js  # Electron で preload が載るか
 | ファイル | 見ていること |
 |---|---|
 | `comment-fields.test.ts` | コメント本文。v3 / 旧形式、絵文字だけの代替文言 |
-| `gift-fields.test.ts` | ギフト名と画像 URL。旧形式、一覧復元、危険なスキームは拒否 |
+| `gift-fields.test.ts` | ギフト名と画像 URL、ギフト ID。旧形式、一覧復元、危険なスキームは拒否 |
 | `social-fields.test.ts` | フォロー／シェアの判定 |
 | `envelope-fields.test.ts` | 宝箱・スパファンボックス、非表示、ダイヤ数 |
 | `portal-fields.test.ts` | ポータル投げ（ギフト名）とポータル経由入室 |
@@ -104,7 +115,7 @@ scripts/verify-preload.js  # Electron で preload が載るか
 
 | ファイル | 見ていること |
 |---|---|
-| `tts-queue.test.ts` | 待ち上限、待ち捨て、優先読み上げ。偽物エンジン |
+| `tts-queue.test.ts` | 待ち上限、待ち捨て、優先読み上げ、一時停止。偽物エンジン |
 | `fallback-tts-engine.test.ts` | 優先エンジンが使えない／失敗したとき内蔵 TTS へ |
 | `wav-utils.test.ts` | 無音 WAV の生成と結合 |
 | `windows-tts-worker.test.ts` | Windows 内蔵 TTS で実際に wav を書く（Windows 以外はスキップ。Zira が無いときは英語声の確認だけ飛ばす） |
@@ -116,6 +127,10 @@ scripts/verify-preload.js  # Electron で preload が載るか
 ### preload（`scripts/verify-preload.js`）
 
 隠れ窓で preload を読み、`window.liveTts` が付くかを見る。sandbox で相対 require が落ちていないかの確認。
+
+### 固定枠退場（`scripts/verify-pin-leave.js`）
+
+オーバーレイのプレビューで固定枠の入場が終わったあと、Web Animations API で入場 keyframes を逆再生し、opacity が段階的に下がるかを見る。アニメーション時間の計測のため、検証中だけウィンドウを `showInactive()` する。
 
 ## 見ていないもの
 

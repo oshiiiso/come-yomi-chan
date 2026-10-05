@@ -1,4 +1,6 @@
+import { CommentEmote, MAX_COMMENT_EMOTES, normalizeCommentEmotes } from '../shared/comment-emotes';
 import { MSG } from '../shared/messages';
+import { firstImageUrl } from './gift-fields';
 
 function asRecord(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -28,9 +30,39 @@ function asText(value: unknown, depth = 0): string {
   );
 }
 
+function asIndex(value: unknown): number {
+  const parsed = typeof value === 'number' ? value : Number(value);
+  if (!Number.isFinite(parsed)) {
+    return 0;
+  }
+  return Math.max(0, Math.trunc(parsed));
+}
+
+function emoteListsFromRaw(raw: Record<string, unknown>): unknown[] {
+  for (const key of ['emotes', 'emoteList', 'emoteWithIndexList', 'emoteListList'] as const) {
+    const list = raw[key];
+    if (Array.isArray(list) && list.length > 0) {
+      return list;
+    }
+  }
+  return [];
+}
+
 function hasEmotes(raw: Record<string, unknown>): boolean {
-  return [raw.emotes, raw.emoteList, raw.emoteWithIndexList, raw.emoteListList].some(
-    (list) => Array.isArray(list) && list.length > 0,
+  return emoteListsFromRaw(raw).length > 0;
+}
+
+function imageUrlFromEmoteItem(item: Record<string, unknown>): string {
+  const nested = asRecord(item.emote);
+  const image = asRecord(nested.image ?? item.image);
+  return (
+    firstImageUrl(item.emoteImageUrl) ||
+    firstImageUrl(nested.emoteImageUrl) ||
+    firstImageUrl(image) ||
+    firstImageUrl(image.imageUrl) ||
+    firstImageUrl(nested.imageUrl) ||
+    firstImageUrl(item.imageUrl) ||
+    ''
   );
 }
 
@@ -47,4 +79,31 @@ export function commentFromEvent(raw: Record<string, unknown>): string {
     asText(raw.describe) ||
     (hasEmotes(raw) ? MSG.ui.emoteComment : '')
   );
+}
+
+/** チャット／スタンプイベントからインライン画像用の emote 一覧を取る。 */
+export function commentEmotesFromEvent(raw: Record<string, unknown>): CommentEmote[] {
+  const list = emoteListsFromRaw(raw);
+  if (list.length === 0) {
+    return [];
+  }
+  const collected: CommentEmote[] = [];
+  for (const entry of list) {
+    const item = asRecord(entry);
+    const imageUrl = imageUrlFromEmoteItem(item);
+    if (!imageUrl) {
+      continue;
+    }
+    const nested = asRecord(item.emote);
+    collected.push({
+      index: asIndex(
+        item.placeInComment ?? item.index ?? nested.placeInComment ?? nested.index ?? 0,
+      ),
+      imageUrl,
+    });
+    if (collected.length >= MAX_COMMENT_EMOTES) {
+      break;
+    }
+  }
+  return normalizeCommentEmotes(collected);
 }

@@ -37,7 +37,7 @@ export const HELP_HEADING_IDS: Record<string, HelpTopicId> = {
   準備: HELP_HEADING_ID.setup,
   初期設定: HELP_HEADING_ID.first,
   コメント画面のレイアウト: HELP_HEADING_ID.viewerLayout,
-  コメント画面の印: HELP_HEADING_ID.viewerBadge,
+  コメント画面のバッジ: HELP_HEADING_ID.viewerBadge,
   コメント画面の表示と検索: HELP_HEADING_ID.viewerDisplay,
   コメント画面の右クリック: HELP_HEADING_ID.viewerMenu,
   コメント画面のログ: HELP_HEADING_ID.viewerLog,

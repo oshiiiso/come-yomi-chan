@@ -2,14 +2,22 @@ import { EventEmitter } from 'events';
 import { clipboard } from 'electron';
 import { APP_CONFIG } from '../shared/app-config';
 import { ConfigStore, getOverlayUrl } from '../shared/config-store';
+import { buildOverlaySamplePlan } from './overlay-sample-plan';
 import { overlayLookFromConfig } from '../shared/overlay-look';
 import { overlayPinFromConfig } from '../shared/overlay-pin';
-import { overlayPreviewUrl, overlayStudioUrl } from '../shared/overlay-url';
+import {
+  overlayAlertsPreviewUrl,
+  overlayAlertsPublicUrl,
+  overlayAlertsStudioUrl,
+  overlayPreviewUrl,
+  overlayStudioUrl,
+} from '../shared/overlay-url';
 import { getErrorMessage } from '../shared/error-utils';
 import { getLogger } from '../shared/logging-config';
 import { MSG } from '../shared/messages';
 import {
   AppConfig,
+  AppConfigSaveInput,
   LiveConnectionState,
   LiveStatus,
   NormalizedLiveEvent,
@@ -22,6 +30,9 @@ import {
 import { LikeTracker } from './like-tracker';
 import { OverlayServer } from '../overlay-server/overlay-server';
 import { TikTokLiveWatcher } from '../tiktok/tiktok-client';
+import { catalogGiftsWithIcons, normalizeCatalogGifts } from '../tiktok/gift-fields';
+import { finalizeCatalogGifts, dedupeAndSortCatalogGifts } from '../shared/permanent-gifts';
+import { japaneseNameForGift } from '../shared/permanent-gift-names';
 import {
   clipText,
   renderDisplayTemplate,
@@ -31,6 +42,38 @@ import {
 import { containsNgWord, isListedUser } from '../shared/comment-filters';
 import { pickEventTemplates } from '../shared/event-templates';
 import { resolveEventSpeech, resolveShowDisplay } from '../shared/event-pipeline';
+import { isEventSoundType } from '../shared/event-notify';
+import {
+  buildAlertDisplayParts,
+  canonicalEventAlertType,
+  resolveEventAlertDisplayMs,
+  resolveEventAlertImageUrl,
+  shouldShowEventAlert,
+} from '../shared/event-alert';
+import { pruneUnreferencedAlertMediaFiles } from '../shared/alert-media-files';
+import { pruneUnreferencedSoundFiles } from '../shared/sound-files';
+import {
+  nameColorForUser,
+  normalizeOverlayNameColors,
+} from '../shared/overlay-name-colors';
+import { resolveDisplayName } from '../shared/nickname-map';
+import {
+  DEFAULT_GIFT_CHIME_VOLUME,
+  findGiftChimeDiamondBand,
+  normalizeGiftChimeVolume,
+  resolveGiftChimeVolume,
+  resolveGiftChimeBandSound,
+  resolveGiftChimeSound,
+  shouldPlayGiftChime,
+  shouldSpeakGiftById,
+} from '../shared/gift-notify';
+import {
+  resolveWatcherDisconnect,
+  shouldClearSpeechQueueOnConfigChange,
+} from '../shared/live-disconnect';
+import { normalizeGiftSoundRef, normalizeSoundRef, type SoundRef } from '../shared/sound-ref';
+import { soundFilePath } from '../shared/sound-files';
+import fs from 'fs';
 import { FallbackTtsEngine } from '../tts/fallback-tts-engine';
 import { TtsEngine } from '../tts/tts-engine';
 import { TtsQueue } from '../tts/tts-queue';
@@ -55,6 +98,9 @@ import { sameViewerRoomStats, ViewerRoomStats } from '../shared/viewer-room-stat
 import { RepeatSpeechGuard, speechUserKey } from '../shared/speech-filters';
 import { SuperFanJoinDedupe, isSuperFanBoxEvent } from '../shared/super-fan-event';
 import { pushSessionLog, SessionLogRow } from '../shared/session-log';
+import {
+  applySpeechReplaceMap,
+} from '../shared/speech-replace-map';
 import {
   tikTokRetryMessage,
   tikTokStatusMessage,
@@ -85,6 +131,10 @@ export class SessionManager extends EventEmitter {
   private overlayListenRetryAt = 0;
   private streamStartedAtMs: number | null = null;
   private roomStats: ViewerRoomStats | null = null;
+  private commentSoundMuted = false;
+  private commentSoundAt = 0;
+  private eventSoundAt: Partial<Record<string, number>> = {};
+  private giftChimeAt = 0;
 
   constructor(
     private readonly configStore: ConfigStore,
@@ -142,14 +192,9 @@ export class SessionManager extends EventEmitter {
   }
 
   async startOverlay(): Promise<void> {
+    this.pruneUnusedMediaFiles(this.configStore.get());
     const config = this.configStore.get();
-    this.overlay.setOverlayOptions(
-      config.chatMaxRows,
-      config.chatDisplayMs,
-      config.overlayCustomCss,
-      overlayLookFromConfig(config),
-      overlayPinFromConfig(config),
-    );
+    this.syncOverlayOptions(config);
     const ok = await this.ensureOverlayListening({ force: true });
     if (!ok) {
       throw new Error(MSG.errors.overlayPortBusy);
@@ -242,7 +287,7 @@ export class SessionManager extends EventEmitter {
     }
   }
 
-  async applyConfig(_previousPort: number, previousUniqueId: string): Promise<void> {
+  async applyConfig(previousPort: number, previousUniqueId: string, previousConfig?: AppConfig): Promise<void> {
     const previousState = this.status.state;
     const wasWatching =
       previousState === 'live' ||
@@ -250,20 +295,29 @@ export class SessionManager extends EventEmitter {
       previousState === 'connecting' ||
       Boolean(this.lastConnectError);
     const config = this.configStore.get();
-    this.overlay.setOverlayOptions(
-      config.chatMaxRows,
-      config.chatDisplayMs,
-      config.overlayCustomCss,
-      overlayLookFromConfig(config),
-      overlayPinFromConfig(config),
-    );
+    if (previousConfig && shouldClearSpeechQueueOnConfigChange(previousConfig, config)) {
+      this.ttsQueue.clearUnplayed();
+      this.overlay.clearPendingAudio();
+    }
+    this.syncOverlayOptions(config);
     await this.ensureOverlayListening({ force: true, throwIfBound: true });
     this.refreshStatusAfterOverlayChange();
+    this.pruneUnusedMediaFiles(config);
 
     const uniqueIdChanged = config.uniqueId.trim() !== previousUniqueId.trim();
     if (uniqueIdChanged && wasWatching) {
       await this.disconnect();
       this.notify(true, MSG.connection.idChangedNeedConfirm);
+    }
+  }
+
+  /** 設定から外れたアラート画像・効果音を data から消す。 */
+  private pruneUnusedMediaFiles(config: AppConfig): void {
+    try {
+      pruneUnreferencedAlertMediaFiles(config.eventAlertMedia);
+      pruneUnreferencedSoundFiles(config);
+    } catch (error) {
+      logger.warning(`未使用メディアの削除に失敗しました: ${getErrorMessage(error)}`);
     }
   }
 
@@ -439,6 +493,8 @@ export class SessionManager extends EventEmitter {
         ...EMPTY_USER_LIVE_BADGES,
       },
       displayText: clipText(text, config.maxDisplayChars),
+      comment: '',
+      commentEmotes: [],
       giftImageUrl: '',
       audioUrl: null,
       receivedAt: new Date().toISOString(),
@@ -452,8 +508,27 @@ export class SessionManager extends EventEmitter {
       throw new Error(MSG.tts.synthesizeFailed);
     }
 
-    const id = this.overlay.storeAudio(wavResult.wav);
-    this.overlay.broadcastAudio(`/tts/${id}.wav`);
+    await this.playSynthesizedSpeech(wavResult.wav);
+  }
+
+  async previewSound(
+    rawSound: unknown,
+    rawVolume?: unknown,
+  ): Promise<{ soundUrl: string | null; volume: number }> {
+    const sound = normalizeGiftSoundRef(rawSound);
+    const volume = normalizeGiftChimeVolume(rawVolume);
+    if (sound.kind === 'file') {
+      const ok = await this.ensureOverlayListening({ force: true });
+      if (!ok) {
+        throw new Error(MSG.errors.overlayPortBusy);
+      }
+      const full = soundFilePath(sound.fileName);
+      if (!full || !fs.existsSync(full)) {
+        throw new Error(MSG.ui.giftChimeTestFailed);
+      }
+    }
+    const soundUrl = await this.resolvePlayableSoundUrl(sound);
+    return { soundUrl, volume };
   }
 
   async sendTestEvent(
@@ -531,7 +606,9 @@ export class SessionManager extends EventEmitter {
         isAnchor,
       },
       comment,
+      commentEmotes: [],
       likeCount: type === 'like' ? count : 0,
+      giftId: type === 'gift' ? catalogGift?.id || '' : '',
       giftName: options.superFanBox
         ? MSG.ui.superFanBox
         : options.portalJoin
@@ -559,7 +636,7 @@ export class SessionManager extends EventEmitter {
   }
 
   listTestGifts(): CatalogGift[] {
-    return this.watcher.listGifts();
+    return catalogGiftsWithIcons(dedupeAndSortCatalogGifts(this.watcher.listGifts()));
   }
 
   async refreshTestGifts(uniqueId?: string): Promise<CatalogGift[]> {
@@ -568,23 +645,40 @@ export class SessionManager extends EventEmitter {
       throw new Error(MSG.ui.giftsNeedId);
     }
 
-    const gifts =
+    const fetched =
       this.status.state === 'live'
         ? await this.watcher.refreshGifts()
         : await this.watcher.fetchGiftsForUser(id);
+    const gifts = finalizeCatalogGifts(fetched);
+    this.watcher.primeGifts(gifts);
     this.persistTestGifts(gifts);
-    return gifts;
+    const visible = this.listTestGifts();
+    if (visible.length === 0) {
+      throw new Error(
+        this.status.state === 'live' ? MSG.ui.giftsNeedBusinessPlan : MSG.ui.giftsEmpty,
+      );
+    }
+    return visible;
   }
 
   private persistTestGifts(gifts: CatalogGift[]): void {
-    if (gifts.length === 0) {
+    const config = this.configStore.get();
+    const preferIds = [
+      ...Object.keys(config.giftSpeakByGiftId ?? {}),
+      ...Object.keys(config.giftChimeByGiftId ?? {}),
+      ...Object.keys(config.giftChimeVolumeByGiftId ?? {}),
+    ];
+    const next = normalizeCatalogGifts(
+      dedupeAndSortCatalogGifts(gifts, { preferIds }),
+    );
+    if (next.length === 0) {
       return;
     }
-    this.configStore.save({ cachedTestGifts: gifts });
+    this.configStore.save({ cachedTestGifts: next });
   }
 
   private pickTestGift(giftId?: string): CatalogGift | null {
-    const gifts = this.watcher.listGifts();
+    const gifts = this.listTestGifts();
     if (gifts.length === 0) {
       return null;
     }
@@ -595,20 +689,29 @@ export class SessionManager extends EventEmitter {
     this.queueSampleEvents({ silent: true, viewerOnly: true });
   }
 
-  previewStreamSamples(): void {
+  previewStreamSamples(streamSettings?: AppConfigSaveInput): void {
+    const config = streamSettings
+      ? { ...this.configStore.get(), ...streamSettings }
+      : this.configStore.get();
+    this.syncOverlayOptions(config);
     this.clearOverlay();
-    void this.queueOverlaySamples();
+    this.overlay.showSampleDisplay(
+      buildOverlaySamplePlan(config, this.pickTestGift(undefined)),
+    );
   }
 
-  private async queueOverlaySamples(): Promise<void> {
-    const flags = { silent: true, overlayOnly: true };
-    try {
-      await this.sendTestEvent('comment', 1, flags);
-      await this.sendTestEvent('gift', 100, flags);
-      await this.sendTestEvent('follow', 1, flags);
-    } catch (error) {
-      logger.error(`サンプル表示に失敗しました: ${getErrorMessage(error)}`);
-    }
+  private syncOverlayOptions(config: AppConfig): void {
+    this.overlay.setOverlayOptions(
+      config.chatMaxRows,
+      config.chatDisplayMs,
+      config.overlayCustomCss,
+      overlayLookFromConfig(config),
+      overlayPinFromConfig(config),
+      config.hideUserName,
+      config.overlayNameColorEnabled !== false,
+      Array.isArray(config.overlayNameColors) ? config.overlayNameColors : [],
+      config.eventAlertDisplayMs,
+    );
   }
 
   private queueSampleEvents(flags: {
@@ -660,12 +763,39 @@ export class SessionManager extends EventEmitter {
   }
 
   skipSpeech(): void {
+    this.emit('speech-audio-control', { action: 'skip' });
     this.overlay.skipPlayback();
   }
 
   clearSpeechQueue(): void {
     this.ttsQueue.clearUnplayed();
+    this.emit('speech-audio-control', { action: 'clear-pending' });
     this.overlay.clearPendingAudio();
+  }
+
+  isSpeechPaused(): boolean {
+    return this.ttsQueue.isPaused();
+  }
+
+  setSpeechPaused(paused: boolean): boolean {
+    this.ttsQueue.setPaused(paused);
+    return this.ttsQueue.isPaused();
+  }
+
+  toggleSpeechPaused(): boolean {
+    const paused = this.setSpeechPaused(!this.ttsQueue.isPaused());
+    this.touchStatus();
+    return paused;
+  }
+
+  isCommentSoundMuted(): boolean {
+    return this.commentSoundMuted;
+  }
+
+  toggleCommentSoundMuted(): boolean {
+    this.commentSoundMuted = !this.commentSoundMuted;
+    this.touchStatus();
+    return this.commentSoundMuted;
   }
 
   async connectOnStart(): Promise<{ ok: boolean; message: string } | null> {
@@ -693,13 +823,15 @@ export class SessionManager extends EventEmitter {
 
   async waitForOverlayClient(timeoutMs: number): Promise<boolean> {
     const started = Date.now();
+    const hasClient = () =>
+      this.overlay.clientCount() > 0 || this.overlay.alertClientCount() > 0;
     while (Date.now() - started < timeoutMs) {
-      if (this.overlay.clientCount() > 0) {
+      if (hasClient()) {
         return true;
       }
       await new Promise((resolve) => setTimeout(resolve, 100));
     }
-    return this.overlay.clientCount() > 0;
+    return hasClient();
   }
 
   copyOverlayUrl(kind = 'default'): boolean {
@@ -710,7 +842,13 @@ export class SessionManager extends EventEmitter {
           ? overlayStudioUrl(port)
           : kind === 'local'
             ? overlayPreviewUrl(port)
-            : getOverlayUrl(port);
+            : kind === 'alerts'
+              ? overlayAlertsPublicUrl(port)
+              : kind === 'alerts-studio'
+                ? overlayAlertsStudioUrl(port)
+                : kind === 'alerts-local'
+                  ? overlayAlertsPreviewUrl(port)
+                  : getOverlayUrl(port);
       clipboard.writeText(url);
       return true;
     } catch (error) {
@@ -771,12 +909,23 @@ export class SessionManager extends EventEmitter {
         logger.error(`オーバーレイサーバー起動失敗: ${getErrorMessage(error)}`);
       });
     });
-    this.watcher.on('disconnected', () => {
+    this.watcher.on('disconnected', (reason: string) => {
       this.streamStartedAtMs = null;
       this.updateRoomStats(null);
-      if (this.status.state !== 'disconnected') {
-        this.setStatus('waiting_live', MSG.connection.disconnectedFromLive);
+      const next = resolveWatcherDisconnect(this.status.state, reason || '');
+      if (!next) {
+        return;
       }
+      if (next.fullStop) {
+        this.connectToken += 1;
+        this.lastConnectError = '';
+        this.likeTracker.reset();
+        this.repeatSpeech.clear();
+        this.superFanJoinDedupe.clear();
+        this.memberJoinDedupe.clear();
+        this.roomStats = null;
+      }
+      this.setStatus(next.state, next.message);
     });
     this.watcher.on('retry', (delayMs, lastError) => {
       if (this.status.state === 'disconnected') {
@@ -923,14 +1072,49 @@ export class SessionManager extends EventEmitter {
 
     let current = currentType === event.type ? event : { ...event, type: currentType };
     if (
+      (current.type === 'gift' || current.type === 'portal') &&
+      current.giftId &&
+      current.giftName &&
+      !options.skipFilters
+    ) {
+      if (
+        this.watcher.rememberGift({
+          id: current.giftId,
+          name: japaneseNameForGift(current.giftName, current.diamondCount),
+          imageUrl: current.giftImageUrl || '',
+          diamondCount: Math.max(0, current.diamondCount || 0),
+        })
+      ) {
+        this.persistTestGifts(this.watcher.listGifts());
+      }
+    }
+    if (
       !options.skipFilters &&
       isListedUser(current.user, config.blockedUsers ?? [])
     ) {
       return;
     }
 
+    const sourceUser = current.user;
+    const displayNickname = resolveDisplayName(
+      sourceUser.uniqueId,
+      sourceUser.nickname,
+      config.nicknameMap,
+    );
+    current = {
+      ...current,
+      user: {
+        ...sourceUser,
+        nickname: displayNickname,
+        sourceNickname: sourceUser.nickname || sourceUser.sourceNickname || '',
+      },
+    };
     if (current.type === 'like' && !options.skipFilters) {
-      if (!toggle.display && !toggle.speak) {
+      if (
+        !toggle.display &&
+        !toggle.speak &&
+        !shouldShowEventAlert(current.type, config.eventAlertEnabled)
+      ) {
         return;
       }
       const reached = this.likeTracker.consume(
@@ -987,7 +1171,11 @@ export class SessionManager extends EventEmitter {
         config.repeatSpeechSec * 1000,
       );
     const speech = resolveEventSpeech({
-      event: current,
+      event: {
+        ...current,
+        user: sourceUser,
+        giftId: current.giftId,
+      },
       config,
       options,
       toggleSpeak: toggle.speak,
@@ -995,10 +1183,132 @@ export class SessionManager extends EventEmitter {
       varsComment: vars.comment,
     });
     const shouldSpeak = speech.shouldSpeak;
+    const rawSpeechComment = speech.speechComment;
+    const speechComment =
+      current.type === 'comment' && config.speechReplaceMap?.length
+        ? applySpeechReplaceMap(rawSpeechComment, config.speechReplaceMap)
+        : rawSpeechComment;
     const speechVars =
-      speech.speechComment === vars.comment ? vars : { ...vars, comment: speech.speechComment };
+      speechComment === vars.comment ? vars : { ...vars, comment: speechComment };
+
+    if (
+      !options.viewerOnly &&
+      !options.silent &&
+      config.giftNotifyMode === 'chime' &&
+      current.type === 'gift' &&
+      toggle.speak
+    ) {
+      try {
+        let sound: SoundRef | null = null;
+        let volume = DEFAULT_GIFT_CHIME_VOLUME;
+        if (config.giftChimeMatchMode === 'diamond') {
+          const band = findGiftChimeDiamondBand(
+            current.diamondCount,
+            config.giftChimeDiamondBands,
+          );
+          sound = resolveGiftChimeBandSound(band);
+          if (band) {
+            volume = normalizeGiftChimeVolume(band.volume);
+          }
+        } else if (shouldSpeakGiftById(current.giftId, config.giftSpeakByGiftId)) {
+          sound = resolveGiftChimeSound(
+            current.giftId,
+            config.giftChimeByGiftId,
+            config.giftChimeSound,
+          );
+          volume = resolveGiftChimeVolume({
+            giftId: current.giftId,
+            byGiftIdSound: config.giftChimeByGiftId,
+            byGiftIdVolume: config.giftChimeVolumeByGiftId,
+            commonVolume: config.giftChimeVolume,
+          });
+        }
+        if (sound) {
+          const chime = shouldPlayGiftChime({
+            playApp: config.giftChimePlayApp,
+            playOverlay: config.giftChimePlayOverlay,
+          });
+          if (chime.playApp || chime.playOverlay) {
+            const now = Date.now();
+            if (now - this.giftChimeAt >= 300) {
+              this.giftChimeAt = now;
+              const soundPath = this.soundFileHttpPath(sound);
+              const soundUrl = soundPath ? await this.resolvePlayableSoundUrl(sound) : null;
+              if (chime.playOverlay) {
+                await this.ensureOverlayListening();
+                // TTS と同様、配信ソース側はルート相対パスで解決する
+                this.overlay.broadcastChime(soundPath ?? soundUrl, volume);
+              }
+              if (chime.playApp) {
+                this.emit('sound', { kind: 'gift-chime', soundUrl, sound, volume });
+              }
+            }
+          }
+        }
+      } catch (error) {
+        logger.warning(`ギフトサウンドの再生に失敗しました: ${getErrorMessage(error)}`);
+      }
+    }
+
+    if (
+      !options.viewerOnly &&
+      !options.silent &&
+      current.type === 'comment' &&
+      config.commentNotifyMode === 'sound' &&
+      config.events.comment?.speak === true &&
+      !this.commentSoundMuted
+    ) {
+      const now = Date.now();
+      if (now - this.commentSoundAt >= 300) {
+        try {
+          const soundUrl = await this.resolvePlayableSoundUrl(config.commentSound);
+          this.emit('sound', {
+            kind: 'comment',
+            soundUrl,
+            sound: config.commentSound,
+          });
+          this.commentSoundAt = now;
+        } catch (error) {
+          logger.warning(`コメント新着音の再生に失敗しました: ${getErrorMessage(error)}`);
+        }
+      }
+    }
+
+    if (
+      !options.viewerOnly &&
+      !options.silent &&
+      isEventSoundType(current.type) &&
+      config.eventNotifyMode?.[current.type] === 'sound' &&
+      toggle.speak
+    ) {
+      const now = Date.now();
+      const lastAt = this.eventSoundAt[current.type] ?? 0;
+      if (now - lastAt >= 300) {
+        const sound = config.eventSound?.[current.type];
+        if (sound) {
+          try {
+            const soundUrl = await this.resolvePlayableSoundUrl(sound);
+            this.emit('sound', {
+              kind: 'event',
+              type: current.type,
+              soundUrl,
+              sound,
+            });
+            this.eventSoundAt[current.type] = now;
+          } catch (error) {
+            logger.warning(`イベントサウンドの再生に失敗しました: ${getErrorMessage(error)}`);
+          }
+        }
+      }
+    }
 
     const giftImageUrl = overlayGiftImagePath(current.giftImageUrl);
+    const commentEmotes = (current.commentEmotes || [])
+      .map((emote) => ({
+        index: emote.index,
+        imageUrl: overlayGiftImagePath(emote.imageUrl),
+      }))
+      .filter((emote) => Boolean(emote.imageUrl));
     const user = {
       ...current.user,
       avatarUrl: overlayGiftImagePath(current.user.avatarUrl),
@@ -1015,6 +1325,7 @@ export class SessionManager extends EventEmitter {
           maxChars: VIEWER_MAX_CHARS,
         }),
         comment: current.comment,
+        commentEmotes,
         giftImageUrl,
         giftName: current.giftName,
         giftCount: current.giftCount,
@@ -1040,11 +1351,14 @@ export class SessionManager extends EventEmitter {
       return;
     }
 
-    if (!showDisplay && !shouldSpeak) {
+    const shouldAlert =
+      !options.silent && shouldShowEventAlert(current.type, config.eventAlertEnabled);
+
+    if (!showDisplay && !shouldSpeak && !shouldAlert) {
       return;
     }
 
-    if (showDisplay || shouldSpeak) {
+    if (showDisplay || shouldSpeak || shouldAlert) {
       await this.ensureOverlayListening();
     }
 
@@ -1052,6 +1366,8 @@ export class SessionManager extends EventEmitter {
       type: current.type,
       user,
       displayText: showDisplay ? displayText : '',
+      comment: current.comment,
+      commentEmotes,
       giftImageUrl,
       audioUrl: null,
       receivedAt: current.receivedAt,
@@ -1059,6 +1375,37 @@ export class SessionManager extends EventEmitter {
 
     if (showDisplay) {
       this.overlay.broadcast(payload);
+    }
+
+    if (shouldAlert) {
+      const alertType = canonicalEventAlertType(current.type);
+      const media = alertType ? config.eventAlertMedia?.[alertType] : undefined;
+      const nameColor =
+        config.overlayNameColorEnabled !== false && user.nickname
+          ? nameColorForUser(
+              user.uniqueId,
+              user.nickname,
+              normalizeOverlayNameColors(config.overlayNameColors),
+            )
+          : null;
+      const displayParts = buildAlertDisplayParts(displayText, user.nickname, nameColor);
+      this.overlay.broadcastAlert({
+        type: current.type,
+        displayText,
+        displayParts,
+        imageUrl: resolveEventAlertImageUrl({
+          type: current.type,
+          media,
+          giftImageUrl,
+        }),
+        displayMs: resolveEventAlertDisplayMs(
+          current.type,
+          config.eventAlertDisplayMsByType,
+          config.eventAlertDisplayMs,
+        ),
+        user,
+        nameColor,
+      });
     }
 
     if (!shouldSpeak) {
@@ -1092,8 +1439,38 @@ export class SessionManager extends EventEmitter {
     }
 
     this.noticeAt.delete('tts-fail');
-    const id = this.overlay.storeAudio(wavResult.wav);
-    this.overlay.broadcastAudio(`/tts/${id}.wav`);
+    await this.playSynthesizedSpeech(wavResult.wav);
+  }
+
+  private soundFileHttpPath(sound: SoundRef): string | null {
+    if (sound.kind !== 'file') {
+      return null;
+    }
+    return `/sounds/${encodeURIComponent(sound.fileName)}`;
+  }
+
+  /** 読み上げ音声をアプリ本体へ送る（配信ソースでは鳴らさない）。 */
+  private async playSynthesizedSpeech(wav: Buffer): Promise<void> {
+    const id = this.overlay.storeAudio(wav);
+    const soundUrl = await this.resolveStoredAudioUrl(id);
+    this.emit('sound', { kind: 'tts', soundUrl });
+  }
+
+  private async resolveStoredAudioUrl(id: string): Promise<string> {
+    await this.ensureOverlayListening();
+    const port = this.overlay.listeningPort() ?? this.configStore.get().overlayPort;
+    return `http://${APP_CONFIG.overlayHost}:${port}/tts/${encodeURIComponent(id)}.wav`;
+  }
+
+  /** アプリ本体再生用。配信ソースの /overlay 付き URL は使わない。 */
+  private async resolvePlayableSoundUrl(sound: SoundRef): Promise<string | null> {
+    const soundPath = this.soundFileHttpPath(sound);
+    if (!soundPath) {
+      return null;
+    }
+    await this.ensureOverlayListening();
+    const port = this.overlay.listeningPort() ?? this.configStore.get().overlayPort;
+    return `http://${APP_CONFIG.overlayHost}:${port}${soundPath}`;
   }
 
   private buildStatus(state: LiveConnectionState, message: string): LiveStatus {
@@ -1109,6 +1486,8 @@ export class SessionManager extends EventEmitter {
       lastUpdated: new Date().toISOString(),
       roomStats: state === 'live' ? this.roomStats : null,
       streamStartedAtMs: state === 'live' ? this.streamStartedAtMs : null,
+      speechPaused: this.ttsQueue.isPaused(),
+      commentSoundMuted: this.commentSoundMuted,
     };
   }
 

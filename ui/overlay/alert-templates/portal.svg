@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 320" width="320" height="320">
+  <defs>
+    <radialGradient id="bg-portal" cx="50%" cy="45%" r="60%">
+      <stop offset="0%" stop-color="#38bdf8" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#38bdf8" stop-opacity="0.35"/>
+    </radialGradient>
+  </defs>
+  <rect width="320" height="320" rx="48" fill="#0f172a" opacity="0.15"/>
+  <circle cx="160" cy="160" r="110" fill="url(#bg-portal)">
+    <animate attributeName="r" values="104;114;104" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <ellipse cx="160" cy="160" rx="55" ry="80" fill="none" stroke="#fff" stroke-width="10" opacity="0.9">
+      <animate attributeName="rx" values="40;65;40" dur="1.5s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0.55;1;0.55" dur="1.5s" repeatCount="indefinite"/>
+    </ellipse>
+  <text x="160" y="292" text-anchor="middle" font-family="Segoe UI, Hiragino Sans, sans-serif" font-size="22" font-weight="700" fill="#f8fafc">ポータル</text>
+</svg>

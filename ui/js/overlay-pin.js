@@ -33,6 +33,33 @@ function normalizeOverlayPinMs(value) {
   return Math.min(MAX_OVERLAY_PIN_MS, Math.max(MIN_OVERLAY_PIN_MS, ms));
 }
 
+function normalizeOverlayPinMsByType(raw) {
+  const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+  const next = {};
+  for (const type of OVERLAY_PIN_TYPES) {
+    if (!(type in record)) continue;
+    const parsed =
+      typeof record[type] === 'number'
+        ? record[type]
+        : Number.parseInt(String(record[type] ?? ''), 10);
+    if (!Number.isFinite(parsed)) continue;
+    const ms = Math.trunc(parsed);
+    if (ms < MIN_OVERLAY_PIN_MS || ms > MAX_OVERLAY_PIN_MS) continue;
+    next[type] = ms;
+  }
+  return next;
+}
+
+function resolveOverlayPinDisplayMs(type, commonMs, byType, hold) {
+  const baseMs = normalizeOverlayPinMs(commonMs);
+  if (hold === true) return baseMs;
+  if (typeof type !== 'string') return baseMs;
+  const key = type === 'subscribe' ? 'superFan' : type;
+  if (!OVERLAY_PIN_TYPES.includes(key)) return baseMs;
+  const typed = byType?.[key];
+  return typeof typed === 'number' ? typed : baseMs;
+}
+
 function normalizeOverlayPinTypes(raw) {
   const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
   const next = { ...DEFAULT_OVERLAY_PIN_TYPES };

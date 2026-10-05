@@ -1,4 +1,3 @@
-import { isPortalSendEvent } from './portal-event';
 import { speechUserKey } from './speech-filters';
 
 export const SUPER_FAN_JOIN_DEDUPE_MS = 8000;
@@ -8,26 +7,6 @@ export function isSuperFanBoxEvent(event: {
   giftName?: string;
 }): boolean {
   return event.type === 'superFan' && Boolean(String(event.giftName || '').trim());
-}
-
-export function shouldPlayGiftChime(
-  event: { type?: string; giftName?: string; diamondCount?: number },
-  threshold: number,
-): boolean {
-  const limit = Math.max(0, Math.trunc(threshold));
-  if (limit <= 0) {
-    return false;
-  }
-  const diamonds = Math.max(0, Math.trunc(Number(event.diamondCount) || 0));
-  if (diamonds < limit) {
-    return false;
-  }
-  return (
-    event.type === 'gift' ||
-    event.type === 'envelope' ||
-    isSuperFanBoxEvent(event) ||
-    isPortalSendEvent(event)
-  );
 }
 
 export class SuperFanJoinDedupe {

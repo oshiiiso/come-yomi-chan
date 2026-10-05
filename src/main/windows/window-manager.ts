@@ -1,11 +1,20 @@
-import { BrowserWindow, Tray, Menu, app, nativeTheme, Rectangle } from 'electron';
+import { BrowserWindow, Tray, Menu, app, nativeTheme, Rectangle, screen } from 'electron';
 import { loadTrayIcon } from '../tray-icon';
 import { APP_CONFIG } from '../../shared/app-config';
 import { MSG } from '../../shared/messages';
 import { COMPACT_WINDOW_LAYOUT, WINDOW_LAYOUT } from '../../shared/window-layout';
+import {
+  MainWindowBounds,
+  normalizeMainWindowBounds,
+  placeMainWindowBoundsOnDisplays,
+} from '../../shared/window-bounds';
+import { IpcChannels } from '../../shared/ipc-channels';
 import { getFramelessWindowOptions } from './window-options';
+import { applyWindowSizeLimits } from './fit-window';
 import { isHelpTopicId } from '../../shared/help-topics';
 import { UiTheme, windowBackgroundFor } from '../../shared/ui-theme';
+
+const BOUNDS_SAVE_DEBOUNCE_MS = 400;
 
 export class WindowManager {
   private mainWindow: BrowserWindow | null = null;
@@ -14,12 +23,16 @@ export class WindowManager {
   private uiTheme: UiTheme = 'system';
   private compact = false;
   private normalBounds: Rectangle | null = null;
+  private boundsSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  private suppressBoundsSave = false;
 
   constructor(
     private getUiPath: (...segments: string[]) => string,
     private preloadPath: string,
     private getMinimizeToTray: () => boolean,
     private onQuit: () => void,
+    private getMainWindowBounds: () => MainWindowBounds | null = () => null,
+    private onMainWindowBoundsChanged: (bounds: MainWindowBounds) => void = () => {},
   ) {
     nativeTheme.on('updated', () => {
       this.applyUiTheme(this.uiTheme);
@@ -49,14 +62,15 @@ export class WindowManager {
     }
 
     const layout = WINDOW_LAYOUT.main;
+    const restored = this.resolveRestoredBounds();
     this.mainWindow = new BrowserWindow(
       getFramelessWindowOptions({
-        width: layout.width,
-        height: layout.height,
+        x: restored?.x,
+        y: restored?.y,
+        width: restored?.width ?? layout.width,
+        height: restored?.height ?? layout.height,
         minWidth: layout.minWidth,
         minHeight: layout.minHeight,
-        maxWidth: layout.maxWidth,
-        maxHeight: layout.maxHeight,
         resizable: true,
         title: APP_CONFIG.name,
         webPreferences: this.getWebPreferences(),
@@ -64,8 +78,14 @@ export class WindowManager {
     );
 
     this.mainWindow.loadFile(this.getUiPath('index.html'));
+    this.wireMainWindowState(this.mainWindow);
+
+    if (restored?.isMaximized) {
+      this.mainWindow.maximize();
+    }
 
     this.mainWindow.on('close', (event) => {
+      this.persistMainWindowBounds(true);
       if (app.isQuitting) {
         return;
       }
@@ -81,6 +101,7 @@ export class WindowManager {
     });
 
     this.mainWindow.on('closed', () => {
+      this.clearBoundsSaveTimer();
       this.mainWindow = null;
       this.normalBounds = null;
       this.compact = false;
@@ -100,24 +121,139 @@ export class WindowManager {
     }
     const compact = COMPACT_WINDOW_LAYOUT;
     const normal = WINDOW_LAYOUT.main;
-    if (enabled) {
-      if (!this.compact) {
-        this.normalBounds = window.getBounds();
+    this.suppressBoundsSave = true;
+    try {
+      if (enabled) {
+        if (!this.compact) {
+          this.normalBounds = window.isMaximized()
+            ? window.getNormalBounds()
+            : window.getBounds();
+        }
+        applyWindowSizeLimits(window, compact);
+        if (!this.compact && !window.isMaximized()) {
+          window.setSize(compact.width, compact.height);
+        }
+        this.compact = true;
+        return;
       }
-      window.setMinimumSize(compact.minWidth, compact.minHeight);
-      window.setMaximumSize(compact.maxWidth, compact.maxHeight);
-      if (!this.compact) {
-        window.setSize(compact.width, compact.height);
+      applyWindowSizeLimits(window, normal);
+      if (this.compact && this.normalBounds && !window.isMaximized()) {
+        window.setBounds(this.normalBounds);
       }
-      this.compact = true;
+      this.compact = false;
+    } finally {
+      this.suppressBoundsSave = false;
+      this.persistMainWindowBounds(false);
+    }
+  }
+
+  minimizeMainWindow(): void {
+    this.mainWindow?.minimize();
+  }
+
+  toggleMaximizeMainWindow(): boolean {
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed()) {
+      return false;
+    }
+    if (window.isMaximized()) {
+      window.unmaximize();
+      return false;
+    }
+    window.maximize();
+    return true;
+  }
+
+  isMainWindowMaximized(): boolean {
+    const window = this.mainWindow;
+    return Boolean(window && !window.isDestroyed() && window.isMaximized());
+  }
+
+  private resolveRestoredBounds(): MainWindowBounds | null {
+    const saved = normalizeMainWindowBounds(this.getMainWindowBounds());
+    if (!saved) {
+      return null;
+    }
+    const displays = screen.getAllDisplays().map((display) => ({
+      x: display.workArea.x,
+      y: display.workArea.y,
+      width: display.workArea.width,
+      height: display.workArea.height,
+    }));
+    return placeMainWindowBoundsOnDisplays(saved, displays);
+  }
+
+  private captureMainWindowBounds(): MainWindowBounds | null {
+    const window = this.mainWindow;
+    if (!window || window.isDestroyed()) {
+      return null;
+    }
+    const isMaximized = window.isMaximized();
+    const rect =
+      this.compact && this.normalBounds
+        ? this.normalBounds
+        : isMaximized
+          ? window.getNormalBounds()
+          : window.getBounds();
+    return normalizeMainWindowBounds({
+      x: rect.x,
+      y: rect.y,
+      width: rect.width,
+      height: rect.height,
+      isMaximized,
+    });
+  }
+
+  private persistMainWindowBounds(immediate: boolean): void {
+    if (this.suppressBoundsSave) {
       return;
     }
-    window.setMinimumSize(normal.minWidth, normal.minHeight);
-    window.setMaximumSize(normal.maxWidth, normal.maxHeight);
-    if (this.compact && this.normalBounds) {
-      window.setBounds(this.normalBounds);
+    const bounds = this.captureMainWindowBounds();
+    if (!bounds) {
+      return;
     }
-    this.compact = false;
+    if (immediate) {
+      this.clearBoundsSaveTimer();
+      this.onMainWindowBoundsChanged(bounds);
+      return;
+    }
+    this.clearBoundsSaveTimer();
+    this.boundsSaveTimer = setTimeout(() => {
+      this.boundsSaveTimer = null;
+      const next = this.captureMainWindowBounds();
+      if (next) {
+        this.onMainWindowBoundsChanged(next);
+      }
+    }, BOUNDS_SAVE_DEBOUNCE_MS);
+  }
+
+  private clearBoundsSaveTimer(): void {
+    if (this.boundsSaveTimer) {
+      clearTimeout(this.boundsSaveTimer);
+      this.boundsSaveTimer = null;
+    }
+  }
+
+  private wireMainWindowState(window: BrowserWindow): void {
+    const emitMaximized = () => {
+      if (window.isDestroyed()) {
+        return;
+      }
+      window.webContents.send(IpcChannels.WINDOW_MAXIMIZED_CHANGED, window.isMaximized());
+    };
+    const scheduleSave = () => {
+      this.persistMainWindowBounds(false);
+    };
+    window.on('maximize', () => {
+      emitMaximized();
+      scheduleSave();
+    });
+    window.on('unmaximize', () => {
+      emitMaximized();
+      scheduleSave();
+    });
+    window.on('move', scheduleSave);
+    window.on('resize', scheduleSave);
   }
 
   applyWindowPrefs(prefs: { alwaysOnTop?: boolean; compactViewer?: boolean }): void {

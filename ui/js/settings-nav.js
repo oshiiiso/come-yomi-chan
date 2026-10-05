@@ -105,9 +105,7 @@ async function flushFormSave() {
 }
 
 async function settleFormSave() {
-  window.clearTimeout(formSaveTimer);
-  formSaveTimer = 0;
-  await formSaveChain.catch(() => undefined);
+  return flushFormSave();
 }
 
 async function saveFormNow() {
@@ -119,7 +117,6 @@ async function saveFormNow() {
     setToast(error, true);
     return { ok: false, message: error };
   }
-  const wasCompact = Boolean(savedConfig?.compactViewer);
   const payload = collectConfig();
   configEchoWait += 1;
   const result = await window.liveTts.saveConfig(payload);
@@ -139,9 +136,6 @@ async function saveFormNow() {
       markClean();
     } else {
       scheduleFormSave();
-    }
-    if (result.config.compactViewer && !wasCompact) {
-      activateAppMode('viewer');
     }
     return { ok: true, config: result.config };
   }

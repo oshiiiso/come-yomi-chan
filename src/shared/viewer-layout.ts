@@ -5,7 +5,7 @@ export const MIN_VIEWER_COMMENT_PANE_PX = 260;
 
 export const DEFAULT_VIEWER_FONT_SIZE = 20;
 export const MIN_VIEWER_FONT_SIZE = 10;
-export const MAX_VIEWER_FONT_SIZE = 30;
+export const MAX_VIEWER_FONT_SIZE = 60;
 
 export type ViewerLayoutMode = 'split' | 'combined' | 'custom';
 export const DEFAULT_VIEWER_LAYOUT: ViewerLayoutMode = 'split';

@@ -5,7 +5,7 @@ import { getLogger } from '../shared/logging-config';
 import { MSG } from '../shared/messages';
 import { withTimeout } from '../shared/with-timeout';
 import { NormalizedLiveEvent, OverlayUser, CatalogGift } from '../shared/types';
-import { commentFromEvent } from './comment-fields';
+import { commentEmotesFromEvent, commentFromEvent } from './comment-fields';
 import { userFromEvent } from './event-user';
 import {
   envelopeDiamondCount,
@@ -15,8 +15,11 @@ import {
 import { socialEventType } from './social-fields';
 import {
   catalogGiftsFromList,
+  giftIdFromEvent,
   giftImageUrlFromEvent,
-  giftNameFromEvent,
+  mergeCatalogGift,
+  mergeCatalogGiftsFromFetch,
+  resolveGiftNameWithCatalog,
 } from './gift-fields';
 import { isPortalGiftEvent, isPortalMemberJoin } from './portal-fields';
 import { classifyTikTokConnectError } from './connection-error';
@@ -47,21 +50,47 @@ export interface TikTokClientEvents {
 type ConnectorModule = {
   TikTokLiveConnection: new (uniqueId: string, options?: Record<string, unknown>) => TikTokConnection;
   WebcastEvent: Record<string, string>;
+  getRandomPresets?: () => {
+    device: unknown;
+    screen: unknown;
+    location: unknown;
+  };
+  RouteConfig?: {
+    fetchRoomGiftsFromProvider: (args: Record<string, unknown>) => Promise<unknown>;
+  };
 };
+
+const JP_LOCATION = {
+  lang_country: 'ja-JP',
+  lang: 'ja',
+  country: 'JP',
+  tz_name: 'Asia/Tokyo',
+} as const;
 
 function tikTokSignApiKey(): string {
   return process.env.EULER_API_KEY?.trim() || process.env.TIKTOK_SIGN_API_KEY?.trim() || '';
 }
 
 function liveConnectionOptions(
+  mod: ConnectorModule | null = null,
   extra: Record<string, unknown> = {},
 ): Record<string, unknown> {
   const signApiKey = tikTokSignApiKey();
   const session = readTikTokSessionConfig();
+  const presets = mod?.getRandomPresets?.();
+  const clientPresets = presets
+    ? {
+        device: presets.device,
+        screen: presets.screen,
+        location: { ...JP_LOCATION },
+      }
+    : undefined;
   return {
     fetchRoomInfoOnConnect: true,
-    enableExtendedGiftInfo: Boolean(signApiKey),
+    // Community キーだと接続時の gift/list 署名で落ちるので、一覧は接続後に別途取る
+    enableExtendedGiftInfo: false,
     ...(signApiKey ? { signApiKey } : {}),
+    ...(clientPresets ? { clientPresets } : {}),
     ...tikTokSessionConnectionOptions(session),
     ...extra,
   };
@@ -76,6 +105,165 @@ interface TikTokConnection {
   fetchRoomInfo?: (roomId?: string) => Promise<unknown>;
   fetchAvailableGifts?: () => Promise<unknown>;
   roomInfo?: unknown;
+  roomId?: string;
+  webClient?: { roomId?: string };
+  apiClient?: {
+    gifts?: {
+      listWebcastGifts: (
+        pageSize?: number,
+        pageNumber?: number,
+        orderBy?: string,
+        ascending?: boolean,
+      ) => Promise<{ data?: unknown }>;
+    };
+  };
+}
+
+function connectionRoomId(connection: TikTokConnection): string {
+  return (
+    asString(connection.roomId) ||
+    asString(connection.webClient?.roomId) ||
+    ''
+  );
+}
+
+function isNonFatalTikTokClientError(message: string): boolean {
+  const text = String(message || '');
+  if (/business plan/i.test(text)) {
+    return true;
+  }
+  if (/requires a (business|premium) plan/i.test(text)) {
+    return true;
+  }
+  // ギフト一覧用の署名失敗。コメント受信自体は続けてよい
+  if (
+    /fetchAvailableGifts|fetchRoomGifts|gift\/list/i.test(text) &&
+    /sign|signature|Empty Payload/i.test(text)
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function sleepMs(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function fetchEulerGiftCatalog(
+  apiClient: TikTokConnection['apiClient'],
+): Promise<CatalogGift[]> {
+  const giftsApi = apiClient?.gifts;
+  if (!giftsApi || typeof giftsApi.listWebcastGifts !== 'function') {
+    return [];
+  }
+
+  const pageSize = 100;
+  const maxPages = 30;
+  const all: unknown[] = [];
+  for (let page = 1; page <= maxPages; page += 1) {
+    let pageGifts: unknown[] | null = null;
+    for (let attempt = 1; attempt <= 5; attempt += 1) {
+      try {
+        const response = await giftsApi.listWebcastGifts(pageSize, page);
+        const body = asRecord(response?.data ?? response);
+        if (body.limit_label || body.limit_details || asNumber(body.code) === 429) {
+          await sleepMs(1200 * attempt);
+          continue;
+        }
+        pageGifts = Array.isArray(body.gifts) ? body.gifts : [];
+        const totalPages = asNumber(body.totalPages, page);
+        all.push(...pageGifts);
+        if (pageGifts.length === 0 || page >= totalPages) {
+          return catalogGiftsFromList({ gifts: all }, { limit: 0 });
+        }
+        break;
+      } catch (error) {
+        const message = getErrorMessage(error);
+        if (attempt >= 5) {
+          logger.warning(`Euler カタログ page ${page} を打ち切ります: ${message}`);
+          return catalogGiftsFromList({ gifts: all }, { limit: 0 });
+        }
+        await sleepMs(1200 * attempt);
+      }
+    }
+    if (pageGifts === null) {
+      break;
+    }
+  }
+  return catalogGiftsFromList({ gifts: all }, { limit: 0 });
+}
+
+async function fetchLocalizedGiftList(
+  connection: TikTokConnection,
+  mod: ConnectorModule,
+): Promise<CatalogGift[]> {
+  const roomId = connectionRoomId(connection);
+  if (
+    tikTokSignApiKey() &&
+    roomId &&
+    connection.webClient &&
+    connection.apiClient &&
+    typeof mod.RouteConfig?.fetchRoomGiftsFromProvider === 'function'
+  ) {
+    try {
+      const raw = await mod.RouteConfig.fetchRoomGiftsFromProvider({
+        roomId,
+        webClient: connection.webClient,
+        apiClient: connection.apiClient,
+        webcastLanguage: 'ja',
+      });
+      const gifts = catalogGiftsFromList(raw, { limit: 0 });
+      if (gifts.length > 0) {
+        return gifts;
+      }
+    } catch (error) {
+      const message = getErrorMessage(error);
+      if (isNonFatalTikTokClientError(message)) {
+        logger.warning(
+          `ギフト一覧（Euler部屋）はプラン制限で取れません。別経路を試します: ${message}`,
+        );
+      } else {
+        logger.warning(
+          `日本語ギフト一覧（Euler部屋）の取得に失敗しました: ${message}`,
+        );
+      }
+    }
+  }
+
+  if (typeof connection.fetchAvailableGifts === 'function' && roomId) {
+    try {
+      const raw = await connection.fetchAvailableGifts();
+      const gifts = catalogGiftsFromList(raw, { limit: 0 });
+      if (gifts.length > 0) {
+        return gifts;
+      }
+    } catch (error) {
+      const message = getErrorMessage(error);
+      if (isNonFatalTikTokClientError(message)) {
+        logger.warning(
+          `ギフト一覧の直取りはプラン制限で使えません。カタログを試します: ${message}`,
+        );
+      } else {
+        logger.warning(`ギフト一覧の直取りに失敗しました: ${message}`);
+      }
+    }
+  }
+
+  if (tikTokSignApiKey() && connection.apiClient) {
+    try {
+      const gifts = await fetchEulerGiftCatalog(connection.apiClient);
+      if (gifts.length > 0) {
+        logger.info(`Euler カタログからギフト一覧を取得しました（${gifts.length}件）`);
+        return gifts;
+      }
+    } catch (error) {
+      logger.warning(
+        `Euler ギフトカタログの取得に失敗しました: ${getErrorMessage(error)}`,
+      );
+    }
+  }
+
+  return catalogGiftsFromList(connection.availableGifts, { limit: 0 });
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -115,7 +303,9 @@ function buildEvent(
     type,
     user: pickUser(raw, streamerId),
     comment: '',
+    commentEmotes: [],
     likeCount: 0,
+    giftId: '',
     giftName: '',
     giftCount: 1,
     giftImageUrl: '',
@@ -134,6 +324,7 @@ export class TikTokLiveWatcher extends EventEmitter {
   private sessionToken = 0;
   private sleepTimer: ReturnType<typeof setTimeout> | null = null;
   private sleepResolve: (() => void) | null = null;
+  private stopAfterStreamEnd = false;
 
   async start(uniqueId: string): Promise<void> {
     const token = ++this.sessionToken;
@@ -145,6 +336,7 @@ export class TikTokLiveWatcher extends EventEmitter {
 
     this.uniqueId = uniqueId.replace(/^@/, '').trim();
     this.streamerFanClubName = '';
+    this.stopAfterStreamEnd = false;
     this.running = true;
     void this.loop(token).catch((error) => {
       logger.error(`TikTok接続ループが止まりました: ${getErrorMessage(error)}`);
@@ -155,6 +347,7 @@ export class TikTokLiveWatcher extends EventEmitter {
   async stop(): Promise<void> {
     this.sessionToken += 1;
     this.running = false;
+    this.stopAfterStreamEnd = false;
     this.streamerFanClubName = '';
     this.wakeSleep();
     await this.teardownConnection();
@@ -181,6 +374,17 @@ export class TikTokLiveWatcher extends EventEmitter {
     this.gifts = gifts;
   }
 
+  /** 配信イベントから一覧を育てる。増えた／中身が変わったら true。 */
+  rememberGift(gift: CatalogGift): boolean {
+    const before = this.gifts;
+    const next = mergeCatalogGift(before, gift);
+    if (next === before) {
+      return false;
+    }
+    this.gifts = next;
+    return true;
+  }
+
   async fetchUserPreview(uniqueId: string): Promise<TikTokUserPreview> {
     const id = uniqueId.replace(/^@/, '').trim();
     if (!id) {
@@ -188,7 +392,7 @@ export class TikTokLiveWatcher extends EventEmitter {
     }
 
     const mod = (await import('tiktok-live-connector')) as unknown as ConnectorModule;
-    const connection = new mod.TikTokLiveConnection(id, liveConnectionOptions({
+    const connection = new mod.TikTokLiveConnection(id, liveConnectionOptions(mod, {
       fetchRoomInfoOnConnect: false,
       enableExtendedGiftInfo: false,
     }));
@@ -235,34 +439,54 @@ export class TikTokLiveWatcher extends EventEmitter {
       return this.gifts;
     }
 
+    if (!tikTokSignApiKey()) {
+      if (this.gifts.length > 0) {
+        return this.gifts;
+      }
+      throw new Error(MSG.ui.giftsNeedApiKey);
+    }
+
     const mod = (await import('tiktok-live-connector')) as unknown as ConnectorModule;
-    const connection = new mod.TikTokLiveConnection(id, liveConnectionOptions({
+    const connection = new mod.TikTokLiveConnection(id, liveConnectionOptions(mod, {
       fetchRoomInfoOnConnect: false,
       enableExtendedGiftInfo: false,
     }));
 
     try {
-      if (typeof connection.fetchRoomId === 'function') {
-        await withTimeout(
-          connection.fetchRoomId(id),
-          APP_CONFIG.connectTimeoutMs,
-          MSG.connection.connectTimeout,
-        );
+      let roomReady = false;
+      try {
+        if (typeof connection.fetchRoomId === 'function') {
+          await withTimeout(
+            connection.fetchRoomId(id),
+            APP_CONFIG.connectTimeoutMs,
+            MSG.connection.connectTimeout,
+          );
+          roomReady = true;
+        }
+      } catch (error) {
+        logger.warning(`部屋IDの取得に失敗しました(@${id}): ${getErrorMessage(error)}`);
       }
-      if (!tikTokSignApiKey() || typeof connection.fetchAvailableGifts !== 'function') {
-        return this.gifts;
+
+      if (!roomReady) {
+        logger.warning(`部屋IDが取れないため、部屋ギフトの直取りはスキップします(@${id})`);
       }
-      const parsed = catalogGiftsFromList(
-        await withTimeout(
-          connection.fetchAvailableGifts(),
-          APP_CONFIG.connectTimeoutMs,
-          MSG.connection.connectTimeout,
-        ),
+
+      const parsed = await withTimeout(
+        fetchLocalizedGiftList(connection, mod),
+        APP_CONFIG.connectTimeoutMs * 3,
+        MSG.connection.connectTimeout,
       );
       if (parsed.length > 0) {
-        this.gifts = parsed;
+        this.gifts = mergeCatalogGiftsFromFetch(this.gifts, parsed);
+        return this.gifts;
       }
-      return this.gifts;
+      if (this.gifts.length > 0) {
+        return this.gifts;
+      }
+      if (!roomReady) {
+        throw new Error(MSG.ui.giftsNeedLive);
+      }
+      throw new Error(MSG.ui.giftsEmpty);
     } finally {
       await disconnectQuiet(connection);
     }
@@ -270,34 +494,41 @@ export class TikTokLiveWatcher extends EventEmitter {
 
   async refreshGifts(connection: TikTokConnection | null = this.connection): Promise<CatalogGift[]> {
     if (!connection) {
-      return this.gifts;
+      throw new Error(MSG.ui.giftsNeedLive);
     }
 
     try {
-      let raw = connection.availableGifts;
-      if (
-        raw == null &&
-        tikTokSignApiKey() &&
-        typeof connection.fetchAvailableGifts === 'function'
-      ) {
-        raw = await connection.fetchAvailableGifts();
-      }
-      let parsed = catalogGiftsFromList(raw);
-      if (
-        parsed.length === 0 &&
-        raw != null &&
-        tikTokSignApiKey() &&
-        typeof connection.fetchAvailableGifts === 'function'
-      ) {
-        parsed = catalogGiftsFromList(await connection.fetchAvailableGifts());
-      }
+      const mod = (await import('tiktok-live-connector')) as unknown as ConnectorModule;
+      const parsed = await fetchLocalizedGiftList(connection, mod);
       if (parsed.length > 0) {
-        this.gifts = parsed;
+        this.gifts = mergeCatalogGiftsFromFetch(this.gifts, parsed);
+        return this.gifts;
       }
+      if (this.gifts.length > 0) {
+        return this.gifts;
+      }
+      throw new Error(MSG.ui.giftsNeedBusinessPlan);
     } catch (error) {
-      logger.warning(`ギフト一覧の取得に失敗しました: ${getErrorMessage(error)}`);
+      const message = getErrorMessage(error);
+      if (
+        message === MSG.ui.giftsNeedBusinessPlan ||
+        message === MSG.ui.giftsEmpty ||
+        message === MSG.ui.giftsNeedLive
+      ) {
+        throw error;
+      }
+      if (isNonFatalTikTokClientError(message)) {
+        if (this.gifts.length > 0) {
+          return this.gifts;
+        }
+        throw new Error(MSG.ui.giftsNeedBusinessPlan);
+      }
+      logger.warning(`ギフト一覧の取得に失敗しました: ${message}`);
+      if (this.gifts.length > 0) {
+        return this.gifts;
+      }
+      throw new Error(MSG.ui.giftsFailed);
     }
-    return this.gifts;
   }
 
   private async loop(token: number): Promise<void> {
@@ -325,13 +556,24 @@ export class TikTokLiveWatcher extends EventEmitter {
         }
         delayMs = APP_CONFIG.reconnectInitialMs;
         lastError = '';
-        await this.refreshGifts(connection);
+        try {
+          await this.refreshGifts(connection);
+        } catch (error) {
+          logger.warning(`接続後のギフト一覧取得をスキップします: ${getErrorMessage(error)}`);
+        }
         const streamStartedAtMs = parseStreamStartedAtMs(connection.roomInfo);
         this.emit('connected', this.uniqueId, streamStartedAtMs);
         logger.info(`TikTok LIVE に接続しました (@${this.uniqueId})`);
         void this.captureRoomFanClubName(connection);
         await this.waitDisconnect(connection, token);
         if (this.isCurrent(token)) {
+          if (this.stopAfterStreamEnd) {
+            this.stopAfterStreamEnd = false;
+            this.running = false;
+            lastError = MSG.connection.streamEnded;
+            this.emit('disconnected', lastError);
+            return;
+          }
           lastError = MSG.connection.disconnectedFromLive;
           this.emit('disconnected', lastError);
         }
@@ -382,7 +624,7 @@ export class TikTokLiveWatcher extends EventEmitter {
     }
     const connection = new mod.TikTokLiveConnection(
       this.uniqueId,
-      liveConnectionOptions(),
+      liveConnectionOptions(mod),
     );
     const events = mod.WebcastEvent;
     const toEvent = (
@@ -396,6 +638,7 @@ export class TikTokLiveWatcher extends EventEmitter {
       this.emitLiveEvent(
         toEvent('comment', raw, {
           comment: commentFromEvent(raw),
+          commentEmotes: commentEmotesFromEvent(raw),
         }),
       );
     };
@@ -428,9 +671,11 @@ export class TikTokLiveWatcher extends EventEmitter {
       }
 
       const gift = asRecord(raw.giftDetails || raw.extendedGiftInfo || raw.gift);
-      const giftName = giftNameFromEvent(raw);
+      const giftId = giftIdFromEvent(raw);
+      const giftName = resolveGiftNameWithCatalog(raw, this.gifts);
       this.emitLiveEvent(
         toEvent(isPortalGiftEvent(raw) ? 'portal' : 'gift', raw, {
+          giftId,
           giftName,
           giftCount: repeatCount,
           giftImageUrl: giftImageUrlFromEvent(raw),
@@ -540,10 +785,18 @@ export class TikTokLiveWatcher extends EventEmitter {
       void disconnectQuiet(connection);
     };
     this.bind(connection, events.DISCONNECTED ?? 'disconnected', drop);
-    this.bind(connection, events.STREAM_END ?? 'streamEnd', drop);
+    this.bind(connection, events.STREAM_END ?? 'streamEnd', () => {
+      this.stopAfterStreamEnd = true;
+      drop();
+    });
     this.bind(connection, events.WEBSOCKET_DISCONNECTED ?? 'websocketDisconnected', drop);
     this.bind(connection, events.ERROR ?? 'error', (data) => {
-      logger.warning(`TikTok接続エラー: ${getErrorMessage(data)}`);
+      const message = getErrorMessage(data);
+      if (isNonFatalTikTokClientError(message)) {
+        logger.warning(`TikTok補助処理のエラー（接続は維持）: ${message}`);
+        return;
+      }
+      logger.warning(`TikTok接続エラー: ${message}`);
       drop();
     });
 

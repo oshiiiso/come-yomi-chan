@@ -11,9 +11,10 @@ import {
 
 test('見た目プリセットは標準から派生する', () => {
   assert.equal(OVERLAY_LOOK_PRESETS.dark.theme, 'dark');
+  assert.equal(DEFAULT_OVERLAY_LOOK.fontSize, 20);
   assert.equal(
-    DEFAULT_OVERLAY_LOOK.fontSize,
     (MIN_OVERLAY_FONT_SIZE + MAX_OVERLAY_FONT_SIZE) / 2,
+    35,
   );
   assert.equal(OVERLAY_LOOK_PRESETS.dark.fontSize, 20);
   assert.equal(OVERLAY_LOOK_PRESETS.minimal.bgOpacity, 0);

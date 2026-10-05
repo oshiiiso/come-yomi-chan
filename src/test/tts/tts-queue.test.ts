@@ -98,6 +98,25 @@ test('待ちを捨てたあとの新規は合成できる', async () => {
   }
 });
 
+test('一時停止中は合成を進めず、再開で続ける', async () => {
+  const engine = new FakeEngine(20);
+  const queue = new TtsQueue(
+    () => engine,
+    () => 10,
+    () => 10,
+    () => options,
+  );
+  queue.setPaused(true);
+  assert.equal(queue.isPaused(), true);
+  const pending = queue.enqueue([{ kind: 'text', value: 'paused' }]);
+  await delay(40);
+  assert.equal(engine.started, 0);
+  queue.setPaused(false);
+  const result = await pending;
+  assert.equal(result.status, 'ok');
+  assert.equal(engine.finished, 1);
+});
+
 test('優先の読み上げは待ちの後ろから先に合成する', async () => {
   const spoken: string[] = [];
   class OrderEngine extends FakeEngine {

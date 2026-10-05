@@ -5,6 +5,7 @@ import {
   isMentionComment,
   stripCommentUrls,
 } from './comment-filters';
+import { isEventSoundType } from './event-notify';
 import { shouldSkipRestrictedCommentSpeech } from './speech-filters';
 import { isPortalSendEvent } from './portal-event';
 import { isSuperFanBoxEvent } from './super-fan-event';
@@ -21,6 +22,7 @@ export interface SpeechPlanEvent {
   type: OverlayEventType;
   comment: string;
   diamondCount: number;
+  giftId?: string;
   giftName?: string;
   user: Pick<
     OverlayUser,
@@ -52,12 +54,17 @@ export function resolveEventSpeech(params: {
   config: Pick<
     AppConfig,
     | 'minGiftDiamonds'
+    | 'giftNotifyMode'
+    | 'commentNotifyMode'
+    | 'eventNotifyMode'
+    | 'giftSpeakByGiftId'
     | 'skipMentionSpeech'
     | 'skipUrlSpeech'
     | 'skipAnchorSpeech'
     | 'skipEmoteSpeech'
     | 'speakFanSubOnly'
     | 'speakFanMinLevel'
+    | 'speakFanClubComments'
     | 'speakSubscriberComments'
     | 'skipRepeatSpeech'
     | 'mutedUsers'
@@ -68,6 +75,23 @@ export function resolveEventSpeech(params: {
   varsComment: string;
 }): { shouldSpeak: boolean; speechComment: string } {
   let shouldSpeak = (params.options.forceSpeak || params.toggleSpeak) && !params.options.silent;
+  if (shouldSpeak && params.event.type === 'gift' && params.config.giftNotifyMode === 'chime') {
+    shouldSpeak = false;
+  }
+  if (
+    shouldSpeak &&
+    params.event.type === 'comment' &&
+    params.config.commentNotifyMode === 'sound'
+  ) {
+    shouldSpeak = false;
+  }
+  if (
+    shouldSpeak &&
+    isEventSoundType(params.event.type) &&
+    params.config.eventNotifyMode?.[params.event.type] === 'sound'
+  ) {
+    shouldSpeak = false;
+  }
   if (
     shouldSpeak &&
     isGiftLikeEvent(params.event) &&
@@ -104,6 +128,7 @@ export function resolveEventSpeech(params: {
       shouldSkipRestrictedCommentSpeech(params.event.type, params.event.user, {
         enabled: params.config.speakFanSubOnly,
         minFanLevel: params.config.speakFanMinLevel,
+        speakFanClub: params.config.speakFanClubComments,
         speakSubscriber: params.config.speakSubscriberComments,
       })
     ) {

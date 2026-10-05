@@ -45,4 +45,7 @@ function writeUserLines(fieldId, list) {
   if (el) {
     el.value = (list || []).join('\n');
   }
+  if (typeof renderLineList === 'function') {
+    renderLineList(fieldId);
+  }
 }

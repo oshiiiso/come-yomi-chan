@@ -1,5 +1,6 @@
-import { BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { BrowserWindow, dialog, ipcMain, shell, app } from 'electron';
 import fs from 'fs';
+import path from 'path';
 import { marked } from 'marked';
 import { SessionManager } from '../../app/session-manager';
 import { getAppInfo, getHelpDocumentPath } from '../../shared/app-meta';
@@ -10,14 +11,37 @@ import { IpcChannels } from '../../shared/ipc-channels';
 import { getLogger } from '../../shared/logging-config';
 import { getRendererCopy, MSG } from '../../shared/messages';
 import { sessionLogFileName, sessionLogTsv } from '../../shared/session-log';
-import { buildConfigExport, configExportFileName, parseConfigExport } from '../../shared/config-transfer';
-import { AppConfigSaveInput, OverlayEventType } from '../../shared/types';
+import {
+  applyProfileToConfig,
+  buildProfileExport,
+  createProfile,
+  profileExportFileName,
+  profileFromImportPayload,
+  profilePatchFromConfig,
+} from '../../shared/config-profiles';
+import { listSoundFiles, saveSoundFile } from '../../shared/sound-files';
+import { SOUND_FILE_EXTENSIONS } from '../../shared/sound-ref';
+import { saveAlertMediaFile } from '../../shared/alert-media-files';
+import { ALERT_MEDIA_FILE_EXTENSIONS } from '../../shared/event-alert';
+import { AppConfig, AppConfigSaveInput, OverlayEventType } from '../../shared/types';
 import {
   isAllowedVoicevoxExecutable,
   voicevoxDialogDefaultPath,
 } from '../../tts/voicevox-launcher';
 import { fitWindowToContent, WindowKind } from '../windows/fit-window';
 import { WindowManager } from '../windows/window-manager';
+import { ViewerEvent } from '../../shared/viewer-event';
+import {
+  DEFAULT_VIEWER_LOG_MAX_ROWS,
+  normalizeViewerPersistRows,
+  trimViewerPersistRows,
+  type ViewerPersistRow,
+} from '../../shared/viewer-log-persist';
+import {
+  formatSpeechReplaceText,
+  parseSpeechReplaceText,
+  formatSkipLineSummary,
+} from '../../shared/speech-replace-map';
 
 const logger = getLogger('ipc');
 
@@ -61,14 +85,155 @@ export function registerIpcHandlers(
   configStore: ConfigStore,
   windowManager: WindowManager,
 ): void {
+  // --- ビューアーログの永続化 ---
+  const viewerLogFilePath = path.join(app.getPath('userData'), 'viewer-log.json');
+  let viewerLog: ViewerPersistRow[] = [];
+  let viewerLogSaveTimer: ReturnType<typeof setTimeout> | null = null;
+
+  try {
+    const raw = JSON.parse(fs.readFileSync(viewerLogFilePath, 'utf8'));
+    viewerLog = normalizeViewerPersistRows(raw, configStore.get().viewerLogMaxRows ?? DEFAULT_VIEWER_LOG_MAX_ROWS);
+  } catch {
+    viewerLog = [];
+  }
+
+  const scheduleViewerLogSave = () => {
+    if (viewerLogSaveTimer) {
+      clearTimeout(viewerLogSaveTimer);
+    }
+    viewerLogSaveTimer = setTimeout(() => {
+      viewerLogSaveTimer = null;
+      try {
+        fs.writeFileSync(viewerLogFilePath, JSON.stringify(viewerLog), 'utf8');
+      } catch (error) {
+        logger.warning(`ビューアーログの保存に失敗しました: ${getErrorMessage(error)}`);
+      }
+    }, 1500);
+  };
+
+  session.on('viewer', (event: ViewerEvent) => {
+    if (event.sample || event.statusKind) {
+      return;
+    }
+    const maxRows = configStore.get().viewerLogMaxRows ?? DEFAULT_VIEWER_LOG_MAX_ROWS;
+    const row: ViewerPersistRow = {
+      receivedAt: event.receivedAt,
+      type: event.type,
+      uniqueId: event.user?.uniqueId ?? '',
+      nickname: event.user?.nickname ?? '',
+      comment: event.comment ?? '',
+      displayText: event.displayText ?? '',
+      giftName: event.giftName ?? '',
+      giftCount: event.giftCount ?? 0,
+      diamondCount: event.diamondCount ?? 0,
+      avatarUrl: event.user?.avatarUrl || undefined,
+      giftImageUrl: event.giftImageUrl || undefined,
+      badges: (() => {
+        const u = event.user;
+        if (!u) return undefined;
+        const b: ViewerPersistRow['badges'] = {};
+        if (u.isFanClub) b.isFanClub = true;
+        if (u.isSuperFan) b.isSuperFan = true;
+        if (u.isModerator) b.isModerator = true;
+        if (u.isAnchor) b.isAnchor = true;
+        if (u.fanClubLevel > 0) b.fanClubLevel = u.fanClubLevel;
+        if (u.fanClubName) b.fanClubName = u.fanClubName;
+        return Object.keys(b).length ? b : undefined;
+      })(),
+    };
+    viewerLog = trimViewerPersistRows([...viewerLog, row], maxRows);
+    scheduleViewerLogSave();
+  });
+
+  ipcMain.handle(IpcChannels.GET_VIEWER_LOG, () => viewerLog);
+
+  ipcMain.handle(IpcChannels.SAVE_VIEWER_LOG, (_event, rows: unknown) => {
+    const maxRows = configStore.get().viewerLogMaxRows ?? DEFAULT_VIEWER_LOG_MAX_ROWS;
+    viewerLog = normalizeViewerPersistRows(rows, maxRows);
+    scheduleViewerLogSave();
+  });
+
+  ipcMain.handle(IpcChannels.CLEAR_VIEWER_LOG, () => {
+    viewerLog = [];
+    if (viewerLogSaveTimer) {
+      clearTimeout(viewerLogSaveTimer);
+      viewerLogSaveTimer = null;
+    }
+    try {
+      if (fs.existsSync(viewerLogFilePath)) {
+        fs.unlinkSync(viewerLogFilePath);
+      }
+    } catch (error) {
+      logger.warning(`ビューアーログの削除に失敗しました: ${getErrorMessage(error)}`);
+    }
+  });
+
+  ipcMain.handle(IpcChannels.CLEAR_VIEWER_LOG_TYPES, (_event, types: unknown) => {
+    const list = Array.isArray(types)
+      ? types.map((item) => String(item || '').trim()).filter(Boolean)
+      : [];
+    if (!list.length) {
+      return;
+    }
+    const drop = new Set(list);
+    viewerLog = viewerLog.filter((row) => !drop.has(row.type));
+    scheduleViewerLogSave();
+  });
+
+  // --- 読み替え辞書のエクスポート ---
+  ipcMain.handle(IpcChannels.EXPORT_SPEECH_REPLACE, async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showSaveDialog(window ?? BrowserWindow.getAllWindows()[0], {
+      title: MSG.ui.speechReplaceExportTitle,
+      defaultPath: '読み替え辞書.txt',
+      filters: [{ name: MSG.ui.speechReplaceExportFilter, extensions: ['txt'] }],
+    });
+    if (result.canceled || !result.filePath) {
+      return { ok: false, canceled: true };
+    }
+    try {
+      const entries = configStore.get().speechReplaceMap ?? [];
+      fs.writeFileSync(result.filePath, formatSpeechReplaceText(entries), 'utf8');
+      return { ok: true };
+    } catch (error) {
+      logger.warning(`読み替え辞書の書き出しに失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, canceled: false };
+    }
+  });
+
+  // --- 読み替え辞書のインポート ---
+  ipcMain.handle(IpcChannels.IMPORT_SPEECH_REPLACE, async (event) => {
+    const window = BrowserWindow.fromWebContents(event.sender);
+    const result = await dialog.showOpenDialog(window ?? BrowserWindow.getAllWindows()[0], {
+      title: MSG.ui.speechReplaceImportTitle,
+      properties: ['openFile'],
+      filters: [{ name: MSG.ui.speechReplaceImportFilter, extensions: ['txt'] }],
+    });
+    if (result.canceled || !result.filePaths[0]) {
+      return { ok: false, canceled: true };
+    }
+    try {
+      const text = fs.readFileSync(result.filePaths[0], 'utf8');
+      const parsed = parseSpeechReplaceText(text);
+      if (parsed.overLimit) {
+        return { ok: false, canceled: false, overLimit: true };
+      }
+      const skipped = formatSkipLineSummary(parsed.skippedLineNumbers);
+      return { ok: true, entries: parsed.entries, skipped };
+    } catch (error) {
+      logger.warning(`読み替え辞書の読み込みに失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, canceled: false };
+    }
+  });
+
   ipcMain.handle(IpcChannels.GET_CONFIG, () => ({
     ...configStore.toView(),
     copy: getRendererCopy(),
   }));
 
-  const applyLiveConfig = async (previousPort: number, previousUniqueId: string) => {
+  const applyLiveConfig = async (previous: AppConfig) => {
     await session.refreshVoicevoxSpeakerName();
-    await session.applyConfig(previousPort, previousUniqueId);
+    await session.applyConfig(previous.overlayPort, previous.uniqueId, previous);
     windowManager.broadcast(IpcChannels.CONFIG_CHANGED, configStore.toView());
     windowManager.broadcast(IpcChannels.STATUS_CHANGED, session.getStatus());
     windowManager.syncTray(configStore.get().minimizeToTray);
@@ -102,13 +267,13 @@ export function registerIpcHandlers(
     const previous = configStore.get();
     try {
       configStore.save((partial ?? {}) as AppConfigSaveInput);
-      await applyLiveConfig(previous.overlayPort, previous.uniqueId);
+      await applyLiveConfig(previous);
       return { ok: true, config: configStore.toView(), message: MSG.ui.saveOk };
     } catch (error) {
       logger.error(`設定の保存に失敗しました: ${getErrorMessage(error)}`);
       try {
         configStore.save(previous);
-        await applyLiveConfig(previous.overlayPort, previous.uniqueId);
+        await applyLiveConfig(previous);
       } catch (restoreError) {
         logger.error(`設定の復元に失敗しました: ${getErrorMessage(restoreError)}`);
       }
@@ -129,13 +294,13 @@ export function registerIpcHandlers(
     const previous = configStore.get();
     try {
       configStore.reset();
-      await applyLiveConfig(previous.overlayPort, previous.uniqueId);
+      await applyLiveConfig(previous);
       return { ok: true, cancelled: false, config: configStore.toView(), message: MSG.ui.resetConfigOk };
     } catch (error) {
       logger.error(`設定の初期化に失敗しました: ${getErrorMessage(error)}`);
       try {
         configStore.save(previous);
-        await applyLiveConfig(previous.overlayPort, previous.uniqueId);
+        await applyLiveConfig(previous);
       } catch (restoreError) {
         logger.error(`設定の復元に失敗しました: ${getErrorMessage(restoreError)}`);
       }
@@ -146,10 +311,21 @@ export function registerIpcHandlers(
   ipcMain.handle(IpcChannels.EXPORT_CONFIG, async (event) => {
     try {
       const window = BrowserWindow.fromWebContents(event.sender);
+      const config = configStore.get();
+      const active = config.activeConfigProfileId
+        ? config.configProfiles.find((item) => item.id === config.activeConfigProfileId)
+        : undefined;
+      const profile = active
+        ? {
+            ...active,
+            updatedAt: new Date().toISOString(),
+            config: profilePatchFromConfig(config),
+          }
+        : createProfile('プロファイル', config);
       const options: Electron.SaveDialogOptions = {
-        title: MSG.ui.exportConfigTitle,
-        defaultPath: configExportFileName(),
-        filters: [{ name: MSG.ui.importConfigFilter, extensions: ['json'] }],
+        title: MSG.ui.exportProfileTitle,
+        defaultPath: profileExportFileName(profile.name),
+        filters: [{ name: MSG.ui.importProfileFilter, extensions: ['json'] }],
       };
       const result = window
         ? await dialog.showSaveDialog(window, options)
@@ -157,21 +333,25 @@ export function registerIpcHandlers(
       if (result.canceled || !result.filePath) {
         return { ok: true, cancelled: true, message: '' };
       }
-      const payload = buildConfigExport(configStore.get());
+      const payload = buildProfileExport(profile);
       fs.writeFileSync(result.filePath, `${JSON.stringify(payload, null, 2)}\n`, 'utf8');
-      return { ok: true, cancelled: false, message: MSG.ui.exportConfigOk };
+      return { ok: true, cancelled: false, message: MSG.ui.exportProfileOk };
     } catch (error) {
-      logger.error(`設定の書き出しに失敗しました: ${getErrorMessage(error)}`);
-      return { ok: false, cancelled: false, message: MSG.ui.exportConfigFailed };
+      logger.error(`プロファイルの書き出しに失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, cancelled: false, message: MSG.ui.exportProfileFailed };
     }
   });
 
   ipcMain.handle(IpcChannels.IMPORT_CONFIG, async (event) => {
     try {
+      const state = session.getStatus().state;
+      if (state === 'live' || state === 'waiting_live' || state === 'connecting') {
+        return { ok: false, cancelled: false, message: MSG.ui.profileNeedDisconnect };
+      }
       const window = BrowserWindow.fromWebContents(event.sender);
       const openOptions: Electron.OpenDialogOptions = {
-        title: MSG.ui.importConfigTitle,
-        filters: [{ name: MSG.ui.importConfigFilter, extensions: ['json'] }],
+        title: MSG.ui.importProfileTitle,
+        filters: [{ name: MSG.ui.importProfileFilter, extensions: ['json'] }],
         properties: ['openFile'],
       };
       const picked = window
@@ -183,37 +363,41 @@ export function registerIpcHandlers(
       const filePath = picked.filePaths[0];
       const stat = fs.statSync(filePath);
       if (!stat.isFile() || stat.size > 1_000_000) {
-        return { ok: false, cancelled: false, message: MSG.ui.importConfigInvalid };
+        return { ok: false, cancelled: false, message: MSG.ui.importProfileInvalid };
       }
       const text = fs.readFileSync(filePath, 'utf8').replace(/^\uFEFF/, '');
       let parsed: unknown;
       try {
         parsed = JSON.parse(text);
       } catch {
-        return { ok: false, cancelled: false, message: MSG.ui.importConfigInvalid };
+        return { ok: false, cancelled: false, message: MSG.ui.importProfileInvalid };
       }
-      if (!parseConfigExport(parsed)) {
-        return { ok: false, cancelled: false, message: MSG.ui.importConfigInvalid };
+      const profile = profileFromImportPayload(parsed, configStore.get());
+      if (!profile) {
+        return { ok: false, cancelled: false, message: MSG.ui.importProfileInvalid };
       }
       const accepted = await confirmWarning(
         event,
-        MSG.ui.importConfigConfirmTitle,
-        MSG.ui.importConfigConfirm,
-        MSG.ui.importConfigLabel,
+        MSG.ui.importProfileConfirmTitle,
+        MSG.ui.importProfileConfirm,
+        MSG.ui.importProfileLabel,
       );
       if (!accepted) {
         return { ok: true, cancelled: true, message: '' };
       }
       const previous = configStore.get();
-      const next = configStore.replaceFromExport(parsed);
-      if (!next) {
-        return { ok: false, cancelled: false, message: MSG.ui.importConfigInvalid };
-      }
-      await applyLiveConfig(previous.overlayPort, previous.uniqueId);
-      return { ok: true, cancelled: false, config: configStore.toView(), message: MSG.ui.importConfigOk };
+      const merged = applyProfileToConfig(previous, profile.config);
+      const profiles = [...previous.configProfiles.filter((item) => item.id !== profile.id), profile];
+      configStore.save({
+        ...merged,
+        configProfiles: profiles,
+        activeConfigProfileId: profile.id,
+      });
+      await applyLiveConfig(previous);
+      return { ok: true, cancelled: false, config: configStore.toView(), message: MSG.ui.importProfileOk };
     } catch (error) {
-      logger.error(`設定の読み込みに失敗しました: ${getErrorMessage(error)}`);
-      return { ok: false, cancelled: false, message: MSG.ui.importConfigFailed };
+      logger.error(`プロファイルの読み込みに失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, cancelled: false, message: MSG.ui.importProfileFailed };
     }
   });
 
@@ -329,6 +513,93 @@ export function registerIpcHandlers(
     return { ok: true, message: MSG.ui.speechQueueCleared };
   });
 
+  ipcMain.handle(IpcChannels.TOGGLE_SPEECH_PAUSE, () => {
+    const paused = session.toggleSpeechPaused();
+    return {
+      ok: true,
+      paused,
+      message: paused ? MSG.ui.speechPaused : MSG.ui.speechResumed,
+    };
+  });
+
+  ipcMain.handle(IpcChannels.TOGGLE_COMMENT_SOUND_MUTE, () => {
+    const muted = session.toggleCommentSoundMuted();
+    return {
+      ok: true,
+      muted,
+      message: muted ? MSG.ui.commentSoundMuted : MSG.ui.commentSoundUnmuted,
+    };
+  });
+
+  ipcMain.handle(IpcChannels.PREVIEW_SOUND, async (_event, sound: unknown, volume: unknown) => {
+    try {
+      const result = await session.previewSound(sound, volume);
+      return { ok: true, soundUrl: result.soundUrl, volume: result.volume };
+    } catch (error) {
+      logger.error(`効果音のテストに失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, soundUrl: null, volume: 100, message: MSG.ui.giftChimeTestFailed };
+    }
+  });
+
+  ipcMain.handle(IpcChannels.LIST_SOUND_FILES, () => ({
+    ok: true,
+    files: listSoundFiles(),
+  }));
+
+  ipcMain.handle(IpcChannels.PICK_SOUND_FILE, async (event) => {
+    try {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      const options: Electron.OpenDialogOptions = {
+        title: MSG.ui.pickSoundTitle,
+        properties: ['openFile'],
+        filters: [
+          {
+            name: MSG.ui.pickSoundFilter,
+            extensions: [...SOUND_FILE_EXTENSIONS],
+          },
+        ],
+      };
+      const result = window
+        ? await dialog.showOpenDialog(window, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || !result.filePaths[0]) {
+        return { ok: true, cancelled: true, fileName: '' };
+      }
+      const fileName = saveSoundFile(result.filePaths[0]);
+      return { ok: true, cancelled: false, fileName };
+    } catch (error) {
+      logger.error(`音声ファイルの取り込みに失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, cancelled: false, fileName: '', message: MSG.ui.pickSoundFailed };
+    }
+  });
+
+  ipcMain.handle(IpcChannels.PICK_ALERT_MEDIA_FILE, async (event) => {
+    try {
+      const window = BrowserWindow.fromWebContents(event.sender);
+      const options: Electron.OpenDialogOptions = {
+        title: MSG.ui.pickAlertMediaTitle,
+        properties: ['openFile'],
+        filters: [
+          {
+            name: MSG.ui.pickAlertMediaFilter,
+            extensions: [...ALERT_MEDIA_FILE_EXTENSIONS],
+          },
+        ],
+      };
+      const result = window
+        ? await dialog.showOpenDialog(window, options)
+        : await dialog.showOpenDialog(options);
+      if (result.canceled || !result.filePaths[0]) {
+        return { ok: true, cancelled: true, fileName: '' };
+      }
+      const fileName = saveAlertMediaFile(result.filePaths[0]);
+      return { ok: true, cancelled: false, fileName };
+    } catch (error) {
+      logger.error(`アラート画像の取り込みに失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, cancelled: false, fileName: '', message: MSG.ui.pickAlertMediaFailed };
+    }
+  });
+
   ipcMain.handle(
     IpcChannels.SEND_TEST_EVENT,
     async (_event, type: unknown, giftCount: unknown, giftId: unknown, badges: unknown) => {
@@ -420,7 +691,14 @@ export function registerIpcHandlers(
     } catch (error) {
       const cached = session.listTestGifts();
       const message = getErrorMessage(error);
-      if (message === MSG.ui.giftsNeedId) {
+      if (
+        message === MSG.ui.giftsNeedId ||
+        message === MSG.ui.giftsNeedApiKey ||
+        message === MSG.ui.giftsNeedBusinessPlan ||
+        message === MSG.ui.giftsNeedLive ||
+        message === MSG.ui.giftsEmpty ||
+        message === MSG.ui.giftsCached
+      ) {
         return { ok: false, gifts: cached, message };
       }
       logger.error(`ギフト一覧の取得に失敗しました: ${message}`);
@@ -432,7 +710,7 @@ export function registerIpcHandlers(
     }
   });
 
-  ipcMain.handle(IpcChannels.PREVIEW_OVERLAY, async (_event, target: unknown) => {
+  ipcMain.handle(IpcChannels.PREVIEW_OVERLAY, async (_event, target: unknown, streamSettings: unknown) => {
     try {
       if (target === 'overlay' || target === 'stream') {
         const down = overlayServerMessage(session);
@@ -444,7 +722,11 @@ export function registerIpcHandlers(
         if (disconnected) {
           return { ok: false, message: disconnected };
         }
-        session.previewStreamSamples();
+        const snapshot =
+          streamSettings && typeof streamSettings === 'object' && !Array.isArray(streamSettings)
+            ? (streamSettings as Record<string, unknown>)
+            : undefined;
+        session.previewStreamSamples(snapshot);
         return { ok: true, message: MSG.ui.overlayPreviewShown };
       }
       session.previewOverlaySamples();
@@ -494,16 +776,25 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle(IpcChannels.COPY_OVERLAY_URL, (_event, kind: unknown) => {
-    const urlKind = kind === 'studio' ? 'studio' : kind === 'local' ? 'local' : 'default';
+    const urlKind =
+      kind === 'studio' ||
+      kind === 'local' ||
+      kind === 'alerts' ||
+      kind === 'alerts-studio' ||
+      kind === 'alerts-local'
+        ? kind
+        : 'default';
     const ok = session.copyOverlayUrl(urlKind);
     const message =
       !ok
         ? MSG.ui.copyFailed
-        : urlKind === 'studio'
+        : urlKind === 'studio' || urlKind === 'alerts-studio'
           ? MSG.ui.copiedStudio
-          : urlKind === 'local'
+          : urlKind === 'local' || urlKind === 'alerts-local'
             ? MSG.ui.copiedObs
-            : MSG.ui.copied;
+            : urlKind === 'alerts'
+              ? MSG.ui.copiedAlerts
+              : MSG.ui.copied;
     return { ok, message };
   });
 
@@ -558,5 +849,17 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IpcChannels.WINDOW_CLOSE, (event) => {
     BrowserWindow.fromWebContents(event.sender)?.close();
+  });
+
+  ipcMain.handle(IpcChannels.WINDOW_MINIMIZE, () => {
+    windowManager.minimizeMainWindow();
+  });
+
+  ipcMain.handle(IpcChannels.WINDOW_TOGGLE_MAXIMIZE, () => {
+    return { maximized: windowManager.toggleMaximizeMainWindow() };
+  });
+
+  ipcMain.handle(IpcChannels.WINDOW_IS_MAXIMIZED, () => {
+    return { maximized: windowManager.isMainWindowMaximized() };
   });
 }

@@ -1,5 +1,5 @@
 import { BrowserWindow } from 'electron';
-import { WINDOW_LAYOUT, WindowKind } from '../../shared/window-layout';
+import { WINDOW_LAYOUT, WINDOW_SIZE_NO_MAX, WindowKind, WindowSize } from '../../shared/window-layout';
 
 export type { WindowKind };
 
@@ -9,6 +9,14 @@ export interface FitWindowResult {
   capped: boolean;
 }
 
+export function applyWindowSizeLimits(window: BrowserWindow, layout: WindowSize): void {
+  window.setMinimumSize(layout.minWidth, layout.minHeight);
+  window.setMaximumSize(
+    layout.maxWidth ?? WINDOW_SIZE_NO_MAX,
+    layout.maxHeight ?? WINDOW_SIZE_NO_MAX,
+  );
+}
+
 export function fitWindowToContent(
   window: BrowserWindow,
   contentWidth: number,
@@ -16,6 +24,8 @@ export function fitWindowToContent(
   kind: WindowKind,
 ): FitWindowResult {
   const options = WINDOW_LAYOUT[kind];
+  const maxWidth = options.maxWidth ?? WINDOW_SIZE_NO_MAX;
+  const maxHeight = options.maxHeight ?? WINDOW_SIZE_NO_MAX;
 
   if (!Number.isFinite(contentWidth) || !Number.isFinite(contentHeight)) {
     return {
@@ -25,16 +35,10 @@ export function fitWindowToContent(
     };
   }
 
-  const width = Math.min(
-    options.maxWidth,
-    Math.max(options.minWidth, Math.ceil(contentWidth)),
-  );
+  const width = Math.min(maxWidth, Math.max(options.minWidth, Math.ceil(contentWidth)));
   const naturalHeight = Math.ceil(contentHeight);
-  const capped = naturalHeight > options.maxHeight;
-  const height = Math.min(
-    options.maxHeight,
-    Math.max(options.minHeight, naturalHeight),
-  );
+  const capped = Boolean(options.maxHeight && naturalHeight > options.maxHeight);
+  const height = Math.min(maxHeight, Math.max(options.minHeight, naturalHeight));
 
   window.setContentSize(width, height);
 

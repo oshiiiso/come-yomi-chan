@@ -78,6 +78,10 @@ async function setupApp(): Promise<void> {
       app.isQuitting = true;
       void shutdown().finally(() => app.quit());
     },
+    () => configStore.get().mainWindowBounds,
+    (bounds) => {
+      configStore.save({ mainWindowBounds: bounds });
+    },
   );
 
   registerIpcHandlers(session, configStore, windowManager);
@@ -90,6 +94,12 @@ async function setupApp(): Promise<void> {
   });
   session.on('viewer', (payload) => {
     windowManager.broadcast(IpcChannels.VIEWER_EVENT, payload);
+  });
+  session.on('sound', (payload) => {
+    windowManager.broadcast(IpcChannels.PLAY_SOUND, payload);
+  });
+  session.on('speech-audio-control', (payload) => {
+    windowManager.broadcast(IpcChannels.SPEECH_AUDIO_CONTROL, payload);
   });
 
   try {

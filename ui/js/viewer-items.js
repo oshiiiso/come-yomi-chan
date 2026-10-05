@@ -354,9 +354,7 @@ function appendViewerStatusLine(notice) {
   item.appendChild(body);
 
   log.appendChild(item);
-  while (log.children.length > VIEWER_MAX_ROWS) {
-    log.firstElementChild?.remove();
-  }
+  trimViewerLogsOverall();
   applyViewerSearch();
   if (stick) {
     scrollViewerLogToLatest(log);
@@ -395,22 +393,29 @@ function appendViewerEvent(payload) {
     item.classList.add(`viewer__item--gift-${giftDiamondTier(payload.diamondCount)}`);
   }
   item.dataset.uniqueId = payload.user?.uniqueId || '';
-  item.dataset.nickname = payload.user?.nickname || '';
+  item.dataset.nickname =
+    payload.user?.sourceNickname || payload.user?.nickname || '';
+  item.dataset.displayName = payload.user?.nickname || '';
   if (payload.sample === true) {
     item.dataset.sample = '1';
   }
 
   appendViewerAvatar(item, payload.user);
 
-  if ((type === 'gift' || type === 'portal') && payload.giftImageUrl) {
-    const gift = document.createElement('img');
-    gift.className = 'viewer__gift';
-    gift.alt = '';
-    gift.referrerPolicy = 'no-referrer';
-    gift.decoding = 'async';
-    gift.addEventListener('error', () => gift.remove());
-    gift.src = giftIconSrc(payload.giftImageUrl);
-    item.appendChild(gift);
+  if (type === 'gift' || type === 'portal') {
+    const giftSrc = giftIconSrc(payload.giftImageUrl || '');
+    if (typeof createGiftImage === 'function') {
+      item.appendChild(createGiftImage(giftSrc, 'viewer__gift'));
+    } else if (giftSrc) {
+      const gift = document.createElement('img');
+      gift.className = 'viewer__gift';
+      gift.alt = '';
+      gift.referrerPolicy = 'no-referrer';
+      gift.decoding = 'async';
+      gift.addEventListener('error', () => gift.remove());
+      gift.src = giftSrc;
+      item.appendChild(gift);
+    }
   }
 
   const body = document.createElement('div');
@@ -445,16 +450,23 @@ function appendViewerEvent(payload) {
 
   const text = document.createElement('p');
   text.className = 'viewer__text';
-  text.textContent = bodyText;
+  const emotes = Array.isArray(payload.commentEmotes) ? payload.commentEmotes : [];
+  if (type === 'comment' && emotes.length > 0 && typeof buildCommentSegments === 'function') {
+    const segments = buildCommentSegments(commentBody || bodyText, emotes);
+    appendCommentSegments(text, segments, 'viewer__emote', giftIconSrc);
+    if (!text.childNodes.length) {
+      text.textContent = bodyText;
+    }
+  } else {
+    text.textContent = bodyText;
+  }
   body.appendChild(text);
   item.appendChild(body);
 
   item.dataset.displayText = text.textContent || '';
 
   log.appendChild(item);
-  while (log.children.length > VIEWER_MAX_ROWS) {
-    log.firstElementChild?.remove();
-  }
+  trimViewerLogsOverall();
   applyViewerSearch();
   applyViewerFocus();
   if (stick) {
@@ -462,6 +474,58 @@ function appendViewerEvent(payload) {
   }
   syncViewerEmpty();
   syncViewerLatestButton();
+}
+
+function trimViewerLogsOverall() {
+  const max = Math.max(1, Number(VIEWER_MAX_ROWS) || 1000);
+  const entries = [];
+  for (const log of allViewerLogs()) {
+    for (const child of log.children) {
+      const time = child.querySelector('time')?.dateTime || '';
+      entries.push({ child, time });
+    }
+  }
+  if (entries.length <= max) {
+    return;
+  }
+  entries.sort((left, right) => String(left.time).localeCompare(String(right.time)));
+  const removeCount = entries.length - max;
+  for (let index = 0; index < removeCount; index += 1) {
+    entries[index].child.remove();
+  }
+}
+
+function typesForViewerPaneClear(key) {
+  if (key === 'comments') {
+    if (viewerLayout === 'combined') {
+      return [...EVENT_ORDER];
+    }
+    return ['comment'];
+  }
+  if (key === 'events') {
+    return EVENT_ORDER.filter((type) => type !== 'comment');
+  }
+  const leaf = listDockLeaves(pruneDock(viewerDock)).find((item) => item.id === key);
+  return leaf ? [...leaf.types] : [];
+}
+
+function clearViewerLogPane(key, typesOverride) {
+  const types =
+    Array.isArray(typesOverride) && typesOverride.length
+      ? typesOverride
+      : typesForViewerPaneClear(key);
+  if (key === 'comments' || key === 'events') {
+    const log = key === 'comments' ? $('viewer-log-comments') : $('viewer-log-events');
+    log?.replaceChildren();
+  } else {
+    const log = $(`viewer-log-${key}`);
+    log?.replaceChildren();
+  }
+  applyViewerSearch();
+  applyViewerFocus();
+  syncViewerEmpty();
+  syncViewerLatestButton();
+  return types;
 }
 
 function clearViewerLog() {
