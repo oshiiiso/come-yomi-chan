@@ -16,6 +16,7 @@ import { socialEventType } from './social-fields';
 import {
   catalogGiftsFromList,
   giftIdFromEvent,
+  catalogGiftImageById,
   giftImageUrlFromEvent,
   mergeCatalogGift,
   mergeCatalogGiftsFromFetch,
@@ -673,12 +674,14 @@ export class TikTokLiveWatcher extends EventEmitter {
       const gift = asRecord(raw.giftDetails || raw.extendedGiftInfo || raw.gift);
       const giftId = giftIdFromEvent(raw);
       const giftName = resolveGiftNameWithCatalog(raw, this.gifts);
+      const giftImageUrl =
+        giftImageUrlFromEvent(raw) || catalogGiftImageById(this.gifts, giftId);
       this.emitLiveEvent(
         toEvent(isPortalGiftEvent(raw) ? 'portal' : 'gift', raw, {
           giftId,
           giftName,
           giftCount: repeatCount,
-          giftImageUrl: giftImageUrlFromEvent(raw),
+          giftImageUrl,
           diamondCount:
             asNumber(raw.diamondCount) ||
             asNumber(raw.diamond_count) ||

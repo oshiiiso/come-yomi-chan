@@ -80,6 +80,42 @@ function activateEventSection(name) {
   }
 }
 
+function activateLookSection(name) {
+  clearOkToast();
+  const allowed = ['comment', 'ranking', 'alerts'];
+  const current = allowed.includes(name) ? name : 'comment';
+  for (const button of document.querySelectorAll('[data-look-section-btn]')) {
+    const on = button.dataset.lookSectionBtn === current;
+    button.classList.toggle('is-active', on);
+    button.setAttribute('aria-selected', on ? 'true' : 'false');
+    button.tabIndex = on ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll('[data-look-section]')) {
+    panel.hidden = panel.dataset.lookSection !== current;
+  }
+  const kind = current === 'ranking' ? 'ranking' : current === 'alerts' ? 'alerts' : 'chat';
+  if (typeof setOverlayUrlKind === 'function') {
+    setOverlayUrlKind(kind);
+  }
+  if (typeof refreshPreviewFrame === 'function') {
+    refreshPreviewFrame();
+  }
+}
+
+function activateLookCommentSection(name) {
+  const allowed = ['easy', 'chat', 'name'];
+  const current = allowed.includes(name) ? name : 'easy';
+  for (const button of document.querySelectorAll('[data-look-comment-btn]')) {
+    const on = button.dataset.lookCommentBtn === current;
+    button.classList.toggle('is-active', on);
+    button.setAttribute('aria-selected', on ? 'true' : 'false');
+    button.tabIndex = on ? 0 : -1;
+  }
+  for (const panel of document.querySelectorAll('[data-look-comment]')) {
+    panel.hidden = panel.dataset.lookComment !== current;
+  }
+}
+
 function noteFormChanged() {
   updateDirtyUi();
   scheduleFormSave();
@@ -122,14 +158,8 @@ async function saveFormNow() {
   const result = await window.liveTts.saveConfig(payload);
   if (result.ok && result.config) {
     savedConfig = result.config;
-    if (result.config.overlayUrl) {
-      $('overlay-url').textContent = result.config.overlayUrl;
-    }
-    if (result.config.overlayStudioUrl) {
-      $('overlay-studio-url').textContent = result.config.overlayStudioUrl;
-    }
-    if (result.config.overlayPreviewUrl && $('overlay-local-url')) {
-      $('overlay-local-url').textContent = result.config.overlayPreviewUrl;
+    if (typeof fillOverlayUrlUi === 'function') {
+      fillOverlayUrlUi(result.config, { force: true });
     }
     applyWindowPrefUi(Boolean(result.config.alwaysOnTop), Boolean(result.config.compactViewer));
     if (JSON.stringify(collectConfig()) === JSON.stringify(payload)) {

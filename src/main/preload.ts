@@ -15,6 +15,7 @@ const api = {
   saveConfig: (partial: Record<string, unknown>) =>
     ipcRenderer.invoke('config:save', partial),
   resetConfig: () => ipcRenderer.invoke('config:reset'),
+  resetConfigTab: (tab: string) => ipcRenderer.invoke('config:reset-tab', tab),
   exportConfig: () => ipcRenderer.invoke('config:export'),
   importConfig: () => ipcRenderer.invoke('config:import'),
   getStatus: () => ipcRenderer.invoke('live:status'),
@@ -53,9 +54,18 @@ const api = {
   getTestGifts: () => ipcRenderer.invoke('tester:gifts'),
   refreshTestGifts: (uniqueId?: string) =>
     ipcRenderer.invoke('tester:gifts-refresh', uniqueId),
-  previewOverlay: (target?: string, streamSettings?: Record<string, unknown>) =>
-    ipcRenderer.invoke('overlay:preview', target, streamSettings),
-  clearOverlay: () => ipcRenderer.invoke('overlay:clear'),
+  previewOverlay: (
+    target?: string,
+    streamSettings?: Record<string, unknown>,
+    kind?: string,
+  ) => ipcRenderer.invoke('overlay:preview', target, streamSettings, kind),
+  pushOverlayRankingMotion: (streamSettings?: Record<string, unknown>) =>
+    ipcRenderer.invoke('overlay:push-ranking-motion', streamSettings),
+  pushOverlayLook: (streamSettings?: Record<string, unknown>) =>
+    ipcRenderer.invoke('overlay:push-look', streamSettings),
+  getOverlaySamplePlan: (streamSettings?: Record<string, unknown>) =>
+    ipcRenderer.invoke('overlay:sample-plan', streamSettings),
+  clearOverlay: (kind?: string) => ipcRenderer.invoke('overlay:clear', kind),
   clearOverlayPin: () => ipcRenderer.invoke('overlay:clear-pin'),
   copyOverlayUrl: (kind?: string) => ipcRenderer.invoke('overlay:copy-url', kind),
   copyVoicevoxCredit: () => ipcRenderer.invoke('tts:copy-credit'),

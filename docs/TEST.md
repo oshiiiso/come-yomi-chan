@@ -73,7 +73,8 @@ scripts/verify-pin-leave.js  # Electron で固定枠の逆再生退場
 | `overlay-name-colors.test.ts` | 配信ソースの名前色5色の正規化とユーザーごとの色割り当て |
 | `speech-replace-map.test.ts` | 読み上げ用置換辞書の正規化・適用・テキスト解析・上限 |
 | `viewer-log-persist.test.ts` | コメント画面ログの復元行・件数上限・古い行の捨て |
-| `overlay-url.test.ts` | LIVE Studio 向け URL と公開ホスト |
+| `overlay-url.test.ts` | LIVE Studio 向け URL と公開ホスト。コピー kind と URL 束 |
+| `ui-mirrors.test.ts` | `src/shared` と `ui/js` / `ui/overlay` の定数ミラー（URL kind・名前色・テンプレ差し込み・ファンレベ） |
 | `ui-theme.test.ts` | アプリの明るさ（system / dark / light） |
 | `fan-club-name.test.ts` | ファンクラブ名の整形と配信で覚えた名前 |
 | `fan-level-look.test.ts` | ファンレベの段階と色 |
@@ -83,7 +84,7 @@ scripts/verify-pin-leave.js  # Electron で固定枠の逆再生退場
 | `config-store.test.ts` | 初期化は TikTok ID とポートだけ残す |
 | `config-transfer.test.ts` | 設定 JSON の書き出し／読み込み。別アプリと壊れた JSON は拒否 |
 | `session-log.test.ts` | タブ区切りログ、行数上限、ファイル名 |
-| `messages.test.ts` | レンダラ向け文言が IPC で渡せる形。`ui/js/renderer-copy.js` のキーと一致 |
+| `messages.test.ts` | レンダラ向け文言が IPC で渡せる形。`ui/js/renderer-copy.js` のキーと主要文言の一致 |
 | `preload-channels.test.ts` | preload は `electron` 以外を import しない。チャンネル名は `IpcChannels` と一致 |
 | `error-utils.test.ts` | 例外から表示用メッセージを取る |
 | `with-timeout.test.ts` | 制限時間つき待ちと close |
@@ -92,7 +93,7 @@ scripts/verify-pin-leave.js  # Electron で固定枠の逆再生退場
 
 | ファイル | 見ていること |
 |---|---|
-| `render-template.test.ts` | `{user}` `{comment}` `{gift}` `{count}` `{likes}` の展開。個数・省略・拍（半角 `.`） |
+| `render-template.test.ts` | `{user}` `{comment}` `{gift}` `{count}` `{likes}` `{event}` の展開。`**強調**` の除去。個数・省略・拍（半角 `.`） |
 
 ### TikTok イベント読み取り（`src/test/tiktok/`）
 

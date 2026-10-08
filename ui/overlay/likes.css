@@ -1,0 +1,475 @@
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color-scheme: dark;
+  font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+}
+
+html[data-preview="1"][data-backdrop="checker"],
+html[data-preview="1"][data-backdrop="checker"] body {
+  background:
+    repeating-conic-gradient(#3a3d45 0% 25%, #1a1c21 0% 50%) 0 0 / 22px 22px;
+}
+
+html[data-preview="1"][data-backdrop="green"],
+html[data-preview="1"][data-backdrop="green"] body {
+  background: #00b140;
+}
+
+html[data-preview="1"][data-backdrop="magenta"],
+html[data-preview="1"][data-backdrop="magenta"] body {
+  background: #ff00ff;
+}
+
+html[data-preview="1"][data-backdrop="dark"],
+html[data-preview="1"][data-backdrop="dark"] body {
+  background: #121317;
+}
+
+.likes-root {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 16px;
+  box-sizing: border-box;
+  pointer-events: none;
+}
+
+html[data-preview="1"] .likes-root {
+  padding: 28px 20px;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.likes-list {
+  --likes-font: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
+  --likes-font-size: 22px;
+  --likes-bg-alpha: 48%;
+  --likes-avatar-size: 36px;
+  --likes-item-radius: 14px;
+  --likes-row-gap: 6px;
+  --likes-panel-width: 420px;
+  --likes-neon-hue: 280;
+  /* 1〜3位は文字だけ大きくする。列幅は基準文字サイズで揃える */
+  --likes-mark: max(var(--likes-avatar-size), calc(var(--likes-font-size) * 2.5));
+  position: relative;
+  margin: 0;
+  padding: 14px 16px;
+  list-style: none;
+  width: fit-content;
+  max-width: min(100%, var(--likes-panel-width));
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--likes-row-gap);
+  background: rgb(10 12 18 / var(--likes-bg-alpha));
+  border-radius: calc(var(--likes-item-radius) + 4px);
+  box-sizing: border-box;
+  font-family: var(--likes-font);
+}
+
+.likes-list[hidden] {
+  display: none !important;
+}
+
+.likes-row {
+  display: grid;
+  grid-template-columns: var(--likes-mark) var(--likes-mark) minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 4px 8px;
+  border-radius: var(--likes-item-radius);
+  color: #fff;
+  font-size: var(--likes-font-size);
+  font-weight: 700;
+  line-height: 1.25;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(0, 0, 0, 0.9),
+    1px 0 0 rgba(0, 0, 0, 0.9),
+    -1px 0 0 rgba(0, 0, 0, 0.9),
+    0 -1px 0 rgba(0, 0, 0, 0.9),
+    0 3px 8px rgba(0, 0, 0, 0.55);
+}
+
+.likes-list--hide-avatar .likes-row {
+  grid-template-columns: var(--likes-mark) minmax(0, 1fr);
+}
+
+.likes-rank {
+  position: relative;
+  width: var(--likes-mark);
+  height: var(--likes-mark);
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+  font-size: calc(var(--likes-font-size) * 0.78);
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0.88;
+  text-align: center;
+  z-index: 0;
+}
+
+/* 1〜3位: 王冠の中に順位数字 */
+.likes-row--1 .likes-rank,
+.likes-row--2 .likes-rank,
+.likes-row--3 .likes-rank {
+  opacity: 1;
+  color: #1a1408;
+  text-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.35),
+    0 0 2px rgba(0, 0, 0, 0.25);
+  font-size: calc(var(--likes-font-size) * 0.62);
+  /* 王冠の帯あたりに数字が来るよう少し下げる */
+  padding-top: 18%;
+  box-sizing: border-box;
+}
+
+.likes-row--1 .likes-rank::before,
+.likes-row--2 .likes-rank::before,
+.likes-row--3 .likes-rank::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.45));
+}
+
+.likes-row--1 .likes-rank::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23f5c842' stroke='%23b8860b' stroke-width='2' stroke-linejoin='round' d='M8 42 L14 18 L26 34 L32 10 L38 34 L50 18 L56 42 Z'/%3E%3Cpath fill='%23ffd86b' d='M10 42 H54 V50 H10 Z'/%3E%3Ccircle cx='14' cy='18' r='3.2' fill='%23fff3c4' stroke='%23b8860b' stroke-width='1.2'/%3E%3Ccircle cx='32' cy='10' r='3.6' fill='%23fff3c4' stroke='%23b8860b' stroke-width='1.2'/%3E%3Ccircle cx='50' cy='18' r='3.2' fill='%23fff3c4' stroke='%23b8860b' stroke-width='1.2'/%3E%3C/svg%3E");
+}
+
+.likes-row--2 .likes-rank::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23d5dde8' stroke='%238a96a8' stroke-width='2' stroke-linejoin='round' d='M8 42 L14 18 L26 34 L32 10 L38 34 L50 18 L56 42 Z'/%3E%3Cpath fill='%23e8eef6' d='M10 42 H54 V50 H10 Z'/%3E%3Ccircle cx='14' cy='18' r='3.2' fill='%23f7f9fc' stroke='%238a96a8' stroke-width='1.2'/%3E%3Ccircle cx='32' cy='10' r='3.6' fill='%23f7f9fc' stroke='%238a96a8' stroke-width='1.2'/%3E%3Ccircle cx='50' cy='18' r='3.2' fill='%23f7f9fc' stroke='%238a96a8' stroke-width='1.2'/%3E%3C/svg%3E");
+}
+
+.likes-row--3 .likes-rank::before {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath fill='%23d4924a' stroke='%238a5a28' stroke-width='2' stroke-linejoin='round' d='M8 42 L14 18 L26 34 L32 10 L38 34 L50 18 L56 42 Z'/%3E%3Cpath fill='%23e8ab6a' d='M10 42 H54 V50 H10 Z'/%3E%3Ccircle cx='14' cy='18' r='3.2' fill='%23f6d2a8' stroke='%238a5a28' stroke-width='1.2'/%3E%3Ccircle cx='32' cy='10' r='3.6' fill='%23f6d2a8' stroke='%238a5a28' stroke-width='1.2'/%3E%3Ccircle cx='50' cy='18' r='3.2' fill='%23f6d2a8' stroke='%238a5a28' stroke-width='1.2'/%3E%3C/svg%3E");
+}
+
+.likes-avatar {
+  width: var(--likes-mark);
+  height: var(--likes-mark);
+  border-radius: 50%;
+  object-fit: cover;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.18);
+}
+
+.likes-avatar--empty {
+  display: inline-block;
+}
+
+.likes-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0;
+  line-height: 1.2;
+}
+
+.likes-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.likes-count-wrap {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.28em;
+  min-width: 0;
+}
+
+.likes-count {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.95;
+}
+
+.likes-unit {
+  font-size: 0.55em;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  opacity: 0.72;
+  text-transform: lowercase;
+}
+
+.likes-list--hide-unit .likes-unit {
+  display: none;
+}
+
+/* 首位ほど豪華に（標準・豪華の共通）。左右パディングは揃えて列ズレを防ぐ */
+.likes-row--1 {
+  font-size: calc(var(--likes-font-size) * 1.35);
+  padding-top: 10px;
+  padding-bottom: 10px;
+  background:
+    linear-gradient(110deg, rgba(255, 214, 102, 0.28), rgba(255, 170, 40, 0.1) 55%, rgba(255, 214, 102, 0.18));
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 214, 120, 0.55),
+    0 6px 18px rgba(0, 0, 0, 0.35);
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(0, 0, 0, 0.9),
+    0 0 12px rgba(255, 200, 80, 0.45),
+    0 4px 10px rgba(0, 0, 0, 0.55);
+}
+
+.likes-row--1 .likes-count {
+  color: #ffe7a8;
+  opacity: 1;
+}
+
+.likes-row--1 .likes-unit {
+  color: #f6d98a;
+  opacity: 0.85;
+}
+
+.likes-row--2 {
+  font-size: calc(var(--likes-font-size) * 1.15);
+  padding-top: 8px;
+  padding-bottom: 8px;
+  background:
+    linear-gradient(110deg, rgba(210, 220, 235, 0.22), rgba(160, 175, 195, 0.08) 60%, rgba(210, 220, 235, 0.14));
+  box-shadow:
+    inset 0 0 0 1px rgba(220, 230, 245, 0.4),
+    0 4px 14px rgba(0, 0, 0, 0.3);
+}
+
+.likes-row--2 .likes-count {
+  color: #edf2fa;
+}
+
+.likes-row--3 {
+  font-size: calc(var(--likes-font-size) * 1.05);
+  padding-top: 7px;
+  padding-bottom: 7px;
+  background:
+    linear-gradient(110deg, rgba(220, 150, 90, 0.22), rgba(160, 100, 50, 0.08) 60%, rgba(220, 150, 90, 0.14));
+  box-shadow:
+    inset 0 0 0 1px rgba(230, 170, 110, 0.4),
+    0 3px 12px rgba(0, 0, 0, 0.28);
+}
+
+.likes-row--3 .likes-count {
+  color: #f3d0a8;
+}
+
+.likes-row--rest {
+  opacity: 0.92;
+}
+
+/* 豪華 */
+.likes-list--luxury {
+  padding: 18px 20px;
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 214, 120, 0.22),
+    0 10px 28px rgba(0, 0, 0, 0.4);
+}
+
+.likes-list--luxury .likes-row--1 {
+  font-size: calc(var(--likes-font-size) * 1.45);
+}
+
+/* コンパクト */
+.likes-list--compact {
+  padding: 8px 10px;
+}
+
+.likes-list--compact .likes-row {
+  padding: 3px 4px;
+  gap: 6px;
+  font-weight: 600;
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(0, 0, 0, 0.85);
+}
+
+.likes-list--compact .likes-row--1,
+.likes-list--compact .likes-row--2,
+.likes-list--compact .likes-row--3 {
+  font-size: var(--likes-font-size);
+  padding-top: 4px;
+  padding-bottom: 4px;
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.9),
+    0 1px 0 rgba(0, 0, 0, 0.85);
+}
+
+.likes-list--compact .likes-row--1 .likes-count {
+  color: #ffe08a;
+}
+
+/* ネオン */
+.likes-list--neon {
+  background: rgb(8 6 18 / var(--likes-bg-alpha));
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--likes-neon-hue) 90% 70% / 0.35),
+    0 0 24px hsl(var(--likes-neon-hue) 90% 55% / 0.25);
+}
+
+.likes-list--neon .likes-row {
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 0 10px hsl(var(--likes-neon-hue) 90% 60% / 0.45);
+}
+
+.likes-list--neon .likes-row--1 {
+  background: linear-gradient(
+    110deg,
+    hsl(var(--likes-neon-hue) 90% 60% / 0.28),
+    hsl(var(--likes-neon-hue) 80% 45% / 0.08) 60%,
+    hsl(var(--likes-neon-hue) 90% 60% / 0.18)
+  );
+  box-shadow:
+    inset 0 0 0 1px hsl(var(--likes-neon-hue) 90% 70% / 0.55),
+    0 0 18px hsl(var(--likes-neon-hue) 90% 55% / 0.35);
+}
+
+.likes-list--neon .likes-row--1 .likes-count,
+.likes-list--neon .likes-row--1 .likes-unit {
+  color: hsl(var(--likes-neon-hue) 90% 80%);
+}
+
+.likes-list--neon .likes-row--2,
+.likes-list--neon .likes-row--3 {
+  background: hsl(var(--likes-neon-hue) 40% 40% / 0.12);
+  box-shadow: inset 0 0 0 1px hsl(var(--likes-neon-hue) 70% 70% / 0.28);
+}
+
+/* シンプル */
+.likes-list--minimal {
+  background: transparent;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.likes-list--minimal .likes-row,
+.likes-list--minimal .likes-row--1,
+.likes-list--minimal .likes-row--2,
+.likes-list--minimal .likes-row--3 {
+  background: transparent;
+  box-shadow: none;
+  padding: 2px 0;
+  font-size: var(--likes-font-size);
+  text-shadow:
+    0 0 2px rgba(0, 0, 0, 0.95),
+    0 1px 0 rgba(0, 0, 0, 0.9),
+    1px 0 0 rgba(0, 0, 0, 0.9),
+    -1px 0 0 rgba(0, 0, 0, 0.9),
+    0 -1px 0 rgba(0, 0, 0, 0.9);
+}
+
+.likes-list--minimal .likes-row--1 .likes-count {
+  color: #ffe08a;
+}
+
+/* 入れ替わりアニメ */
+.likes-list {
+  --ranking-motion-ms: 480ms;
+}
+
+.likes-row--flip {
+  transition: transform var(--ranking-motion-ms) cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  z-index: 2;
+}
+
+.likes-row--enter {
+  animation: likes-row-enter var(--ranking-motion-ms) cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.likes-row--leave {
+  transition:
+    opacity var(--ranking-motion-ms) ease,
+    transform var(--ranking-motion-ms) ease;
+  opacity: 0;
+  transform: translateY(-8px) scale(0.97);
+  pointer-events: none;
+  /* top/left/width は JS で固定。フロー外にして順位入れ替えの計測を守る */
+  box-sizing: border-box;
+}
+
+.likes-row--soft {
+  animation: likes-row-soft var(--ranking-motion-ms) ease both;
+}
+
+.likes-row--flash {
+  animation: likes-row-flash var(--ranking-motion-ms) ease both;
+}
+
+@keyframes likes-row-enter {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes likes-row-soft {
+  0% {
+    opacity: 0.55;
+    transform: scale(0.98);
+  }
+  55% {
+    opacity: 1;
+    transform: scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes likes-row-flash {
+  0% {
+    filter: brightness(1);
+    box-shadow: inherit;
+  }
+  35% {
+    filter: brightness(1.35);
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 230, 150, 0.75),
+      0 0 18px rgba(255, 200, 80, 0.45);
+  }
+  100% {
+    filter: brightness(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .likes-row--flip,
+  .likes-row--enter,
+  .likes-row--leave,
+  .likes-row--soft,
+  .likes-row--flash {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+    opacity: 1 !important;
+    filter: none !important;
+  }
+}

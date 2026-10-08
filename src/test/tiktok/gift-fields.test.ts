@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { firstImageUrl, giftIdFromEvent, giftImageUrlFromEvent, giftNameFromEvent, catalogGiftsFromList, normalizeCatalogGifts, mergeCatalogGift, mergeCatalogGiftsFromFetch, catalogGiftNameById, resolveGiftNameWithCatalog } from '../../tiktok/gift-fields';
+import { firstImageUrl, giftIdFromEvent, giftImageUrlFromEvent, giftNameFromEvent, catalogGiftsFromList, normalizeCatalogGifts, mergeCatalogGift, mergeCatalogGiftsFromFetch, catalogGiftNameById, catalogGiftImageById, resolveGiftNameWithCatalog } from '../../tiktok/gift-fields';
 
 test('ギフト画像は urlList から取る', () => {
   assert.equal(
@@ -26,6 +26,23 @@ test('ギフトイベントからアイコンURLと名前を取る', () => {
     'https://p16-webcast.tiktokcdn.com/img/rose.png',
   );
   assert.equal(giftNameFromEvent(raw), 'Rose');
+});
+
+test('カタログのギフトIDからアイコンURLを取る', () => {
+  const catalog = [
+    {
+      id: '5655',
+      name: 'バラ',
+      imageUrl: 'https://p16-webcast.tiktokcdn.com/rose.png',
+      diamondCount: 1,
+    },
+  ];
+  assert.equal(
+    catalogGiftImageById(catalog, '5655'),
+    'https://p16-webcast.tiktokcdn.com/rose.png',
+  );
+  assert.equal(catalogGiftImageById(catalog, '0'), '');
+  assert.equal(catalogGiftImageById(undefined, '5655'), '');
 });
 
 test('ギフトIDを取る', () => {
@@ -215,6 +232,71 @@ test('常設英→日はカタログが無くてもダイヤ一致で直す', ()
     ),
     'Heart Me',
   );
+});
+
+test('入れ子の日本語名は英語の正式名より優先し、再取得の英語では潰さない', () => {
+  assert.equal(
+    giftNameFromEvent({
+      gift: {
+        name: 'Star Map Polaris',
+        giftTexts: [{ giftTextName: '星まつり' }],
+      },
+    }),
+    '星まつり',
+  );
+  assert.equal(
+    giftNameFromEvent({
+      gift: {
+        name: 'Star Map Polaris',
+        describe: {
+          defaultPattern: 'sent Star Map Polaris',
+          pieces: [{ stringValue: '星まつり' }],
+        },
+      },
+    }),
+    '星まつり',
+  );
+  const gifts = catalogGiftsFromList({
+    gifts: [
+      {
+        id: 9,
+        name: 'Star Map Polaris',
+        diamond_count: 1000,
+        gift_texts: [{ gift_text_name: '星まつり' }],
+      },
+    ],
+  });
+  assert.equal(gifts[0].name, '星まつり');
+  const merged = mergeCatalogGiftsFromFetch(gifts, [
+    { id: '9', name: 'Star Map Polaris', imageUrl: '', diamondCount: 1000 },
+  ]);
+  assert.equal(merged.find((gift) => gift.id === '9')?.name, '星まつり');
+});
+
+test('地域の表示名は英語の正式名より優先する', () => {
+  assert.equal(
+    giftNameFromEvent({
+      gift: { name: 'Star Map Polaris', describe: '星まつり' },
+    }),
+    '星まつり',
+  );
+  assert.equal(
+    resolveGiftNameWithCatalog(
+      { gift: { name: 'Star Map Polaris', describe: '星まつり' }, diamondCount: 1 },
+      [],
+    ),
+    '星まつり',
+  );
+  assert.equal(
+    giftNameFromEvent({
+      gift: { name: 'Star Map Polaris', describe: '星まつりを贈りました。' },
+    }),
+    'Star Map Polaris',
+  );
+  const gifts = catalogGiftsFromList({
+    gifts: [{ id: 9, name: 'Star Map Polaris', describe: '星まつり', diamond_count: 1000 }],
+  });
+  assert.equal(gifts[0].name, '星まつり');
 });
 
 test('配信の日本語名は英語の初期一覧名を上書きする', () => {

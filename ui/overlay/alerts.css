@@ -77,27 +77,19 @@ html[data-preview="1"][data-backdrop="dark"] body {
   display: none !important;
 }
 
-.alert-media-svg {
-  width: 100%;
-  height: 100%;
-}
-
-.alert-media-svg[hidden] {
-  display: none !important;
-}
-
-.alert-media-svg svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
 .alert-text {
   margin: 0;
+  width: 100%;
+  max-width: 100%;
   color: #fff;
   font-size: clamp(28px, 4.2vw, 48px);
   font-weight: 700;
   line-height: 1.35;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
   text-shadow:
     0 0 2px rgba(0, 0, 0, 0.95),
     0 1px 0 rgba(0, 0, 0, 0.9),
@@ -115,6 +107,11 @@ html[data-preview="1"][data-backdrop="dark"] body {
 
 .alert-name {
   font-weight: inherit;
+  text-shadow: inherit;
+}
+
+.alert-accent {
+  font-weight: 800;
   text-shadow: inherit;
 }
 

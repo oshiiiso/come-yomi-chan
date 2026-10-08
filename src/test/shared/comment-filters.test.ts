@@ -38,8 +38,10 @@ test('スタンプ代替文言と絵文字だけを絵文字コメントと判�
   assert.equal(isEmoteOnlyComment('絵文字'), true);
   assert.equal(isEmoteOnlyComment('😂'), true);
   assert.equal(isEmoteOnlyComment('😂😂 ✨'), true);
+  assert.equal(isEmoteOnlyComment('[heart][wow][hi]'), true);
   assert.equal(isEmoteOnlyComment('草'), false);
   assert.equal(isEmoteOnlyComment('草😂'), false);
+  assert.equal(isEmoteOnlyComment('歌[heart]'), false);
   assert.equal(isEmoteOnlyComment(''), false);
 });
 

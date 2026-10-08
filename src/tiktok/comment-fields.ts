@@ -96,8 +96,9 @@ export function commentEmotesFromEvent(raw: Record<string, unknown>): CommentEmo
     }
     const nested = asRecord(item.emote);
     collected.push({
+      // proto は index。旧コネクタ簡略形は placeInComment。
       index: asIndex(
-        item.placeInComment ?? item.index ?? nested.placeInComment ?? nested.index ?? 0,
+        item.index ?? item.placeInComment ?? nested.index ?? nested.placeInComment ?? 0,
       ),
       imageUrl,
     });

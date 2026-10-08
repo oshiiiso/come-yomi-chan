@@ -8,15 +8,28 @@
   const stage = document.getElementById('alert-stage');
   const mediaWrap = document.getElementById('alert-media-wrap');
   const media = document.getElementById('alert-media');
-  const mediaSvg = document.getElementById('alert-media-svg');
   const textEl = document.getElementById('alert-text');
   const isPreview = new URLSearchParams(location.search).has('preview');
-  const templateSvgCache = new Map();
-  const DEFAULT_NAME_COLORS = ['#5eead4', '#93c5fd', '#fcd34d', '#f9a8d4', '#86efac'];
+  const DEFAULT_NAME_COLORS = window.OverlayNameColors?.DEFAULT_NAME_COLORS || [
+    '#5eead4',
+    '#93c5fd',
+    '#fcd34d',
+    '#f9a8d4',
+    '#86efac',
+  ];
 
   let displayMs = DEFAULT_DISPLAY_MS;
   let nameColorEnabled = true;
   let nameColors = [...DEFAULT_NAME_COLORS];
+  const DEFAULT_TEMPLATE_ACCENT_COLORS = {
+    gift: '#5eead4',
+    count: '#93c5fd',
+    likes: '#93c5fd',
+    comment: '#f1f3f5',
+    event: '#f9a8d4',
+    emphasis: '#86efac',
+  };
+  let templateAccentColors = { ...DEFAULT_TEMPLATE_ACCENT_COLORS };
   /** @type {Array<{ type: string, displayText: string, displayParts: Array<{ kind: string, value: string, color?: string }>, imageUrl: string|null, displayMs: number, user: { nickname?: string, uniqueId?: string }|null, nameColor: string|null }>} */
   const queue = [];
   let busy = false;
@@ -51,24 +64,7 @@
     }
   }
 
-  function normalizeNameColors(raw) {
-    const list = Array.isArray(raw) ? raw : [];
-    return DEFAULT_NAME_COLORS.map((def, index) => {
-      const candidate = list[index];
-      return typeof candidate === 'string' && /^#[0-9a-fA-F]{6}$/.test(candidate)
-        ? candidate.toLowerCase()
-        : def;
-    });
-  }
-
-  function sameNameColors(left, right) {
-    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-      return false;
-    }
-    return left.every((color, index) => color === right[index]);
-  }
-
-  function nameColorIndex(uniqueId, nickname) {
+  function nameColorIndexLocal(uniqueId, nickname) {
     const id = String(uniqueId ?? '')
       .replace(/^@/, '')
       .trim()
@@ -84,10 +80,36 @@
     return Math.abs(hash) % DEFAULT_NAME_COLORS.length;
   }
 
+  function normalizeNameColors(raw) {
+    if (window.OverlayNameColors?.normalizeNameColors) {
+      return window.OverlayNameColors.normalizeNameColors(raw);
+    }
+    const list = Array.isArray(raw) ? raw : [];
+    return DEFAULT_NAME_COLORS.map((def, index) => {
+      const candidate = list[index];
+      return typeof candidate === 'string' && /^#[0-9a-fA-F]{6}$/.test(candidate)
+        ? candidate.toLowerCase()
+        : def;
+    });
+  }
+
+  function sameNameColors(left, right) {
+    if (window.OverlayNameColors?.sameNameColors) {
+      return window.OverlayNameColors.sameNameColors(left, right);
+    }
+    if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
+      return false;
+    }
+    return left.every((color, index) => color === right[index]);
+  }
+
   function nameColorForUser(uniqueId, nickname) {
+    if (window.OverlayNameColors?.nameColorForUser) {
+      return window.OverlayNameColors.nameColorForUser(uniqueId, nickname, nameColors);
+    }
     const colors =
       nameColors.length === DEFAULT_NAME_COLORS.length ? nameColors : [...DEFAULT_NAME_COLORS];
-    return colors[nameColorIndex(uniqueId, nickname)];
+    return colors[nameColorIndexLocal(uniqueId, nickname)];
   }
 
   function applyNameColorSettings(message) {
@@ -106,6 +128,50 @@
       }
     }
     return changed;
+  }
+
+  function normalizeTemplateAccentColors(raw) {
+    const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const out = { ...DEFAULT_TEMPLATE_ACCENT_COLORS };
+    for (const key of Object.keys(DEFAULT_TEMPLATE_ACCENT_COLORS)) {
+      const value = record[key];
+      if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
+        out[key] = value.toLowerCase();
+      }
+    }
+    return out;
+  }
+
+  function sameTemplateAccentColors(left, right) {
+    return Object.keys(DEFAULT_TEMPLATE_ACCENT_COLORS).every((key) => left?.[key] === right?.[key]);
+  }
+
+  function applyTemplateAccentSettings(message) {
+    if (!message || typeof message !== 'object' || !('templateAccentColors' in message)) {
+      return false;
+    }
+    const next = normalizeTemplateAccentColors(message.templateAccentColors);
+    if (sameTemplateAccentColors(next, templateAccentColors)) {
+      return false;
+    }
+    templateAccentColors = next;
+    return true;
+  }
+
+  function refreshAccentColors() {
+    if (!(textEl instanceof HTMLElement)) {
+      return;
+    }
+    for (const accentEl of textEl.querySelectorAll('.alert-accent[data-accent-token]')) {
+      if (!(accentEl instanceof HTMLElement)) {
+        continue;
+      }
+      const token = accentEl.dataset.accentToken || '';
+      const color = templateAccentColors[token];
+      if (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) {
+        accentEl.style.color = color.toLowerCase();
+      }
+    }
   }
 
   function paintNameColor(el, color) {
@@ -135,12 +201,7 @@
       }
       const uniqueId = nameEl.dataset.uniqueId || '';
       const nickname = nameEl.dataset.nickname || nameEl.textContent || '';
-      const fallback = nameEl.dataset.nameColor || '';
-      const color =
-        fallback && /^#[0-9a-fA-F]{6}$/.test(fallback)
-          ? fallback.toLowerCase()
-          : nameColorForUser(uniqueId, nickname);
-      paintNameColor(nameEl, color);
+      paintNameColor(nameEl, nameColorForUser(uniqueId, nickname));
     }
   }
 
@@ -169,12 +230,25 @@
           if (!value) {
             return null;
           }
-          if (
-            part.kind === 'name' &&
-            typeof part.color === 'string' &&
-            /^#[0-9a-fA-F]{6}$/.test(part.color)
-          ) {
-            return { kind: 'name', value, color: part.color.toLowerCase() };
+          if (part.kind === 'name') {
+            const color =
+              typeof part.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(part.color)
+                ? part.color.toLowerCase()
+                : '';
+            return { kind: 'name', value, color };
+          }
+          if (part.kind === 'accent') {
+            const color =
+              typeof part.color === 'string' && /^#[0-9a-fA-F]{6}$/.test(part.color)
+                ? part.color.toLowerCase()
+                : '';
+            const token = typeof part.token === 'string' ? part.token : '';
+            return {
+              kind: 'accent',
+              value,
+              color,
+              ...(token ? { token } : {}),
+            };
           }
           return { kind: 'text', value };
         })
@@ -215,10 +289,27 @@
         nameSpan.className = 'alert-name';
         nameSpan.dataset.uniqueId = String(uniqueId || '');
         nameSpan.dataset.nickname = part.value;
-        nameSpan.dataset.nameColor = part.color || '';
-        paintNameColor(nameSpan, nameColorEnabled ? part.color || '' : '');
+        paintNameColor(
+          nameSpan,
+          nameColorEnabled ? nameColorForUser(uniqueId, part.value) : '',
+        );
         nameSpan.textContent = part.value;
         textEl.appendChild(nameSpan);
+        continue;
+      }
+      if (part.kind === 'accent') {
+        const accentSpan = document.createElement('span');
+        accentSpan.className = 'alert-accent';
+        if (typeof part.token === 'string' && part.token) {
+          accentSpan.dataset.accentToken = part.token;
+        }
+        const resolved =
+          typeof part.token === 'string' && templateAccentColors[part.token]
+            ? templateAccentColors[part.token]
+            : part.color;
+        accentSpan.style.color = resolved || '';
+        accentSpan.textContent = part.value;
+        textEl.appendChild(accentSpan);
         continue;
       }
       textEl.appendChild(document.createTextNode(part.value));
@@ -265,51 +356,17 @@
       media.hidden = true;
       media.removeAttribute('src');
     }
-    if (mediaSvg) {
-      mediaSvg.hidden = true;
-      mediaSvg.replaceChildren();
-    }
-  }
-
-  function isAlertTemplateUrl(url) {
-    return typeof url === 'string' && url.includes('/overlay/alert-templates/');
-  }
-
-  async function loadTemplateSvg(url) {
-    if (templateSvgCache.has(url)) {
-      return templateSvgCache.get(url);
-    }
-    const response = await fetch(url, { cache: 'force-cache' });
-    if (!response.ok) {
-      throw new Error(`template ${response.status}`);
-    }
-    const text = await response.text();
-    templateSvgCache.set(url, text);
-    return text;
   }
 
   async function applyMedia(imageUrl, generation) {
     clearMedia();
-    if (!imageUrl || !mediaWrap) {
+    if (!imageUrl || !mediaWrap || !media) {
       return;
     }
-    if (isAlertTemplateUrl(imageUrl) && mediaSvg) {
-      try {
-        const svgText = await loadTemplateSvg(imageUrl);
-        if (!isCurrentGeneration(generation)) {
-          return;
-        }
-        mediaSvg.innerHTML = svgText;
-        mediaSvg.hidden = false;
-        mediaWrap.hidden = false;
-        return;
-      } catch {
-        // テンプレ取得失敗時は通常画像として試す
-      }
-    }
-    if (!isCurrentGeneration(generation) || !media) {
+    if (!isCurrentGeneration(generation)) {
       return;
     }
+    // 同梱 GIF / ユーザー画像はどちらも <img>。バイナリを HTML に流し込まない
     media.hidden = false;
     media.src = imageUrl;
     mediaWrap.hidden = false;
@@ -426,6 +483,9 @@
     }
     if (applyNameColorSettings(message)) {
       refreshColoredNames();
+    }
+    if (applyTemplateAccentSettings(message)) {
+      refreshAccentColors();
     }
   }
 

@@ -139,8 +139,8 @@ function applyStatus(status) {
   }
   $('status-text').textContent = nextStatus.message || '未接続';
   syncLiveDurationClock(nextStatus);
-  if (nextStatus.overlayUrl) {
-    $('overlay-url').textContent = nextStatus.overlayUrl;
+  if (typeof fillOverlayUrlUi === 'function') {
+    fillOverlayUrlUi(nextStatus);
   }
   const overlayStatus = $('overlay-status-line');
   if (overlayStatus) {

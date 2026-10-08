@@ -4,6 +4,18 @@ let uiCopy = {
   helpTopics: {},
   invalidPort: 'ポートは 1024〜65535 で指定してください',
   invalidLikeMilestone: 'いいねの区切りは 1 以上の整数にしてください',
+  invalidOverlayLikeRankingMax: 'ランキングの人数は 1〜10 にしてください',
+  invalidOverlayRankingLikePollSec: 'ポーリング間隔は 1〜300 秒にしてください',
+  overlayRankingMotionLabel: '入れ替わりの動き',
+  overlayRankingMotionHint:
+    '順位が変わったときの動きです。スライドは行が上下に移動し、ふわっとは切り替わり、強調は上がった行を光らせます。「サンプルを出す」と入れ替わりを繰り返し、動きや速さを変えるとその場で切り替わります。「表示を消す」で止まります。',
+  overlayRankingMotionSlide: 'スライド',
+  overlayRankingMotionSoft: 'ふわっと',
+  overlayRankingMotionEmphasis: 'スライド＋強調',
+  overlayRankingMotionSpeedLabel: '入れ替わりの速さ',
+  overlayRankingMotionSpeed1: '遅い',
+  overlayRankingMotionSpeed2: 'ふつう',
+  overlayRankingMotionSpeed3: '速い',
   invalidDisplaySec: '表示時間は 1〜120 秒で指定してください',
   invalidDisplayChars: '表示の文字数上限は 10〜400 にしてください',
   invalidSpeechChars: '読み上げの文字数上限は 10〜400 にしてください',
@@ -13,13 +25,15 @@ let uiCopy = {
   invalidEventAlertSec: 'イベントアラートの表示時間は 1〜120 秒で指定してください',
   eventAlertLabel: 'イベントアラート',
   eventAlertHint:
-    '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。',
-  eventAlertMediaAuto: '自動',
+    '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。',
+  eventAlertGiftHint:
+    '別の配信ソース（イベントアラート用URL）に出します。初期はもらったギフトの画像です。取れないときは同梱GIFを出します。画像を選ぶと差し替え、× でもらったギフトに戻せます。',
+  eventAlertMediaAuto: 'もらったギフト',
   eventAlertMediaTemplate: 'テンプレ',
   eventAlertMediaFile: 'ファイル',
   eventAlertMediaNone: 'なし',
   eventAlertMediaAutoHint:
-    '初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。',
+    '初期はもらったギフトの画像です。取れないときは同梱GIFを出します。画像を選ぶと差し替え、× でもらったギフトに戻せます。',
   eventAlertTemplateNames: {
     gift: 'ギフト用テンプレ',
     follow: 'フォロー用テンプレ',
@@ -32,11 +46,67 @@ let uiCopy = {
   },
   eventAlertPickMedia: '画像を選ぶ',
   eventAlertResetTemplate: 'テンプレに戻す',
+  eventAlertResetAuto: 'もらったギフトに戻す',
   eventAlertSecLabel: '表示時間',
   eventAlertChatUrlTitle: 'コメント列（固定枠あり）',
   eventAlertAlertsUrlTitle: 'イベントアラート',
   eventAlertAlertsUrlHint:
-    '中央に画像や GIF を出す用です。初期は簡易テンプレです。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+    '中央に画像や GIF を出す用です。ギフトはもらった画像（取れないときは同梱GIF）、他は同梱GIFが初期です。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+  overlayUrlLikesTitle: 'ランキング',
+  overlayUrlLikesHint:
+    'セッション中のいいね／ダイヤ累計トップを出す用です。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+  overlayLikeRankingEnabledLabel: 'ランキングを配信ソースに出す',
+  overlayLikeRankingMaxLabel: 'ランキングの表示人数',
+  overlayLikeRankingHint:
+    '上の URL を別ソースとして貼ります。配信中の累計トップです（接続し直すとリセット）。見た目は下で変えられます。',
+  overlayRankingModeLabel: 'ランキングの種類',
+  overlayRankingModeLikes: 'いいね',
+  overlayRankingModeDiamonds: 'ダイヤ',
+  overlayRankingModeHint:
+    'いいねはセッション中のいいね累計、ダイヤは通常ギフトの個数×ダイヤの累計です。',
+  overlayRankingLikeSyncLabel: 'いいねの更新',
+  overlayRankingLikeSyncLive: '常時',
+  overlayRankingLikeSyncPoll: 'ポーリング',
+  overlayRankingLikeSyncHint:
+    'いいねが多い配信ではポーリングにすると配信ソースの負荷を抑えられます。ダイヤは常に即時です。',
+  overlayRankingLikePollSecLabel: 'ポーリング間隔（秒）',
+  likesLookTitle: 'ランキングの見た目',
+  likesLookHint:
+    'ランキング配信ソース専用の見た目です。プリセットを選んでから微調整できます。右のプレビューで確認できます。配信ソースへ出すときは「サンプルを出す」です。',
+  lookSectionComment: 'コメント',
+  lookSectionRanking: 'ランキング',
+  lookSectionAlerts: 'アラート',
+  lookSectionEasy: 'かんたん見た目',
+  lookSectionChat: 'コメントと固定枠',
+  lookSectionName: '名前と色',
+  lookSectionsLabel: 'オーバーレイの区分',
+  lookCommentSectionsLabel: 'コメントの区分',
+  lookAlertsHint:
+    '画像・文言・表示秒はイベントタブです。ここは配信用の URL です。右のプレビューはアラート用の画面で、中身は「サンプルを出す」で確認します。',
+  likesLookShowAvatarLabel: 'アイコン（アバター）を出す',
+  likesLookShowUnitLabel: '単位（likes／ダイヤ）を付ける',
+  likesLookPresetStandard: '標準',
+  likesLookPresetLuxury: '豪華',
+  likesLookPresetCompact: 'コンパクト',
+  likesLookPresetNeon: 'ネオン',
+  likesLookPresetMinimal: 'シンプル',
+  overlayUrlCardTitle: '配信ソースURL',
+  overlayUrlKindLabel: '配信ソースの種類',
+  overlayUrlCopyGroupLabel: 'URLのコピー',
+  overlayUrlChatHint:
+    'TikTok LIVE Studio でソース追加 → リンクに貼るときは LIVE Studio用、OBS のブラウザソースには OBS用を使います。',
+  overlayUrlLiveHint:
+    '「正しいURLを入力してください」と出るときは、127.0.0.1 を手打ちしていないか確認してください。LIVE Studio用を使います。',
+  overlayUrlObsHint:
+    'OBS のブラウザソースに貼ってください。自分の耳に二重で聞こえるときは、このソースの音声モニタリングをオフにしてください。',
+  overlayUrlAltHint: 'LIVE Studio で上のアドレスが通らないときだけ使います。',
+  overlayUrlCopyLiveLabel: 'LIVE Studio用をコピー',
+  overlayUrlCopyAltLabel: '別のURLをコピー',
+  overlayConnectSampleGroupLabel: '配信ソースの確認',
+  overlayConnectSample: 'サンプルを出す',
+  overlayConnectClear: '表示を消す',
+  overlayConnectSampleHint:
+    '今開いている区分の配信ソースにサンプルを出します。ランキングでは入れ替わりを繰り返し、「表示を消す」で止められます。',
   pickAlertMediaTitle: 'アラート用の画像・GIFを選ぶ',
   pickAlertMediaFilter: '画像',
   pickAlertMediaFailed: 'アラート画像の取り込みに失敗しました',
@@ -156,11 +226,13 @@ let uiCopy = {
     'コメントと固定枠が出るときと消えるときの動きです。次に出る行から効きます。プレビューは選ぶと再生されます。',
   overlayMotionSpeedLabel: '速さ',
   overlayMotionReplay: '動きを見る',
-  settingsTabLook: '配信の見た目',
+  settingsTabLook: 'オーバーレイ',
   lookTabHint:
-    'ここは視聴者の画面（配信ソース）の見た目です。コメント画面の文字サイズや幅は、コメント画面の上で変えます。',
+    '視聴者の画面に出す配信ソースです。上の区分でコメント・ランキング・アラートを切り替え、右のプレビューで確認します。\n\nコメント画面の文字サイズや欄の幅は、コメント画面上のコントロールで変えます。',
   lookChatTitle: 'コメント列',
   copyObsLabel: 'OBS用をコピー',
+  copyFailed: 'コピーに失敗しました',
+  copied: 'LIVE Studio用URLをコピーしました。このアドレスを貼ってください',
   overlayMotionFuwatto: 'ふわっと',
   overlayMotionFade: 'フェード',
   overlayMotionSlideUp: '下から',
@@ -197,8 +269,42 @@ let uiCopy = {
   overlayNameColorTitle: '名前の色',
   overlayNameColorEnabledLabel: '配信ソースで名前に色をつける',
   overlayNameColorEnabledHint:
-    '同じユーザーは常に同じ色になります。固定枠やイベントアラートにも付きます。初期のパレットのままなら、かんたん見た目のプリセットに合わせた色へ自動で変わります。自分で変えた色はそのままです。',
+    '同じユーザーは常に同じ色になります。固定枠やイベントアラートにも付きます。初期のパレットのまま（またはかんたん見た目用の色のまま）なら、かんたん見た目のプリセットに合わせた色へ自動で変わります。自分で変えた色はそのままです。差し込み色も同じルールです。',
   overlayNameColorPaletteLabel: '色のパレット（5色）',
+  overlayCustomCssSummary: 'カスタム CSS（上級者向け）',
+  overlayCustomCssLabel: '上書き用 CSS（空ならかんたん設定のまま）',
+  overlayCustomCssHint:
+    'コメント列の配信ソースだけに効きます。イベントアラート・ランキングには入りません。かんたん見た目のあとに上書きされます。',
+  overlayCustomCssRef: `骨格
+.overlay-root
+  ol#pin.chat.chat--pin          …固定枠
+  ol#chat.chat                   …コメント列
+    li.chat__item.chat__item--{種類}
+      img.chat__avatar
+      img.chat__gift             …ギフト時
+      .chat__body
+        .chat__name-line
+          .chat__name
+        .chat__text-line
+          .chat__text / .chat__accent / .chat__emote
+
+種類: comment gift follow share superFan envelope portal like member
+修飾: .chat--pin .chat--theme-* .chat--align-* .chat--hide-avatar .is-leaving
+
+.chat の変数（例）
+--bubble-rgb --bubble-text --bubble-alpha
+--body-size --avatar-size --gift-size --item-radius --chat-font
+--gift-color --event-color --like-color
+
+例
+.chat__item { background: rgb(0 0 0 / 55%); }
+.chat__body { font-size: 22px; }
+.chat--pin .chat__item { box-shadow: inset 0 0 0 2px #f59f00; }`,
+  templateEditorHint:
+    '欄の上のボタンで差し込みを入れられます。表示欄では差し込み横の色で強調色を変えられます。色付きの差し込みと **太字** で囲んだ文字は、固定枠・コメント列・イベントアラートで同じ色・太字になります。それ以外の平文は吹き出しの文字色です。{user} だけはユーザーごとの名前色です。差し込み色が初期（またはかんたん見た目用）のままなら、かんたん見た目のプリセットに合わせて変わります。自分で変えた色はそのままです。読み上げでは ** を外して中身だけ読みます。',
+  templateEmphasisInsertLabel: '**強調** を挿入',
+  templateAccentColorLabel: '差し込みの色',
+  colorPickerResetLabel: '初期色に戻す',
   viewerUnknownUser: '名前なし',
   viewerBadgeFan: 'メンレベ',
   viewerBadgeSuperFan: 'スパファン',
@@ -295,6 +401,17 @@ let uiCopy = {
   resetConfigLabel: '設定を初期化する',
   resetConfigHint:
     '文言・見た目・読み上げ・フィルタなどを最初の状態に戻します。TikTok ID と配信画面用のポートは残します。',
+  resetTabLabel: 'このタブを初期化する',
+  resetTabHints: {
+    connect: 'TikTok ID と、起動時の自動接続を最初の状態に戻します。',
+    filter: 'NGワード、ブロック、ミュート、呼び方、読み替えを空に戻します。',
+    comment: 'コメントの表示・読み上げ・サウンド・メンレベの色を最初の状態に戻します。',
+    gift: 'ギフトの表示・読み上げ・サウンド・アラートを最初の状態に戻します。',
+    events: 'フォローから入室までの表示・読み上げ・サウンド・アラートを最初の状態に戻します。',
+    look: '配信ソースの見た目と動きを最初の状態に戻します。ポートは残します。',
+    tts: '読み上げエンジンと速度などを最初の状態に戻します。',
+    app: '手前表示、明るさ、ショートカット、ログの最大行数を最初の状態に戻します。プロファイルは残します。',
+  },
   exportConfigLabel: 'プロファイルを書き出す',
   importConfigLabel: 'プロファイルを読み込む',
   transferConfigHint:

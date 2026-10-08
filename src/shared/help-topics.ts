@@ -47,7 +47,7 @@ export const HELP_HEADING_IDS: Record<string, HelpTopicId> = {
   いいね: HELP_HEADING_ID.like,
   ポータル: HELP_HEADING_ID.portal,
   VOICEVOX: HELP_HEADING_ID.voicevoxSetup,
-  配信の見た目: HELP_HEADING_ID.look,
+  オーバーレイ: HELP_HEADING_ID.look,
   テスター: HELP_HEADING_ID.tester,
   よくある質問: HELP_HEADING_ID.faq,
   アプリに出ない人がいる: HELP_HEADING_ID.commentsMissing,

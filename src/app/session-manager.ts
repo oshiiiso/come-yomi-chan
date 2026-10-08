@@ -1,17 +1,23 @@
 import { EventEmitter } from 'events';
 import { clipboard } from 'electron';
 import { APP_CONFIG } from '../shared/app-config';
-import { ConfigStore, getOverlayUrl } from '../shared/config-store';
-import { buildOverlaySamplePlan } from './overlay-sample-plan';
+import { ConfigStore } from '../shared/config-store';
+import {
+  buildAlertSamplePlan,
+  buildRankingSample,
+  buildOverlaySamplePlan,
+} from './overlay-sample-plan';
 import { overlayLookFromConfig } from '../shared/overlay-look';
+import { overlayLikesLookFromConfig } from '../shared/overlay-likes-look';
 import { overlayPinFromConfig } from '../shared/overlay-pin';
 import {
-  overlayAlertsPreviewUrl,
-  overlayAlertsPublicUrl,
-  overlayAlertsStudioUrl,
+  normalizeOverlayUrlKind,
   overlayPreviewUrl,
-  overlayStudioUrl,
+  overlayUrlFieldsForPort,
+  overlayUrlForCopyKind,
+  type OverlayUrlKind,
 } from '../shared/overlay-url';
+import type { OverlayClientRole } from '../overlay-server/overlay-server';
 import { getErrorMessage } from '../shared/error-utils';
 import { getLogger } from '../shared/logging-config';
 import { MSG } from '../shared/messages';
@@ -27,15 +33,21 @@ import {
   TtsVoiceInfo,
   CatalogGift,
 } from '../shared/types';
+import { DiamondTracker } from './diamond-tracker';
 import { LikeTracker } from './like-tracker';
 import { OverlayServer } from '../overlay-server/overlay-server';
 import { TikTokLiveWatcher } from '../tiktok/tiktok-client';
-import { catalogGiftsWithIcons, normalizeCatalogGifts } from '../tiktok/gift-fields';
+import {
+  catalogGiftImageById,
+  catalogGiftsWithIcons,
+  normalizeCatalogGifts,
+} from '../tiktok/gift-fields';
 import { finalizeCatalogGifts, dedupeAndSortCatalogGifts } from '../shared/permanent-gifts';
 import { japaneseNameForGift } from '../shared/permanent-gift-names';
 import {
   clipText,
   renderDisplayTemplate,
+  renderOverlayDisplay,
   renderSpeechParts,
   varsFromEvent,
 } from '../template/render-template';
@@ -44,11 +56,11 @@ import { pickEventTemplates } from '../shared/event-templates';
 import { resolveEventSpeech, resolveShowDisplay } from '../shared/event-pipeline';
 import { isEventSoundType, resolveEventSoundVolume } from '../shared/event-notify';
 import {
-  buildAlertDisplayParts,
   canonicalEventAlertType,
   resolveEventAlertDisplayMs,
   resolveEventAlertImageUrl,
   shouldEmitEventAlert,
+  type AlertDisplayPart,
 } from '../shared/event-alert';
 import { pruneUnreferencedAlertMediaFiles } from '../shared/alert-media-files';
 import { pruneUnreferencedSoundFiles } from '../shared/sound-files';
@@ -56,6 +68,7 @@ import {
   nameColorForUser,
   normalizeOverlayNameColors,
 } from '../shared/overlay-name-colors';
+import { normalizeTemplateAccentColors } from '../shared/template-accent-colors';
 import { resolveDisplayName } from '../shared/nickname-map';
 import {
   DEFAULT_GIFT_CHIME_VOLUME,
@@ -95,6 +108,22 @@ import {
 } from '../shared/viewer-event';
 import { buildViewerStatusEvent, pickViewerStatusNotice } from '../shared/viewer-status-line';
 import { sameViewerRoomStats, ViewerRoomStats } from '../shared/viewer-room-stats';
+import {
+  DEFAULT_OVERLAY_LIKE_RANKING_ENABLED,
+  DEFAULT_OVERLAY_LIKE_RANKING_MAX,
+  DEFAULT_OVERLAY_RANKING_MODE,
+  giftDiamondDelta,
+  normalizeOverlayLikeRankingEnabled,
+  normalizeOverlayLikeRankingMax,
+  normalizeOverlayRankingLikePollSec,
+  normalizeOverlayRankingLikeSyncMode,
+  normalizeOverlayRankingMode,
+  sameRanking,
+  type OverlayRankingLikeSyncMode,
+  type OverlayRankingMode,
+  type RankEntry,
+} from '../shared/like-ranking';
+import { overlayRankingMotionMs } from '../shared/overlay-ranking-motion';
 import { RepeatSpeechGuard, speechUserKey } from '../shared/speech-filters';
 import { SuperFanJoinDedupe, isSuperFanBoxEvent } from '../shared/super-fan-event';
 import { pushSessionLog, SessionLogRow } from '../shared/session-log';
@@ -124,6 +153,7 @@ export class SessionManager extends EventEmitter {
     alreadyRunning: boolean;
   }> | null = null;
   private readonly likeTracker = new LikeTracker();
+  private readonly diamondTracker = new DiamondTracker();
   private readonly repeatSpeech = new RepeatSpeechGuard();
   private readonly superFanJoinDedupe = new SuperFanJoinDedupe();
   private readonly memberJoinDedupe = new SuperFanJoinDedupe();
@@ -131,6 +161,18 @@ export class SessionManager extends EventEmitter {
   private overlayListenRetryAt = 0;
   private streamStartedAtMs: number | null = null;
   private roomStats: ViewerRoomStats | null = null;
+  private rankingEntries: RankEntry[] = [];
+  private rankingEnabled = DEFAULT_OVERLAY_LIKE_RANKING_ENABLED;
+  private rankingMax = DEFAULT_OVERLAY_LIKE_RANKING_MAX;
+  private rankingMode: OverlayRankingMode = DEFAULT_OVERLAY_RANKING_MODE;
+  private rankingLikeSyncMode: OverlayRankingLikeSyncMode = 'live';
+  private rankingLikePollSec = 30;
+  private rankingLikePollTimer: ReturnType<typeof setInterval> | null = null;
+  /** 稼働中タイマーの間隔（秒）。未稼働は null */
+  private rankingLikePollActiveSec: number | null = null;
+  /** ランキングサンプルの入れ替わり周回（表示を消すまで） */
+  private rankingSampleLoopTimer: ReturnType<typeof setTimeout> | null = null;
+  private rankingSampleLoopActive = false;
   private commentSoundMuted = false;
   private commentSoundAt = 0;
   private eventSoundAt: Partial<Record<string, number>> = {};
@@ -199,6 +241,8 @@ export class SessionManager extends EventEmitter {
     if (!ok) {
       throw new Error(MSG.errors.overlayPortBusy);
     }
+    this.publishRankingIfChanged(true);
+    this.syncRankingLikePollTimer();
     this.setStatus(this.status.state, this.status.message);
   }
 
@@ -212,6 +256,10 @@ export class SessionManager extends EventEmitter {
     const token = ++this.connectToken;
     this.lastConnectError = '';
     this.likeTracker.reset();
+    this.diamondTracker.reset();
+    this.rankingEntries = [];
+    this.publishRankingIfChanged(true);
+    this.syncRankingLikePollTimer();
     this.repeatSpeech.clear();
     this.superFanJoinDedupe.clear();
     this.memberJoinDedupe.clear();
@@ -235,6 +283,10 @@ export class SessionManager extends EventEmitter {
     this.lastConnectError = '';
     await this.watcher.stop();
     this.likeTracker.reset();
+    this.diamondTracker.reset();
+    this.rankingEntries = [];
+    this.publishRankingIfChanged(true);
+    this.syncRankingLikePollTimer();
     this.repeatSpeech.clear();
     this.superFanJoinDedupe.clear();
     this.memberJoinDedupe.clear();
@@ -287,7 +339,11 @@ export class SessionManager extends EventEmitter {
     }
   }
 
-  async applyConfig(previousPort: number, previousUniqueId: string, previousConfig?: AppConfig): Promise<void> {
+  async applyConfig(
+    previousPort: number,
+    previousUniqueId: string,
+    previousConfig?: AppConfig,
+  ): Promise<{ idChangeDisconnected: boolean }> {
     const previousState = this.status.state;
     const wasWatching =
       previousState === 'live' ||
@@ -301,6 +357,10 @@ export class SessionManager extends EventEmitter {
     }
     this.syncOverlayOptions(config);
     await this.ensureOverlayListening({ force: true, throwIfBound: true });
+    // force しない。見た目だけの保存で接続タブのサンプルを潰さない。
+    // 人数・出す／出さない・モードが変わったときだけ配信し直す。
+    this.publishRankingIfChanged();
+    this.syncRankingLikePollTimer();
     this.refreshStatusAfterOverlayChange();
     this.pruneUnusedMediaFiles(config);
 
@@ -308,7 +368,9 @@ export class SessionManager extends EventEmitter {
     if (uniqueIdChanged && wasWatching) {
       await this.disconnect();
       this.notify(true, MSG.connection.idChangedNeedConfirm);
+      return { idChangeDisconnected: true };
     }
+    return { idChangeDisconnected: false };
   }
 
   /** 設定から外れたアラート画像・効果音を data から消す。 */
@@ -548,6 +610,9 @@ export class SessionManager extends EventEmitter {
       diamondCount?: number;
       superFanBox?: boolean;
       portalJoin?: boolean;
+      nickname?: string;
+      uniqueId?: string;
+      comment?: string;
     } = {},
   ): Promise<void> {
     const config = this.configStore.get();
@@ -563,29 +628,35 @@ export class SessionManager extends EventEmitter {
     const fanClubLevel = isFanClub
       ? Math.max(1, Math.trunc(options.fanClubLevel || 4))
       : 0;
-    const uniqueId = isAnchor
-      ? 'test_anchor'
-      : isModerator
-        ? 'test_mod'
-        : isFanClub && isSuperFan
-          ? 'test_fan_super'
-          : isSuperFan
-            ? 'test_super'
-            : isFanClub
-              ? `test_fan_${fanClubLevel}`
-              : 'test_user';
-    const comment =
-      isAnchor
-        ? MSG.tester.comment
+    const uniqueId =
+      (typeof options.uniqueId === 'string' && options.uniqueId.trim()) ||
+      (isAnchor
+        ? 'test_anchor'
         : isModerator
-          ? MSG.tester.comment
+          ? 'test_mod'
           : isFanClub && isSuperFan
-            ? MSG.tester.commentFanSuper
+            ? 'test_fan_super'
             : isSuperFan
-              ? MSG.tester.commentSuperFan
+              ? 'test_super'
               : isFanClub
-                ? MSG.tester.commentFan
-                : MSG.tester.comment;
+                ? `test_fan_${fanClubLevel}`
+                : 'test_user');
+    const nickname =
+      (typeof options.nickname === 'string' && options.nickname.trim()) || MSG.tester.user;
+    const comment =
+      typeof options.comment === 'string'
+        ? options.comment
+        : isAnchor
+          ? MSG.tester.comment
+          : isModerator
+            ? MSG.tester.comment
+            : isFanClub && isSuperFan
+              ? MSG.tester.commentFanSuper
+              : isSuperFan
+                ? MSG.tester.commentSuperFan
+                : isFanClub
+                  ? MSG.tester.commentFan
+                  : MSG.tester.comment;
     const diamondCount =
       typeof options.diamondCount === 'number' && Number.isFinite(options.diamondCount)
         ? Math.max(0, Math.trunc(options.diamondCount))
@@ -594,7 +665,7 @@ export class SessionManager extends EventEmitter {
       type: canonicalOverlayType(options.portalJoin ? 'member' : type),
       user: {
         uniqueId,
-        nickname: MSG.tester.user,
+        nickname,
         avatarUrl: '',
         ...EMPTY_USER_LIVE_BADGES,
         isFanClub,
@@ -689,15 +760,64 @@ export class SessionManager extends EventEmitter {
     this.queueSampleEvents({ silent: true, viewerOnly: true });
   }
 
-  previewStreamSamples(streamSettings?: AppConfigSaveInput): void {
+  /**
+   * 配信ソースへ種類別サンプルを出す。
+   * kind 省略時はコメント列（見た目タブ／メニュー互換）。
+   */
+  previewStreamSamples(
+    streamSettings?: AppConfigSaveInput,
+    kind: OverlayUrlKind = 'chat',
+  ): void {
     const config = streamSettings
       ? { ...this.configStore.get(), ...streamSettings }
       : this.configStore.get();
     this.syncOverlayOptions(config);
-    this.clearOverlay();
+    const safeKind = normalizeOverlayUrlKind(kind);
+    if (safeKind === 'alerts') {
+      this.overlay.clearRoles(['alerts']);
+      for (const sample of buildAlertSamplePlan(config, this.pickTestGift(undefined))) {
+        const displayParts: AlertDisplayPart[] = (sample.displayParts || []).map((part) => {
+          if (part.kind === 'accent') {
+            return {
+              kind: 'accent',
+              value: part.value,
+              color: part.color || '',
+              ...(typeof part.token === 'string' && part.token ? { token: part.token } : {}),
+            };
+          }
+          if (part.kind === 'name') {
+            return { kind: 'name', value: part.value, color: part.color || '' };
+          }
+          return { kind: 'text', value: part.value };
+        });
+        this.overlay.broadcastAlert({
+          type: sample.type,
+          displayText: sample.displayText,
+          displayParts,
+          imageUrl: sample.imageUrl,
+          displayMs: sample.displayMs,
+          user: sample.user,
+          nameColor: sample.nameColor,
+        });
+      }
+      return;
+    }
+    if (safeKind === 'ranking') {
+      this.previewRankingSampleMotion(config);
+      return;
+    }
+    this.overlay.clearRoles(['chat']);
     this.overlay.showSampleDisplay(
       buildOverlaySamplePlan(config, this.pickTestGift(undefined)),
     );
+  }
+
+  /** 見た目プレビュー用。OBS には送らず計画だけ返す */
+  buildOverlaySamplePlan(streamSettings?: AppConfigSaveInput) {
+    const config = streamSettings
+      ? { ...this.configStore.get(), ...streamSettings }
+      : this.configStore.get();
+    return buildOverlaySamplePlan(config, this.pickTestGift(undefined));
   }
 
   private syncOverlayOptions(config: AppConfig): void {
@@ -711,7 +831,70 @@ export class SessionManager extends EventEmitter {
       config.overlayNameColorEnabled !== false,
       Array.isArray(config.overlayNameColors) ? config.overlayNameColors : [],
       config.eventAlertDisplayMs,
+      overlayLikesLookFromConfig(config),
+      config.templateAccentColors,
+      config.overlayRankingMotion,
+      config.overlayRankingMotionSpeed,
     );
+  }
+
+  private clearRankingSampleLoopTimer(): void {
+    this.rankingSampleLoopActive = false;
+    if (this.rankingSampleLoopTimer) {
+      clearTimeout(this.rankingSampleLoopTimer);
+      this.rankingSampleLoopTimer = null;
+    }
+  }
+
+  /** クライアント有無に関係なく入れ替わり周回を止める（クリア失敗時用） */
+  cancelRankingSamplePreview(): void {
+    this.clearRankingSampleLoopTimer();
+  }
+
+  /**
+   * 動き・速さを配信ソースへ送り、サンプル周回中なら新しい設定でやり直す。
+   * 未保存のフォーム値を streamSettings で渡せる。
+   */
+  pushOverlayRankingMotion(streamSettings?: AppConfigSaveInput): void {
+    const config = streamSettings
+      ? { ...this.configStore.get(), ...streamSettings }
+      : this.configStore.get();
+    this.syncOverlayOptions(config);
+    if (this.rankingSampleLoopActive) {
+      this.previewRankingSampleMotion(config);
+    }
+  }
+
+  /**
+   * 未保存の見た目・名前色・差し込み色を配信ソースへ送る。
+   * プレビューはフォームを直接描くので、ここを通さないと色がずれる。
+   */
+  pushOverlayLook(streamSettings?: AppConfigSaveInput): void {
+    const config = streamSettings
+      ? { ...this.configStore.get(), ...streamSettings }
+      : this.configStore.get();
+    this.syncOverlayOptions(config);
+  }
+
+  /** 表示を消すまで入れ替わりを繰り返して動きを確認できるようにする */
+  private previewRankingSampleMotion(config: AppConfig): void {
+    this.clearRankingSampleLoopTimer();
+    this.rankingSampleLoopActive = true;
+    const intervalMs = Math.max(
+      720,
+      overlayRankingMotionMs(config.overlayRankingMotionSpeed) + 280,
+    );
+    const tick = () => {
+      if (!this.rankingSampleLoopActive) {
+        return;
+      }
+      this.overlay.broadcastRanking(buildRankingSample(config));
+      if (!this.rankingSampleLoopActive) {
+        return;
+      }
+      this.rankingSampleLoopTimer = setTimeout(tick, intervalMs);
+    };
+    tick();
   }
 
   private queueSampleEvents(flags: {
@@ -728,20 +911,87 @@ export class SessionManager extends EventEmitter {
         fanClubLevel?: number;
         isModerator?: boolean;
         isAnchor?: boolean;
+        nickname?: string;
+        uniqueId?: string;
+        comment?: string;
       };
     }> = [
-      { type: 'comment', count: 1, extra: {} },
-      { type: 'comment', count: 1, extra: { isFanClub: true, fanClubLevel: 4 } },
-      { type: 'comment', count: 1, extra: { isSuperFan: true } },
       {
         type: 'comment',
         count: 1,
-        extra: { isFanClub: true, isSuperFan: true, fanClubLevel: 4 },
+        extra: {
+          uniqueId: 'sample_normal',
+          nickname: 'テストユーザー',
+          comment: 'テストコメントです',
+        },
       },
-      { type: 'comment', count: 1, extra: { isModerator: true } },
-      { type: 'comment', count: 1, extra: { isAnchor: true } },
-      { type: 'gift', count: 100, extra: {} },
-      { type: 'follow', count: 1, extra: {} },
+      {
+        type: 'comment',
+        count: 1,
+        extra: {
+          uniqueId: 'sample_short',
+          nickname: 'あ',
+          comment: 'ok',
+          isFanClub: true,
+          fanClubLevel: 4,
+        },
+      },
+      {
+        type: 'comment',
+        count: 1,
+        extra: {
+          uniqueId: 'sample_long',
+          nickname: 'すごく長いニックネームのテストユーザーさん一二三四五',
+          comment:
+            'これはかなり長いコメントのサンプルです。表示の折り返しや省略、吹き出しの幅が正しく見えるかを確認するための文を続けています。',
+          isSuperFan: true,
+        },
+      },
+      {
+        type: 'comment',
+        count: 1,
+        extra: {
+          uniqueId: 'sample_emoji',
+          nickname: '🐱✨',
+          comment: '🎉',
+          isFanClub: true,
+          isSuperFan: true,
+          fanClubLevel: 4,
+        },
+      },
+      {
+        type: 'comment',
+        count: 1,
+        extra: {
+          uniqueId: 'sample_mod',
+          nickname: 'テストユーザー',
+          comment: 'テストコメントです',
+          isModerator: true,
+        },
+      },
+      {
+        type: 'comment',
+        count: 1,
+        extra: {
+          uniqueId: 'sample_anchor',
+          nickname: 'あ',
+          comment: 'ok',
+          isAnchor: true,
+        },
+      },
+      {
+        type: 'gift',
+        count: 100,
+        extra: {
+          uniqueId: 'sample_gift',
+          nickname: 'すごく長いニックネームのテストユーザーさん一二三四五',
+        },
+      },
+      {
+        type: 'follow',
+        count: 1,
+        extra: { uniqueId: 'sample_follow', nickname: '🐱✨' },
+      },
     ];
     for (const job of jobs) {
       void this.sendTestEvent(job.type, job.count, { ...job.extra, ...flags }).catch((error) => {
@@ -750,8 +1000,22 @@ export class SessionManager extends EventEmitter {
     }
   }
 
-  clearOverlay(): void {
-    this.overlay.clearChat();
+  /**
+   * 配信ソースを消す。kind 省略または all なら全種類。
+   * ランキングはサンプルを消したあとセッション累計へ戻す。
+   */
+  clearOverlay(kind: OverlayUrlKind | 'all' = 'all'): void {
+    const target = kind === 'all' ? 'all' : normalizeOverlayUrlKind(kind);
+    if (target === 'all' || target === 'chat') {
+      this.overlay.clearRoles(['chat']);
+    }
+    if (target === 'all' || target === 'alerts') {
+      this.overlay.clearRoles(['alerts']);
+    }
+    if (target === 'all' || target === 'ranking') {
+      this.clearRankingSampleLoopTimer();
+      this.publishRankingIfChanged(true);
+    }
   }
 
   clearOverlayPin(): void {
@@ -817,14 +1081,30 @@ export class SessionManager extends EventEmitter {
     return this.overlay.clientCount();
   }
 
+  overlayRoleClientCount(kind: OverlayUrlKind): number {
+    const role = normalizeOverlayUrlKind(kind) as OverlayClientRole;
+    return this.overlay.clientCountForRole(role);
+  }
+
+  hasAnyOverlayClient(): boolean {
+    return this.overlay.anyClientCount() > 0;
+  }
+
   overlayListeningPort(): number | null {
     return this.overlay.listeningPort();
   }
 
-  async waitForOverlayClient(timeoutMs: number): Promise<boolean> {
+  async waitForOverlayClient(
+    timeoutMs: number,
+    kind: OverlayUrlKind | 'all' = 'all',
+  ): Promise<boolean> {
     const started = Date.now();
-    const hasClient = () =>
-      this.overlay.clientCount() > 0 || this.overlay.alertClientCount() > 0;
+    const hasClient = () => {
+      if (kind === 'all') {
+        return this.hasAnyOverlayClient();
+      }
+      return this.overlayRoleClientCount(kind) > 0;
+    };
     while (Date.now() - started < timeoutMs) {
       if (hasClient()) {
         return true;
@@ -837,19 +1117,7 @@ export class SessionManager extends EventEmitter {
   copyOverlayUrl(kind = 'default'): boolean {
     try {
       const port = this.configStore.get().overlayPort;
-      const url =
-        kind === 'studio'
-          ? overlayStudioUrl(port)
-          : kind === 'local'
-            ? overlayPreviewUrl(port)
-            : kind === 'alerts'
-              ? overlayAlertsPublicUrl(port)
-              : kind === 'alerts-studio'
-                ? overlayAlertsStudioUrl(port)
-                : kind === 'alerts-local'
-                  ? overlayAlertsPreviewUrl(port)
-                  : getOverlayUrl(port);
-      clipboard.writeText(url);
+      clipboard.writeText(overlayUrlForCopyKind(port, kind));
       return true;
     } catch (error) {
       logger.error(`URLコピーに失敗しました: ${getErrorMessage(error)}`);
@@ -860,6 +1128,12 @@ export class SessionManager extends EventEmitter {
   async dispose(): Promise<void> {
     this.connectToken += 1;
     this.ttsQueue.clearUnplayed();
+    this.clearRankingSampleLoopTimer();
+    if (this.rankingLikePollTimer) {
+      clearInterval(this.rankingLikePollTimer);
+      this.rankingLikePollTimer = null;
+    }
+    this.rankingLikePollActiveSec = null;
     try {
       await this.watcher.stop();
     } catch (error) {
@@ -920,6 +1194,10 @@ export class SessionManager extends EventEmitter {
         this.connectToken += 1;
         this.lastConnectError = '';
         this.likeTracker.reset();
+        this.diamondTracker.reset();
+        this.rankingEntries = [];
+        this.publishRankingIfChanged(true);
+        this.syncRankingLikePollTimer();
         this.repeatSpeech.clear();
         this.superFanJoinDedupe.clear();
         this.memberJoinDedupe.clear();
@@ -960,6 +1238,93 @@ export class SessionManager extends EventEmitter {
     if (this.status.state === 'live') {
       this.touchStatus();
     }
+  }
+
+  private publishRankingIfChanged(force = false): void {
+    const config = this.configStore.get();
+    const enabled = normalizeOverlayLikeRankingEnabled(config.overlayLikeRankingEnabled);
+    const max = normalizeOverlayLikeRankingMax(config.overlayLikeRankingMax);
+    const mode = normalizeOverlayRankingMode(config.overlayRankingMode);
+    const likeSync = normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode);
+    const likePollSec = normalizeOverlayRankingLikePollSec(config.overlayRankingLikePollSec);
+    const tracked = enabled
+      ? mode === 'diamonds'
+        ? this.diamondTracker.top(max)
+        : this.likeTracker.top(max)
+      : [];
+    const next = tracked.map((entry) => ({
+      ...entry,
+      avatarUrl: overlayGiftImagePath(entry.avatarUrl) || entry.avatarUrl || '',
+    }));
+    if (
+      !force &&
+      this.rankingEnabled === enabled &&
+      this.rankingMax === max &&
+      this.rankingMode === mode &&
+      this.rankingLikeSyncMode === likeSync &&
+      this.rankingLikePollSec === likePollSec &&
+      sameRanking(this.rankingEntries, next)
+    ) {
+      return;
+    }
+    this.rankingEntries = next;
+    this.rankingEnabled = enabled;
+    this.rankingMax = max;
+    this.rankingMode = mode;
+    this.rankingLikeSyncMode = likeSync;
+    this.rankingLikePollSec = likePollSec;
+    // サンプル周回中は本番の配信を被せない（累計は上で更新済み）
+    if (this.rankingSampleLoopActive && !force) {
+      return;
+    }
+    this.overlay.broadcastRanking({ entries: next, max, enabled, mode });
+  }
+
+  /** いいねランキングがポーリングのときだけ定周期で配信する */
+  private syncRankingLikePollTimer(): void {
+    const config = this.configStore.get();
+    const enabled = normalizeOverlayLikeRankingEnabled(config.overlayLikeRankingEnabled);
+    const mode = normalizeOverlayRankingMode(config.overlayRankingMode);
+    const likeSync = normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode);
+    const likePollSec = normalizeOverlayRankingLikePollSec(config.overlayRankingLikePollSec);
+    const shouldPoll = enabled && mode === 'likes' && likeSync === 'poll';
+    if (!shouldPoll) {
+      if (this.rankingLikePollTimer) {
+        clearInterval(this.rankingLikePollTimer);
+        this.rankingLikePollTimer = null;
+      }
+      this.rankingLikePollActiveSec = null;
+      return;
+    }
+    // 間隔が同じなら作り直さない（無関係な設定保存で待ちをリセットしない）
+    if (this.rankingLikePollTimer && this.rankingLikePollActiveSec === likePollSec) {
+      return;
+    }
+    if (this.rankingLikePollTimer) {
+      clearInterval(this.rankingLikePollTimer);
+      this.rankingLikePollTimer = null;
+    }
+    this.rankingLikePollActiveSec = likePollSec;
+    this.rankingLikePollTimer = setInterval(() => {
+      try {
+        this.publishRankingIfChanged();
+      } catch (error) {
+        logger.error(
+          `いいねランキングのポーリング配信に失敗しました: ${getErrorMessage(error)}`,
+        );
+      }
+    }, likePollSec * 1000);
+  }
+
+  private shouldPublishLikesRankingImmediately(): boolean {
+    const config = this.configStore.get();
+    if (!normalizeOverlayLikeRankingEnabled(config.overlayLikeRankingEnabled)) {
+      return false;
+    }
+    if (normalizeOverlayRankingMode(config.overlayRankingMode) !== 'likes') {
+      return false;
+    }
+    return normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode) === 'live';
   }
 
   private notify(ok: boolean, message: string): void {
@@ -1109,28 +1474,51 @@ export class SessionManager extends EventEmitter {
         sourceNickname: sourceUser.nickname || sourceUser.sourceNickname || '',
       },
     };
-    if (current.type === 'like' && !options.skipFilters) {
-      if (
-        !toggle.display &&
-        !toggle.speak &&
-        !shouldEmitEventAlert({
-          type: current.type,
-          enabled: config.eventAlertEnabled,
-          media: config.eventAlertMedia,
-          giftImageUrl: current.giftImageUrl,
-        })
-      ) {
-        return;
+    if (current.type === 'gift') {
+      // ランキング用にダイヤ累計は常に更新（表示オフ・テスト送信でも集計する）
+      this.diamondTracker.consume(
+        current.user.uniqueId,
+        current.user.nickname,
+        giftDiamondDelta(current.diamondCount, current.giftCount),
+        current.user.avatarUrl || '',
+      );
+      // ダイヤモードのときだけ即時配信（いいねモードはポーリング／常時の対象外）
+      if (normalizeOverlayRankingMode(config.overlayRankingMode) === 'diamonds') {
+        this.publishRankingIfChanged();
       }
+    }
+
+    if (current.type === 'like') {
+      // ランキング用に累計は常に更新（表示オフ・テスト送信でも集計する）
       const reached = this.likeTracker.consume(
         current.user.uniqueId,
+        current.user.nickname,
         Math.max(1, current.likeCount || current.giftCount || 1),
         config.likeMilestone,
+        current.user.avatarUrl || '',
       );
-      if (reached === null) {
-        return;
+      if (this.shouldPublishLikesRankingImmediately()) {
+        this.publishRankingIfChanged();
       }
-      current = { ...current, giftCount: reached };
+      if (!options.skipFilters) {
+        if (
+          !toggle.display &&
+          !toggle.speak &&
+          !shouldEmitEventAlert({
+            type: current.type,
+            enabled: config.eventAlertEnabled,
+            media: config.eventAlertMedia,
+            giftImageUrl: current.giftImageUrl,
+            giftName: current.giftName,
+          })
+        ) {
+          return;
+        }
+        if (reached === null) {
+          return;
+        }
+        current = { ...current, giftCount: reached };
+      }
     }
 
     if (
@@ -1158,9 +1546,19 @@ export class SessionManager extends EventEmitter {
       current.giftCount,
     );
     const templates = pickEventTemplates(config, current);
-    const displayText = renderDisplayTemplate(templates.display, vars, {
+    const overlayNameColor =
+      config.overlayNameColorEnabled !== false && current.user.nickname
+        ? nameColorForUser(
+            current.user.uniqueId,
+            current.user.nickname,
+            normalizeOverlayNameColors(config.overlayNameColors),
+          )
+        : null;
+    const { displayText, displayParts } = renderOverlayDisplay(templates.display, vars, {
       hideUserName: config.hideUserName,
       maxChars: config.maxDisplayChars,
+      nameColor: overlayNameColor,
+      accentColors: normalizeTemplateAccentColors(config.templateAccentColors),
     });
     const inspect = `${displayText} ${current.comment} ${current.user.nickname}`;
     if (containsNgWord(inspect, config.ngWords)) {
@@ -1309,7 +1707,12 @@ export class SessionManager extends EventEmitter {
       }
     }
 
-    const giftImageUrl = overlayGiftImagePath(current.giftImageUrl);
+    const catalogGiftImage =
+      current.giftId && (current.type === 'gift' || current.type === 'portal')
+        ? catalogGiftImageById(this.watcher.listGifts(), current.giftId)
+        : '';
+    const giftImageUrl =
+      overlayGiftImagePath(current.giftImageUrl) || overlayGiftImagePath(catalogGiftImage);
     const commentEmotes = (current.commentEmotes || [])
       .map((emote) => ({
         index: emote.index,
@@ -1365,6 +1768,7 @@ export class SessionManager extends EventEmitter {
         enabled: config.eventAlertEnabled,
         media: config.eventAlertMedia,
         giftImageUrl,
+        giftName: current.giftName,
       });
 
     if (!showDisplay && !shouldSpeak && !shouldAlert) {
@@ -1379,6 +1783,7 @@ export class SessionManager extends EventEmitter {
       type: current.type,
       user,
       displayText: showDisplay ? displayText : '',
+      displayParts: showDisplay ? displayParts : [],
       comment: current.comment,
       commentEmotes,
       giftImageUrl,
@@ -1396,21 +1801,28 @@ export class SessionManager extends EventEmitter {
         type: current.type,
         media: alertType ? config.eventAlertMedia?.[alertType] : undefined,
         giftImageUrl,
+        giftName: current.giftName,
       });
       if (imageUrl) {
-        const nameColor =
-          config.overlayNameColorEnabled !== false && user.nickname
-            ? nameColorForUser(
-                user.uniqueId,
-                user.nickname,
-                normalizeOverlayNameColors(config.overlayNameColors),
-              )
-            : null;
-        const displayParts = buildAlertDisplayParts(displayText, user.nickname, nameColor);
+        const nameColor = overlayNameColor;
+        const alertDisplayParts: AlertDisplayPart[] = displayParts.map((part) => {
+          if (part.kind === 'accent') {
+            return {
+              kind: 'accent',
+              value: part.value,
+              color: part.color || '',
+              ...(typeof part.token === 'string' && part.token ? { token: part.token } : {}),
+            };
+          }
+          if (part.kind === 'name') {
+            return { kind: 'name', value: part.value, color: part.color || '' };
+          }
+          return { kind: 'text', value: part.value };
+        });
         this.overlay.broadcastAlert({
           type: current.type,
           displayText,
-          displayParts,
+          displayParts: alertDisplayParts,
           imageUrl,
           displayMs: resolveEventAlertDisplayMs(
             current.type,
@@ -1495,7 +1907,7 @@ export class SessionManager extends EventEmitter {
       state,
       uniqueId: config.uniqueId,
       message,
-      overlayUrl: getOverlayUrl(config.overlayPort),
+      ...overlayUrlFieldsForPort(config.overlayPort),
       overlayListening: listeningPort === config.overlayPort,
       overlayClients: this.overlay.clientCount(),
       lastUpdated: new Date().toISOString(),

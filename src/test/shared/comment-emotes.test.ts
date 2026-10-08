@@ -4,6 +4,7 @@ import {
   MAX_COMMENT_EMOTES,
   buildCommentSegments,
   normalizeCommentEmotes,
+  stripCommentEmotePlaceholders,
 } from '../../shared/comment-emotes';
 import { MSG } from '../../shared/messages';
 
@@ -69,4 +70,52 @@ test('emote が無いときは本文だけ', () => {
     { kind: 'text', text: 'こんにちは' },
   ]);
   assert.deepEqual(buildCommentSegments('', []), []);
+});
+
+test('[heart] プレースホルダは画像差し込み時に消える', () => {
+  const comment = '歌いますね。[heart][wow][hi]';
+  const heartAt = comment.indexOf('[heart]');
+  const wowAt = comment.indexOf('[wow]');
+  const hiAt = comment.indexOf('[hi]');
+  assert.deepEqual(
+    buildCommentSegments(comment, [
+      { index: heartAt, imageUrl: 'https://cdn.example/heart.png' },
+      { index: wowAt, imageUrl: 'https://cdn.example/wow.png' },
+      { index: hiAt, imageUrl: 'https://cdn.example/hi.png' },
+    ]),
+    [
+      { kind: 'text', text: '歌いますね。' },
+      { kind: 'emote', imageUrl: 'https://cdn.example/heart.png' },
+      { kind: 'emote', imageUrl: 'https://cdn.example/wow.png' },
+      { kind: 'emote', imageUrl: 'https://cdn.example/hi.png' },
+    ],
+  );
+});
+
+test('index が合わないときも [heart] を出現順で画像に差し替える', () => {
+  assert.deepEqual(
+    buildCommentSegments('あ[heart][wow]', [
+      { index: 0, imageUrl: 'https://cdn.example/heart.png' },
+      { index: 0, imageUrl: 'https://cdn.example/wow.png' },
+    ]),
+    [
+      { kind: 'text', text: 'あ' },
+      { kind: 'emote', imageUrl: 'https://cdn.example/heart.png' },
+      { kind: 'emote', imageUrl: 'https://cdn.example/wow.png' },
+    ],
+  );
+});
+
+test('画像が無い [heart] は絵文字に寄せる', () => {
+  assert.deepEqual(buildCommentSegments('あ[heart][wow][hi]', []), [
+    { kind: 'text', text: 'あ❤️😮👋' },
+  ]);
+});
+
+test('読み上げ用に [heart] を落とす', () => {
+  assert.equal(
+    stripCommentEmotePlaceholders('歌いますね。[heart][wow] ありがとう'),
+    '歌いますね。 ありがとう',
+  );
+  assert.equal(stripCommentEmotePlaceholders('[heart][hi]'), '');
 });

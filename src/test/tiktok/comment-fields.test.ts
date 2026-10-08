@@ -68,6 +68,21 @@ test('コネクタ簡略形の emoteImageUrl と placeInComment を取る', () =
   );
 });
 
+test('proto 形の index を placeInComment より優先する', () => {
+  assert.deepEqual(
+    commentEmotesFromEvent({
+      emotes: [
+        {
+          index: 3,
+          placeInComment: 0,
+          emoteImageUrl: 'https://p16-webcast.tiktokcdn.com/img/c.png',
+        },
+      ],
+    }),
+    [{ index: 3, imageUrl: 'https://p16-webcast.tiktokcdn.com/img/c.png' }],
+  );
+});
+
 test('raw の emote.image.urlList からも画像 URL を取る', () => {
   assert.deepEqual(
     commentEmotesFromEvent({

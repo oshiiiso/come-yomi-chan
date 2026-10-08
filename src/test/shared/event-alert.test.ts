@@ -61,9 +61,9 @@ test('メディアの正規化', () => {
   assert.deepEqual(media.like, { kind: 'template', id: 'like' });
 });
 
-test('アラート画像の初期値はテンプレ', () => {
+test('アラート画像の初期値はギフトが自動・他はテンプレ', () => {
   const media = defaultEventAlertMediaMap();
-  assert.deepEqual(media.gift, { kind: 'template', id: 'gift' });
+  assert.deepEqual(media.gift, { kind: 'auto' });
   assert.deepEqual(media.follow, { kind: 'template', id: 'follow' });
   assert.equal(
     shouldEmitEventAlert({
@@ -72,6 +72,10 @@ test('アラート画像の初期値はテンプレ', () => {
       media,
     }),
     true,
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({ type: 'gift', media: media.gift, giftImageUrl: '' }),
+    '/overlay/alert-templates/gift.gif',
   );
 });
 
@@ -160,7 +164,7 @@ test('画像なし（none）のときはオンでもアラートを出さない'
       media,
       giftImageUrl: '',
     }),
-    false,
+    true,
   );
   assert.equal(
     shouldEmitEventAlert({
@@ -181,6 +185,14 @@ test('アラート画像の解決', () => {
       giftImageUrl: '/media/gift?u=https%3A%2F%2Fexample.com%2Fa.png',
     }),
     '/media/gift?u=https%3A%2F%2Fexample.com%2Fa.png',
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({
+      type: 'gift',
+      media: { kind: 'auto' },
+      giftImageUrl: '',
+    }),
+    '/overlay/alert-templates/gift.gif',
   );
   assert.equal(
     resolveEventAlertImageUrl({
@@ -210,7 +222,7 @@ test('アラート画像の解決', () => {
       type: 'follow',
       media: { kind: 'template', id: 'follow' },
     }),
-    '/overlay/alert-templates/follow.svg',
+    '/overlay/alert-templates/follow.gif',
   );
   assert.equal(
     resolveEventAlertImageUrl({
@@ -218,17 +230,65 @@ test('アラート画像の解決', () => {
       media: { kind: 'template', id: 'gift' },
       giftImageUrl: '/media/gift?u=x',
     }),
-    '/overlay/alert-templates/gift.svg',
+    '/overlay/alert-templates/gift.gif',
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({
+      type: 'envelope',
+      media: { kind: 'template', id: 'envelope' },
+    }),
+    '/overlay/alert-templates/chest.gif',
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({
+      type: 'portal',
+      media: { kind: 'template', id: 'portal' },
+    }),
+    '/overlay/alert-templates/portal.gif',
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({
+      type: 'member',
+      media: { kind: 'template', id: 'member' },
+    }),
+    '/overlay/alert-templates/door.gif',
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({
+      type: 'member',
+      media: { kind: 'template', id: 'member' },
+      giftName: 'ポータル',
+    }),
+    '/overlay/alert-templates/portal_door.gif',
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({
+      type: 'superFan',
+      media: { kind: 'template', id: 'superFan' },
+    }),
+    '/overlay/alert-templates/superfan.gif',
+  );
+  assert.equal(
+    resolveEventAlertImageUrl({
+      type: 'superFan',
+      media: { kind: 'template', id: 'superFan' },
+      giftName: 'スーパーファンボックス',
+    }),
+    '/overlay/alert-templates/superfan_box.gif',
   );
 });
 
 test('テンプレ指定は正規化できる', () => {
   const media = normalizeEventAlertMediaMap({
     follow: { kind: 'template', id: 'follow' },
-    gift: { kind: 'template' },
+    gift: { kind: 'template', id: 'gift' },
   });
   assert.deepEqual(media.follow, { kind: 'template', id: 'follow' });
   assert.deepEqual(media.gift, { kind: 'template', id: 'gift' });
+  const incompleteGift = normalizeEventAlertMediaMap({
+    gift: { kind: 'template' },
+  });
+  assert.deepEqual(incompleteGift.gift, { kind: 'auto' });
 });
 
 test('アラート文言の名前色パーツを切り出す', () => {

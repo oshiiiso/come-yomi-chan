@@ -10,6 +10,8 @@ import { getErrorMessage } from '../../shared/error-utils';
 import { IpcChannels } from '../../shared/ipc-channels';
 import { getLogger } from '../../shared/logging-config';
 import { getRendererCopy, MSG } from '../../shared/messages';
+import { isSettingsTabId } from '../../shared/settings-tab-reset';
+import { normalizeOverlayCopyKind, normalizeOverlayUrlKind } from '../../shared/overlay-url';
 import { sessionLogFileName, sessionLogTsv } from '../../shared/session-log';
 import {
   applyProfileToConfig,
@@ -69,12 +71,21 @@ function overlayServerMessage(session: SessionManager): string | null {
   return null;
 }
 
-function overlayClientMessage(session: SessionManager): string | null {
+function overlayClientMessage(
+  session: SessionManager,
+  kind: 'chat' | 'alerts' | 'ranking' | 'all' = 'all',
+): string | null {
   const down = overlayServerMessage(session);
   if (down) {
     return down;
   }
-  if (session.overlayClientCount() === 0) {
+  if (kind === 'all') {
+    if (!session.hasAnyOverlayClient()) {
+      return MSG.ui.overlayNotConnected;
+    }
+    return null;
+  }
+  if (session.overlayRoleClientCount(kind) === 0) {
     return MSG.ui.overlayNotConnected;
   }
   return null;
@@ -231,14 +242,17 @@ export function registerIpcHandlers(
     copy: getRendererCopy(),
   }));
 
-  const applyLiveConfig = async (previous: AppConfig) => {
+  const applyLiveConfig = async (
+    previous: AppConfig,
+  ): Promise<{ idChangeDisconnected: boolean }> => {
     await session.refreshVoicevoxSpeakerName();
-    await session.applyConfig(previous.overlayPort, previous.uniqueId, previous);
+    const applied = await session.applyConfig(previous.overlayPort, previous.uniqueId, previous);
     windowManager.broadcast(IpcChannels.CONFIG_CHANGED, configStore.toView());
     windowManager.broadcast(IpcChannels.STATUS_CHANGED, session.getStatus());
     windowManager.syncTray(configStore.get().minimizeToTray);
     windowManager.applyUiTheme(configStore.get().uiTheme);
     windowManager.applyWindowPrefs(configStore.get());
+    return applied;
   };
 
   const confirmWarning = async (
@@ -305,6 +319,53 @@ export function registerIpcHandlers(
         logger.error(`設定の復元に失敗しました: ${getErrorMessage(restoreError)}`);
       }
       return { ok: false, cancelled: false, config: configStore.toView(), message: MSG.ui.resetConfigFailed };
+    }
+  });
+
+  ipcMain.handle(IpcChannels.RESET_CONFIG_TAB, async (event, tab: unknown) => {
+    if (!isSettingsTabId(tab)) {
+      return {
+        ok: false,
+        cancelled: false,
+        config: configStore.toView(),
+        message: MSG.ui.resetTabFailed,
+      };
+    }
+    const accepted = await confirmWarning(
+      event,
+      MSG.ui.resetTabTitle,
+      MSG.ui.resetTabHints[tab],
+      MSG.ui.resetTabConfirm,
+    );
+    if (!accepted) {
+      return { ok: true, cancelled: true, message: '' };
+    }
+    const previous = configStore.get();
+    try {
+      configStore.resetTab(tab);
+      const applied = await applyLiveConfig(previous);
+      return {
+        ok: true,
+        cancelled: false,
+        config: configStore.toView(),
+        message: applied.idChangeDisconnected
+          ? MSG.connection.idChangedNeedConfirm
+          : MSG.ui.resetTabOk,
+      };
+    } catch (error) {
+      logger.error(`タブの初期化に失敗しました: ${getErrorMessage(error)}`);
+      try {
+        configStore.save(previous);
+        await applyLiveConfig(previous);
+      } catch (restoreError) {
+        logger.error(`設定の復元に失敗しました: ${getErrorMessage(restoreError)}`);
+      }
+      return {
+        ok: false,
+        cancelled: false,
+        config: configStore.toView(),
+        message: MSG.ui.resetTabFailed,
+      };
     }
   });
 
@@ -710,47 +771,103 @@ export function registerIpcHandlers(
     }
   });
 
-  ipcMain.handle(IpcChannels.PREVIEW_OVERLAY, async (_event, target: unknown, streamSettings: unknown) => {
+  ipcMain.handle(IpcChannels.GET_OVERLAY_SAMPLE_PLAN, (_event, streamSettings: unknown) => {
     try {
-      if (target === 'overlay' || target === 'stream') {
-        const down = overlayServerMessage(session);
-        if (down) {
-          return { ok: false, message: down };
-        }
-        await session.waitForOverlayClient(2000);
-        const disconnected = overlayClientMessage(session);
-        if (disconnected) {
-          return { ok: false, message: disconnected };
-        }
-        const snapshot =
-          streamSettings && typeof streamSettings === 'object' && !Array.isArray(streamSettings)
-            ? (streamSettings as Record<string, unknown>)
-            : undefined;
-        session.previewStreamSamples(snapshot);
-        return { ok: true, message: MSG.ui.overlayPreviewShown };
-      }
-      session.previewOverlaySamples();
-      return { ok: true, message: MSG.ui.previewShown };
+      const snapshot =
+        streamSettings && typeof streamSettings === 'object' && !Array.isArray(streamSettings)
+          ? (streamSettings as AppConfigSaveInput)
+          : undefined;
+      return { ok: true, plan: session.buildOverlaySamplePlan(snapshot) };
     } catch (error) {
-      logger.error(`プレビュー表示に失敗しました: ${getErrorMessage(error)}`);
-      return { ok: false, message: MSG.ui.testerFailed };
+      logger.error(`配信ソースサンプル計画の取得に失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false, plan: null };
     }
   });
 
-  ipcMain.handle(IpcChannels.CLEAR_OVERLAY, async () => {
+  ipcMain.handle(
+    IpcChannels.PREVIEW_OVERLAY,
+    async (_event, target: unknown, streamSettings: unknown, kind: unknown) => {
+      try {
+        if (target === 'overlay' || target === 'stream') {
+          const overlayKind = normalizeOverlayUrlKind(kind);
+          const down = overlayServerMessage(session);
+          if (down) {
+            return { ok: false, message: down };
+          }
+          await session.waitForOverlayClient(2000, overlayKind);
+          const disconnected = overlayClientMessage(session, overlayKind);
+          if (disconnected) {
+            return { ok: false, message: disconnected };
+          }
+          const snapshot =
+            streamSettings && typeof streamSettings === 'object' && !Array.isArray(streamSettings)
+              ? (streamSettings as Record<string, unknown>)
+              : undefined;
+          session.previewStreamSamples(snapshot, overlayKind);
+          return { ok: true, message: MSG.ui.overlayPreviewShown };
+        }
+        session.previewOverlaySamples();
+        return { ok: true, message: MSG.ui.previewShown };
+      } catch (error) {
+        logger.error(`プレビュー表示に失敗しました: ${getErrorMessage(error)}`);
+        return { ok: false, message: MSG.ui.testerFailed };
+      }
+    },
+  );
+
+  ipcMain.handle(IpcChannels.PUSH_OVERLAY_RANKING_MOTION, (_event, streamSettings: unknown) => {
+    try {
+      const snapshot =
+        streamSettings && typeof streamSettings === 'object' && !Array.isArray(streamSettings)
+          ? (streamSettings as AppConfigSaveInput)
+          : undefined;
+      session.pushOverlayRankingMotion(snapshot);
+      return { ok: true };
+    } catch (error) {
+      logger.error(`ランキング動きの反映に失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false };
+    }
+  });
+
+  ipcMain.handle(IpcChannels.PUSH_OVERLAY_LOOK, (_event, streamSettings: unknown) => {
+    try {
+      const snapshot =
+        streamSettings && typeof streamSettings === 'object' && !Array.isArray(streamSettings)
+          ? (streamSettings as AppConfigSaveInput)
+          : undefined;
+      session.pushOverlayLook(snapshot);
+      return { ok: true };
+    } catch (error) {
+      logger.error(`配信ソースの見た目反映に失敗しました: ${getErrorMessage(error)}`);
+      return { ok: false };
+    }
+  });
+
+  ipcMain.handle(IpcChannels.CLEAR_OVERLAY, async (_event, kind: unknown) => {
+    const clearKind =
+      kind === 'all' || kind === undefined || kind === null
+        ? 'all'
+        : normalizeOverlayUrlKind(kind);
+    // 未接続で clearOverlay に届かなくても、入れ替わり2通目は止める
+    if (clearKind === 'all' || clearKind === 'ranking') {
+      session.cancelRankingSamplePreview();
+    }
     try {
       const down = overlayServerMessage(session);
       if (down) {
         return { ok: false, message: down };
       }
-      await session.waitForOverlayClient(2000);
-      const disconnected = overlayClientMessage(session);
+      await session.waitForOverlayClient(2000, clearKind);
+      const disconnected = overlayClientMessage(session, clearKind);
       if (disconnected) {
         return { ok: false, message: disconnected };
       }
-      session.clearOverlay();
+      session.clearOverlay(clearKind);
       return { ok: true, message: MSG.ui.previewCleared };
     } catch (error) {
+      if (clearKind === 'all' || clearKind === 'ranking') {
+        session.cancelRankingSamplePreview();
+      }
       logger.error(`プレビューのクリアに失敗しました: ${getErrorMessage(error)}`);
       return { ok: false, message: MSG.ui.testerFailed };
     }
@@ -776,25 +893,26 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle(IpcChannels.COPY_OVERLAY_URL, (_event, kind: unknown) => {
-    const urlKind =
-      kind === 'studio' ||
-      kind === 'local' ||
-      kind === 'alerts' ||
-      kind === 'alerts-studio' ||
-      kind === 'alerts-local'
-        ? kind
-        : 'default';
+    const urlKind = normalizeOverlayCopyKind(kind);
     const ok = session.copyOverlayUrl(urlKind);
     const message =
       !ok
         ? MSG.ui.copyFailed
-        : urlKind === 'studio' || urlKind === 'alerts-studio'
+        : urlKind === 'studio' ||
+            urlKind === 'alerts-studio' ||
+            urlKind === 'ranking-studio' ||
+            urlKind === 'likes-studio'
           ? MSG.ui.copiedStudio
-          : urlKind === 'local' || urlKind === 'alerts-local'
+          : urlKind === 'local' ||
+              urlKind === 'alerts-local' ||
+              urlKind === 'ranking-local' ||
+              urlKind === 'likes-local'
             ? MSG.ui.copiedObs
             : urlKind === 'alerts'
               ? MSG.ui.copiedAlerts
-              : MSG.ui.copied;
+              : urlKind === 'ranking' || urlKind === 'likes'
+                ? MSG.ui.copiedLikes
+                : MSG.ui.copied;
     return { ok, message };
   });
 

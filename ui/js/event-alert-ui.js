@@ -15,7 +15,37 @@ const DEFAULT_EVENT_ALERT_SEC = 4;
 const eventAlertMediaRefs = {};
 
 function defaultAlertMediaRef(type) {
+  if (type === 'gift') {
+    return { kind: 'auto' };
+  }
   return { kind: 'template', id: type };
+}
+
+function isDefaultAlertMediaRef(type, ref) {
+  if (type === 'gift') {
+    return ref?.kind === 'auto';
+  }
+  return ref?.kind === 'template';
+}
+
+function eventAlertResetLabel(type) {
+  if (type === 'gift') {
+    return uiCopy.eventAlertResetAuto || 'もらったギフトに戻す';
+  }
+  return uiCopy.eventAlertResetTemplate || 'テンプレに戻す';
+}
+
+function eventAlertHintText(type) {
+  if (type === 'gift') {
+    return (
+      uiCopy.eventAlertGiftHint ||
+      '別の配信ソース（イベントアラート用URL）に出します。初期はもらったギフトの画像です。取れないときは同梱GIFを出します。画像を選ぶと差し替え、× でもらったギフトに戻せます。'
+    );
+  }
+  return (
+    uiCopy.eventAlertHint ||
+    '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。'
+  );
 }
 
 function normalizeAlertMediaRefUi(raw, type) {
@@ -44,7 +74,7 @@ function alertMediaLabel(ref, type) {
     return uiCopy.eventAlertMediaNone || 'なし';
   }
   if (ref?.kind === 'auto') {
-    return uiCopy.eventAlertMediaAuto || '自動';
+    return uiCopy.eventAlertMediaAuto || 'もらったギフト';
   }
   const id = ref?.id || type;
   const names = uiCopy.eventAlertTemplateNames || {};
@@ -68,10 +98,14 @@ function syncEventAlertResetButton(type) {
     return;
   }
   const ref = eventAlertMediaRefs[type] || defaultAlertMediaRef(type);
-  const isTemplate = ref.kind === 'template';
-  reset.hidden = isTemplate;
+  const isDefault = isDefaultAlertMediaRef(type, ref);
+  const resetLabel = eventAlertResetLabel(type);
+  reset.hidden = isDefault;
+  reset.textContent = '×';
+  reset.setAttribute('aria-label', resetLabel);
+  reset.setAttribute('title', resetLabel);
   if ('disabled' in reset) {
-    reset.disabled = isTemplate;
+    reset.disabled = isDefault;
   }
 }
 
@@ -156,18 +190,15 @@ function fillEventAlertUi(config) {
       el.textContent = uiCopy.eventAlertLabel || 'イベントアラート';
     }
     for (const el of document.querySelectorAll('[data-event-alert-hint]')) {
-      el.textContent =
-        uiCopy.eventAlertHint ||
-        '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。';
+      const block = el.closest('[data-event-alert]');
+      const type = block?.getAttribute('data-event-alert') || '';
+      el.textContent = eventAlertHintText(type);
     }
     for (const button of document.querySelectorAll('[data-event-alert-pick]')) {
       button.textContent = uiCopy.eventAlertPickMedia || '画像を選ぶ';
     }
-    const resetLabel = uiCopy.eventAlertResetTemplate || 'テンプレに戻す';
-    for (const button of document.querySelectorAll('[data-event-alert-reset]')) {
-      button.textContent = '×';
-      button.setAttribute('aria-label', resetLabel);
-      button.title = resetLabel;
+    for (const type of EVENT_ALERT_TYPES_UI) {
+      syncEventAlertResetButton(type);
     }
     const secLabel = uiCopy.eventAlertSecLabel || '表示時間';
     for (const el of document.querySelectorAll('[data-event-alert-sec-label]')) {
@@ -178,17 +209,8 @@ function fillEventAlertUi(config) {
         input.setAttribute('aria-label', `${secLabel}（秒）`);
       }
     }
-    const chatTitle = $('overlay-chat-url-title');
-    if (chatTitle && uiCopy.eventAlertChatUrlTitle) {
-      chatTitle.textContent = uiCopy.eventAlertChatUrlTitle;
-    }
-    const alertsTitle = $('overlay-alerts-url-title');
-    if (alertsTitle && uiCopy.eventAlertAlertsUrlTitle) {
-      alertsTitle.textContent = uiCopy.eventAlertAlertsUrlTitle;
-    }
-    const alertsHint = $('overlay-alerts-url-hint');
-    if (alertsHint && uiCopy.eventAlertAlertsUrlHint) {
-      alertsHint.textContent = uiCopy.eventAlertAlertsUrlHint;
+    if (typeof applyOverlayUrlCopy === 'function') {
+      applyOverlayUrlCopy();
     }
   }
 }

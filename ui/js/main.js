@@ -73,9 +73,16 @@ async function init() {
     if (configEchoWait > 0) {
       configEchoWait -= 1;
       savedConfig = next;
+      // フォーム編集中でも配信ソースURLだけはポートに合わせて更新する
+      if (typeof fillOverlayUrlUi === 'function') {
+        fillOverlayUrlUi(next);
+      }
       return;
     }
     if (isDirty()) {
+      if (typeof fillOverlayUrlUi === 'function') {
+        fillOverlayUrlUi(next);
+      }
       return;
     }
     savedConfig = next;
@@ -216,25 +223,31 @@ async function init() {
     setToast(uiCopy.viewerCleared);
   });
   const showOverlaySamples = async () => {
+    // 見た目タブ／メニューはコメント列向け（接続タブは select 連動）
+    if (typeof previewSelectedOverlaySample === 'function') {
+      const result = await previewSelectedOverlaySample('chat');
+      setToast(result.message, !result.ok);
+      return;
+    }
     const streamSettings =
       typeof readOverlayStreamSettings === 'function' ? readOverlayStreamSettings() : undefined;
-    const result = await window.liveTts.previewOverlay('overlay', streamSettings);
+    const result = await window.liveTts.previewOverlay('overlay', streamSettings, 'chat');
     setToast(result?.message || uiCopy.overlayPreviewSamples, !result?.ok);
   };
   const clearOverlayChat = async () => {
-    const result = await window.liveTts.clearOverlay();
+    // メニュー／見た目タブは全種類を消す
+    if (typeof clearSelectedOverlaySample === 'function') {
+      const result = await clearSelectedOverlaySample('all');
+      setToast(result.message, !result.ok);
+      return;
+    }
+    const result = await window.liveTts.clearOverlay('all');
     setToast(result?.message || uiCopy.overlayClearChat, !result?.ok);
   };
   $('btn-overlay-preview-samples')?.addEventListener('click', () => {
     void showOverlaySamples();
   });
-  $('btn-look-overlay-samples')?.addEventListener('click', () => {
-    void showOverlaySamples();
-  });
   $('btn-overlay-clear')?.addEventListener('click', () => {
-    void clearOverlayChat();
-  });
-  $('btn-look-overlay-clear')?.addEventListener('click', () => {
     void clearOverlayChat();
   });
   $('event-sections')?.addEventListener('click', (event) => {
@@ -243,6 +256,46 @@ async function init() {
       return;
     }
     activateEventSection(button.dataset.eventSectionBtn);
+  });
+  $('look-sections')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-look-section-btn]');
+    if (!button) {
+      return;
+    }
+    activateLookSection(button.dataset.lookSectionBtn);
+  });
+  $('look-comment-sections')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-look-comment-btn]');
+    if (!button) {
+      return;
+    }
+    activateLookCommentSection(button.dataset.lookCommentBtn);
+  });
+  const bindSubtabKeys = (root, selector, activate) => {
+    root?.addEventListener('keydown', (event) => {
+      if (event.key !== 'ArrowRight' && event.key !== 'ArrowLeft') {
+        return;
+      }
+      const buttons = [...root.querySelectorAll(selector)];
+      const index = buttons.indexOf(event.target);
+      if (index < 0) {
+        return;
+      }
+      event.preventDefault();
+      const next =
+        event.key === 'ArrowRight'
+          ? (index + 1) % buttons.length
+          : (index - 1 + buttons.length) % buttons.length;
+      const button = buttons[next];
+      activate(button);
+      button.focus();
+    });
+  };
+  bindSubtabKeys($('look-sections'), '[data-look-section-btn]', (button) => {
+    activateLookSection(button.dataset.lookSectionBtn);
+  });
+  bindSubtabKeys($('look-comment-sections'), '[data-look-comment-btn]', (button) => {
+    activateLookCommentSection(button.dataset.lookCommentBtn);
   });
   $('btn-viewer-save-log')?.addEventListener('click', async () => {
     if (typeof window.liveTts.saveSessionLog !== 'function') {
@@ -360,19 +413,50 @@ async function init() {
     syncRepeatSpeechOptions();
   });
   $('fan-level-look')?.addEventListener('input', (event) => {
-    if (!event.target.matches('[data-fan-min], [data-fan-color]')) {
+    if (!(event.target instanceof HTMLInputElement)) {
       return;
     }
-    fanLevelLook = collectFanLevelLook();
-    refreshViewerFanBadges();
-    for (const row of document.querySelectorAll('#fan-level-look-rows .fan-level-look__row')) {
-      const min = Number(row.querySelector('[data-fan-min]')?.value);
-      const preview = row.querySelector('.viewer__badge');
-      if (preview) {
-        preview.textContent = `${uiCopy.viewerBadgeFan}${clampFanLevel(min)}`;
-        applyFanBadgeColor(preview, min);
+    // 境目の入力途中は正規化しない（空や途中の数字で行が詰め替えられないようにする）
+    if (event.target.matches('[data-fan-min]')) {
+      for (const row of document.querySelectorAll('#fan-level-look-rows .fan-level-look__row')) {
+        const min = Number(row.querySelector('[data-fan-min]')?.value);
+        const preview = row.querySelector('.viewer__badge');
+        if (preview) {
+          preview.textContent = `${uiCopy.viewerBadgeFan}${clampFanLevel(min)}`;
+          applyFanBadgeColor(preview, min);
+        }
       }
+      noteFormChanged();
+      return;
     }
+    if (!event.target.matches('[data-fan-color]')) {
+      return;
+    }
+    // 色ダイアログ操作中も枠と × を追従（再描画するとピッカーが閉じるのでDOMはそのまま）
+    const picker = event.target;
+    const row = picker.closest('.fan-level-look__row');
+    const color = String(picker.value || '').toLowerCase();
+    const index = Number(picker.dataset.fanColor);
+    if (Number.isFinite(index) && Array.isArray(fanLevelLook) && fanLevelLook[index]) {
+      fanLevelLook[index] = { ...fanLevelLook[index], color };
+    }
+    for (const swatch of row?.querySelectorAll('.fan-level-swatch') || []) {
+      swatch.classList.toggle(
+        'is-active',
+        String(swatch.dataset.color || '').toLowerCase() === color,
+      );
+    }
+    const presetMatch = FAN_LEVEL_COLOR_PRESETS.some(
+      (item) => String(item).toLowerCase() === color,
+    );
+    picker.classList.toggle('is-active', !presetMatch);
+    const reset = row?.querySelector('[data-fan-color-reset]');
+    if (typeof syncColorPickerResetButton === 'function') {
+      syncColorPickerResetButton(reset, color, DEFAULT_FAN_LEVEL_COLORS[index]);
+    } else if (reset instanceof HTMLButtonElement && Number.isFinite(index)) {
+      reset.hidden = color === String(DEFAULT_FAN_LEVEL_COLORS[index] || '').toLowerCase();
+    }
+    refreshViewerFanBadges();
     noteFormChanged();
   });
   $('fan-level-look')?.addEventListener('change', () => {
@@ -382,6 +466,21 @@ async function init() {
     noteFormChanged();
   });
   $('fan-level-look')?.addEventListener('click', (event) => {
+    const reset = event.target.closest('[data-fan-color-reset]');
+    if (reset) {
+      const index = Number(reset.dataset.fanColorReset);
+      const picker = reset
+        .closest('.fan-level-look__row')
+        ?.querySelector(`[data-fan-color="${index}"]`);
+      if (picker && DEFAULT_FAN_LEVEL_COLORS[index]) {
+        picker.value = DEFAULT_FAN_LEVEL_COLORS[index];
+      }
+      fanLevelLook = collectFanLevelLook();
+      renderFanLevelLook();
+      refreshViewerFanBadges();
+      noteFormChanged();
+      return;
+    }
     const swatch = event.target.closest('.fan-level-swatch');
     if (!swatch) {
       return;
@@ -453,6 +552,13 @@ async function init() {
   $('viewer-log-comments')?.addEventListener('scroll', hideViewerUserMenu);
   $('viewer-log-events')?.addEventListener('scroll', hideViewerUserMenu);
   bindPreviewPaneResize();
+  const previewFrame = document.querySelector('.preview-frame');
+  if (previewFrame instanceof HTMLElement && typeof ResizeObserver === 'function') {
+    const previewZoomObserver = new ResizeObserver(() => {
+      applyPreviewZoom();
+    });
+    previewZoomObserver.observe(previewFrame);
+  }
   bindViewerPaneResize();
 
   for (const button of document.querySelectorAll('.tabs__btn')) {
@@ -482,6 +588,15 @@ async function init() {
   document.querySelector('.panel')?.addEventListener('input', (event) => {
     syncLookLabels();
     syncLookPresetButtons();
+    if (typeof syncLikesLookLabels === 'function') {
+      syncLikesLookLabels();
+    }
+    if (typeof syncLikesNeonHueField === 'function') {
+      syncLikesNeonHueField();
+    }
+    if (typeof syncLikesLookPresetButtons === 'function') {
+      syncLikesLookPresetButtons();
+    }
     syncDisplayTimeUi();
     syncUiTheme();
     syncNeonHueField();
@@ -496,6 +611,15 @@ async function init() {
     }
     syncLookLabels();
     syncLookPresetButtons();
+    if (typeof syncLikesLookLabels === 'function') {
+      syncLikesLookLabels();
+    }
+    if (typeof syncLikesNeonHueField === 'function') {
+      syncLikesNeonHueField();
+    }
+    if (typeof syncLikesLookPresetButtons === 'function') {
+      syncLikesLookPresetButtons();
+    }
     syncDisplayTimeUi();
     syncUiTheme();
     syncNeonHueField();
@@ -517,6 +641,13 @@ async function init() {
   for (const button of document.querySelectorAll('[data-look-preset]')) {
     button.addEventListener('click', () => applyLookPreset(button.dataset.lookPreset));
   }
+  for (const button of document.querySelectorAll('[data-likes-look-preset]')) {
+    button.addEventListener('click', () => {
+      if (typeof applyLikesLookPreset === 'function') {
+        applyLikesLookPreset(button.dataset.likesLookPreset);
+      }
+    });
+  }
   $('look-motion-speed')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-motion-speed]');
     if (!button) {
@@ -525,6 +656,31 @@ async function init() {
     syncMotionSpeedButtons(button.dataset.motionSpeed);
     noteFormChanged();
     pushLookPreview();
+  });
+  const pushRankingMotionPreview = () => {
+    noteFormChanged();
+    if (typeof window.liveTts?.pushOverlayRankingMotion !== 'function') {
+      return;
+    }
+    const streamSettings =
+      typeof readOverlayStreamSettings === 'function' ? readOverlayStreamSettings() : undefined;
+    void window.liveTts.pushOverlayRankingMotion(streamSettings);
+    if (typeof pushLookPreview === 'function') {
+      pushLookPreview();
+    }
+  };
+  $('overlay-ranking-motion')?.addEventListener('change', () => {
+    pushRankingMotionPreview();
+  });
+  $('overlay-ranking-motion-speed')?.addEventListener('click', (event) => {
+    const button = event.target.closest('[data-ranking-motion-speed]');
+    if (!button) {
+      return;
+    }
+    if (typeof syncRankingMotionSpeedButtons === 'function') {
+      syncRankingMotionSpeedButtons(button.dataset.rankingMotionSpeed);
+    }
+    pushRankingMotionPreview();
   });
   $('btn-look-motion-replay')?.addEventListener('click', () => {
     pushLookPreview();
@@ -563,8 +719,22 @@ async function init() {
       return;
     }
     if (action === 'copy-url') {
-      const result = await window.liveTts.copyOverlayUrl();
-      setToast(result.message, !result.ok);
+      try {
+        if (typeof copySelectedOverlayUrl === 'function') {
+          const result = await copySelectedOverlayUrl('live', { kind: 'chat' });
+          setToast(result.message, !result.ok);
+          return;
+        }
+        const result = await window.liveTts.copyOverlayUrl();
+        setToast(
+          result && typeof result.message === 'string'
+            ? result.message
+            : uiCopy.copyFailed || 'コピーに失敗しました',
+          !(result && result.ok),
+        );
+      } catch (_error) {
+        setToast(uiCopy.copyFailed || 'コピーに失敗しました', true);
+      }
     }
   });
   $('btn-disconnect').addEventListener('click', async () => {
@@ -732,32 +902,20 @@ async function init() {
       void toggleCommentMuteNow();
     }
   });
-  $('btn-copy-url').addEventListener('click', async () => {
-    const result = await window.liveTts.copyOverlayUrl();
-    setToast(result.message, !result.ok);
-  });
-  $('btn-copy-studio-url').addEventListener('click', async () => {
-    const result = await window.liveTts.copyOverlayUrl('studio');
-    setToast(result.message, !result.ok);
-  });
-  $('btn-copy-obs-url')?.addEventListener('click', async () => {
-    const result = await window.liveTts.copyOverlayUrl('local');
-    setToast(result.message, !result.ok);
-  });
-  $('btn-copy-alerts-url')?.addEventListener('click', async () => {
-    const result = await window.liveTts.copyOverlayUrl('alerts');
-    setToast(result.message, !result.ok);
-  });
-  $('btn-copy-alerts-obs-url')?.addEventListener('click', async () => {
-    const result = await window.liveTts.copyOverlayUrl('alerts-local');
-    setToast(result.message, !result.ok);
-  });
-  $('btn-copy-alerts-studio-url')?.addEventListener('click', async () => {
-    const result = await window.liveTts.copyOverlayUrl('alerts-studio');
-    setToast(result.message, !result.ok);
-  });
+  if (typeof bindOverlayUrlUi === 'function') {
+    bindOverlayUrlUi();
+  }
   if (typeof bindEventAlertUi === 'function') {
     bindEventAlertUi();
+  }
+  if (typeof bindTemplateEditors === 'function') {
+    bindTemplateEditors();
+    if (typeof fillTemplateAccentColors === 'function' && savedConfig) {
+      fillTemplateAccentColors(savedConfig);
+    }
+  }
+  if (typeof bindNameColorResets === 'function') {
+    bindNameColorResets();
   }
   async function applyReturnedConfig(result) {
     if (result.cancelled) {
@@ -778,12 +936,43 @@ async function init() {
     }
   }
 
-  $('btn-reset-config')?.addEventListener('click', async () => {
-    await settleFormSave();
-    configEchoWait += 1;
-    const result = await window.liveTts.resetConfig();
-    await applyReturnedConfig(result);
+  let configResetBusy = false;
+  async function runConfigReset(action) {
+    if (configResetBusy) {
+      return;
+    }
+    configResetBusy = true;
+    let armed = false;
+    try {
+      await settleFormSave();
+      configEchoWait += 1;
+      armed = true;
+      const result = await action();
+      if (!result?.ok && !result?.cancelled) {
+        configEchoWait = Math.max(0, configEchoWait - 1);
+      }
+      armed = false;
+      await applyReturnedConfig(
+        result ?? { ok: false, message: uiCopy.resetTabFailed || '初期化に失敗しました' },
+      );
+    } catch {
+      if (armed) {
+        configEchoWait = Math.max(0, configEchoWait - 1);
+      }
+      setToast(uiCopy.resetTabFailed || '初期化に失敗しました', true);
+    } finally {
+      configResetBusy = false;
+    }
+  }
+  $('btn-reset-config')?.addEventListener('click', () => {
+    void runConfigReset(() => window.liveTts.resetConfig());
   });
+  for (const button of document.querySelectorAll('[data-reset-tab]')) {
+    button.addEventListener('click', () => {
+      const tab = button.dataset.resetTab;
+      void runConfigReset(() => window.liveTts.resetConfigTab(tab));
+    });
+  }
   $('btn-export-config')?.addEventListener('click', async () => {
     const saved = await flushFormSave();
     if (!saved?.ok) {

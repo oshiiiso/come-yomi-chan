@@ -237,7 +237,7 @@
         <button class="tabs__btn" type="button" role="tab" id="tab-comment" data-tab="comment" aria-controls="panel-comment" aria-selected="false" tabindex="-1">コメント</button>
         <button class="tabs__btn" type="button" role="tab" id="tab-gift" data-tab="gift" aria-controls="panel-gift" aria-selected="false" tabindex="-1">ギフト</button>
         <button class="tabs__btn" type="button" role="tab" id="tab-events" data-tab="events" aria-controls="panel-events" aria-selected="false" tabindex="-1">イベント</button>
-        <button class="tabs__btn" type="button" role="tab" id="tab-look" data-tab="look" aria-controls="panel-look" aria-selected="false" tabindex="-1">配信の見た目</button>
+        <button class="tabs__btn" type="button" role="tab" id="tab-look" data-tab="look" aria-controls="panel-look" aria-selected="false" tabindex="-1">オーバーレイ</button>
         <button class="tabs__btn" type="button" role="tab" id="tab-tts" data-tab="tts" aria-controls="panel-tts" aria-selected="false" tabindex="-1">読み上げ</button>
         <button class="tabs__btn" type="button" role="tab" id="tab-app" data-tab="app" aria-controls="panel-app" aria-selected="false" tabindex="-1">アプリ</button>
       </nav>
@@ -252,7 +252,7 @@
               <li>出てきたアイコンと名前が自分か確認して、この人で接続する</li>
               <li>いつものように TikTok で配信を開始する</li>
             </ol>
-            <p class="hint">コメントを自分で見るだけなら、これで終わりです。視聴者の画面にもコメント列を出すときは、その下の URL をコピーします。</p>
+            <p class="hint">コメントを自分で見るだけなら、これで終わりです。視聴者の画面にも出すときは、オーバーレイタブの URL をコピーします。</p>
           </div>
           <div class="card">
             <h2>TikTok ID</h2>
@@ -263,57 +263,16 @@
             <p class="hint">プロフィールの @ の後ろです。接続の前に、アイコンと名前で本人か確認します。他の配信ツールと同時に起動しても大丈夫です。</p>
           </div>
           <div class="card">
-            <h2 id="overlay-chat-url-title">コメント列（固定枠あり）</h2>
-            <p class="hint">TikTok LIVE Studio で <strong>ソース追加 → リンク</strong> を選び、下のアドレスを貼ってください。</p>
-            <div class="url-block">
-              <p class="url-line" id="overlay-url"></p>
-              <button class="btn" id="btn-copy-url" type="button">LIVE Studio用をコピー</button>
-            </div>
-            <p class="hint">「正しいURLを入力してください」と出るときは、127.0.0.1 を手打ちしていないか確認してください。上のコピーを使います。</p>
-            <h3>OBS</h3>
-            <p class="hint">OBS のブラウザソースに下のアドレスを貼ってください。自分の耳に二重で聞こえるときは、このソースの音声モニタリングをオフにしてください。</p>
-            <div class="url-block">
-              <p class="url-line" id="overlay-local-url"></p>
-              <button class="btn" id="btn-copy-obs-url" type="button">OBS用をコピー</button>
-            </div>
-            <h3>別のURL</h3>
-            <p class="hint">LIVE Studio で上のアドレスが通らないときだけ使います。</p>
-            <div class="url-block url-block--muted">
-              <p class="url-line" id="overlay-studio-url"></p>
-              <button class="btn btn--ghost" id="btn-copy-studio-url" type="button">別のURLをコピー</button>
-            </div>
-            <label class="field">
-              <span>ポート</span>
-              <input id="overlay-port" type="number" min="1024" max="65535" />
-            </label>
-            <p class="hint">ポートを変えると、上の URL も変わります。配信ソフトに貼り直してください。</p>
-            <p class="hint" id="overlay-status-line"></p>
-          </div>
-          <div class="card">
-            <h2 id="overlay-alerts-url-title">イベントアラート</h2>
-            <p class="hint" id="overlay-alerts-url-hint">中央に画像や GIF を出す用です。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。</p>
-            <div class="url-block">
-              <p class="url-line" id="overlay-alerts-url"></p>
-              <button class="btn" id="btn-copy-alerts-url" type="button">LIVE Studio用をコピー</button>
-            </div>
-            <h3>OBS</h3>
-            <div class="url-block">
-              <p class="url-line" id="overlay-alerts-local-url"></p>
-              <button class="btn" id="btn-copy-alerts-obs-url" type="button">OBS用をコピー</button>
-            </div>
-            <h3>別のURL</h3>
-            <div class="url-block url-block--muted">
-              <p class="url-line" id="overlay-alerts-studio-url"></p>
-              <button class="btn btn--ghost" id="btn-copy-alerts-studio-url" type="button">別のURLをコピー</button>
-            </div>
-          </div>
-          <div class="card">
             <h2>起動</h2>
             <label class="check">
               <input id="auto-connect" type="checkbox" />
               <span>起動時に配信へ接続する</span>
             </label>
             <p class="hint">TikTok ID が入っているとき、起動後に接続を始めます。前回確認した ID のまま使います。ID を変えたあとは、もう一度接続して相手を確認してください。</p>
+          </div>
+          <div class="tab-reset">
+            <p class="hint" id="reset-tab-hint-connect">TikTok ID と、起動時の自動接続を最初の状態に戻します。</p>
+            <button class="btn btn--ghost" type="button" id="btn-reset-tab-connect" data-reset-tab="connect">このタブを初期化する</button>
           </div>
         </section>
 
@@ -388,6 +347,10 @@
               <button class="btn btn--ghost" id="speech-replace-clear-all" type="button">全部クリア</button>
             </div>
           </div>
+          <div class="tab-reset">
+            <p class="hint" id="reset-tab-hint-filter">NGワード、ブロック、ミュート、呼び方、読み替えを空に戻します。</p>
+            <button class="btn btn--ghost" type="button" id="btn-reset-tab-filter" data-reset-tab="filter">このタブを初期化する</button>
+          </div>
         </section>
 
         <section class="tab" role="tabpanel" id="panel-app" aria-labelledby="tab-app" data-tab-panel="app" hidden>
@@ -416,7 +379,7 @@
                 <option value="light">ライト</option>
               </select>
             </label>
-            <p class="hint">Windows のライト／ダークに合わせます。コメント画面と設定画面の色です。配信ソースの見た目は配信の見た目タブで変えます。</p>
+            <p class="hint">Windows のライト／ダークに合わせます。コメント画面と設定画面の色です。配信ソースの見た目はオーバーレイタブで変えます。</p>
           </div>
           <div class="card">
             <h2 id="hotkey-title">ショートカット</h2>
@@ -479,7 +442,7 @@
           <div class="card">
             <h2>コメントログ</h2>
             <p class="hint">アプリを開いてから流れた行をテキストに書き出せます。中身はタブ区切りです。</p>
-            <label class="field">
+            <label class="field field--num-wide">
               <span id="viewer-log-max-rows-label">コメント画面の最大行数</span>
               <input id="viewer-log-max-rows" type="number" min="100" max="5000" value="1000" />
             </label>
@@ -494,6 +457,10 @@
             <div class="row">
               <button class="btn btn--ghost" id="btn-export-config" type="button">設定を書き出す</button>
               <button class="btn btn--ghost" id="btn-import-config" type="button">設定を読み込む</button>
+            </div>
+            <p class="hint" id="reset-tab-hint-app">手前表示、明るさ、ショートカット、ログの最大行数を最初の状態に戻します。プロファイルは残します。</p>
+            <div class="row">
+              <button class="btn btn--ghost" type="button" id="btn-reset-tab-app" data-reset-tab="app">このタブを初期化する</button>
             </div>
             <p class="hint" id="reset-config-hint">文言・見た目・読み上げ・フィルタなどを最初の状態に戻します。TikTok ID と配信画面用のポートは残します。</p>
             <div class="row">
@@ -535,7 +502,7 @@
                 <span>読み上げテンプレート（半角 . は拍）</span>
                 <textarea id="comment-speech"></textarea>
               </label>
-              <p class="hint">{user} と {comment} が使えます。例: {user}.{comment}</p>
+              <p class="hint" id="template-editor-hint">{user} と {comment} が使えます。例: {user}.{comment}。自分の文言を色付き太字にするときは **強調したい文字** で囲みます。</p>
             </div>
             <div id="comment-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
@@ -656,6 +623,10 @@
               </div>
             </div>
           </div>
+          <div class="tab-reset">
+            <p class="hint" id="reset-tab-hint-comment">コメントの表示・読み上げ・サウンド・メンレベの色を最初の状態に戻します。</p>
+            <button class="btn btn--ghost" type="button" id="btn-reset-tab-comment" data-reset-tab="comment">このタブを初期化する</button>
+          </div>
         </section>
 
         <section class="tab" role="tabpanel" id="panel-gift" aria-labelledby="tab-gift" data-tab-panel="gift" hidden>
@@ -669,10 +640,10 @@
               </div>
             </div>
             <div class="event-alert-block" data-event-alert="gift" hidden>
-              <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+              <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期はもらったギフトの画像です。取れないときは同梱GIFを出します。画像を選ぶと差し替え、× でもらったギフトに戻せます。</p>
               <div class="row event-alert-media-row">
                 <button class="btn btn--ghost" type="button" data-event-alert-pick="gift">画像を選ぶ</button>
-                <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="gift" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
+                <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="gift" hidden aria-label="もらったギフトに戻す" title="もらったギフトに戻す">×</button>
                 <span class="hint" id="gift-alert-media-label"></span>
               </div>
               <label class="compact-field">
@@ -884,6 +855,10 @@
               </button>
             </div>
           </div>
+          <div class="tab-reset">
+            <p class="hint" id="reset-tab-hint-gift">ギフトの表示・読み上げ・サウンド・アラートを最初の状態に戻します。</p>
+            <button class="btn btn--ghost" type="button" id="btn-reset-tab-gift" data-reset-tab="gift">このタブを初期化する</button>
+          </div>
         </section>
 
         <section class="tab" role="tabpanel" id="panel-events" aria-labelledby="tab-events" data-tab-panel="events" hidden>
@@ -906,7 +881,7 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="follow" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="follow">画像を選ぶ</button>
                   <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="follow" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
@@ -987,7 +962,7 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="share" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="share">画像を選ぶ</button>
                   <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="share" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
@@ -1068,7 +1043,7 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="superFan" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="superFan">画像を選ぶ</button>
                   <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="superFan" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
@@ -1159,7 +1134,7 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="envelope" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="envelope">画像を選ぶ</button>
                   <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="envelope" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
@@ -1241,7 +1216,7 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="portal" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="portal">画像を選ぶ</button>
                   <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="portal" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
@@ -1323,7 +1298,7 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="like" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="like">画像を選ぶ</button>
                   <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="like" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
@@ -1361,7 +1336,7 @@
                 <span>読み上げテンプレート</span>
                 <textarea id="like-speech"></textarea>
               </label>
-              <p class="hint">{user} と {likes} が使えます。{likes} はその時点の累計です。</p>
+              <p class="hint">{user} と {likes} と {event} が使えます。{likes} はその時点の累計、{event} は「いいね」です。任意の強調は **文字** です。</p>
             </div>
             <div id="like-sound-settings" class="gift-sound-panel" hidden>
               <div class="row">
@@ -1410,7 +1385,7 @@
               </div>
             </div>
               <div class="event-alert-block" data-event-alert="member" hidden>
-                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
+                <p class="hint" data-event-alert-hint>別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。</p>
                 <div class="row event-alert-media-row">
                   <button class="btn btn--ghost" type="button" data-event-alert-pick="member">画像を選ぶ</button>
                   <button class="btn btn--ghost event-alert-media-reset" type="button" data-event-alert-reset="member" hidden aria-label="テンプレに戻す" title="テンプレに戻す">×</button>
@@ -1491,169 +1466,528 @@
               <button class="btn btn--ghost" type="button" data-test-event="member" data-test-count="1" data-test-portal-join="1">ポータルをテスト</button>
             </div>
           </div>
+          <div class="tab-reset">
+            <p class="hint" id="reset-tab-hint-events">フォローから入室までの表示・読み上げ・サウンド・アラートを最初の状態に戻します。</p>
+            <button class="btn btn--ghost" type="button" id="btn-reset-tab-events" data-reset-tab="events">このタブを初期化する</button>
+          </div>
         </section>
 
         <section class="tab" role="tabpanel" id="panel-look" aria-labelledby="tab-look" data-tab-panel="look" hidden>
-          <p class="hint" id="look-tab-hint">ここは視聴者の画面（配信ソース）の見た目です。コメント画面の文字サイズや幅は、コメント画面の上で変えます。</p>
-          <div class="row">
-            <button class="btn btn--ghost" id="btn-look-overlay-samples" type="button">配信ソースにサンプル</button>
-            <button class="btn btn--ghost" id="btn-look-overlay-clear" type="button">配信ソースを消す</button>
+          <p class="hint" id="look-tab-hint">視聴者の画面に出す配信ソースです。上の区分でコメント・ランキング・アラートを切り替え、右のプレビューで確認します。</p>
+          <div class="subtabs" id="look-sections" role="tablist" aria-label="オーバーレイの区分">
+            <button
+              class="subtabs__btn is-active"
+              type="button"
+              role="tab"
+              id="look-section-comment"
+              data-look-section-btn="comment"
+              aria-controls="look-section-panel-comment"
+              aria-selected="true"
+              tabindex="0"
+            >
+              コメント
+            </button>
+            <button
+              class="subtabs__btn"
+              type="button"
+              role="tab"
+              id="look-section-ranking"
+              data-look-section-btn="ranking"
+              aria-controls="look-section-panel-ranking"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              ランキング
+            </button>
+            <button
+              class="subtabs__btn"
+              type="button"
+              role="tab"
+              id="look-section-alerts"
+              data-look-section-btn="alerts"
+              aria-controls="look-section-panel-alerts"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              アラート
+            </button>
           </div>
           <div class="card">
-            <h2>かんたん見た目</h2>
-            <p class="hint">プリセットを選んでから、スライダーで微調整できます。このタブは少し待つと配信ソースにも保存されます。</p>
-            <div class="preset-grid">
-              <button class="preset-btn" type="button" data-look-preset="dark">標準</button>
-              <button class="preset-btn" type="button" data-look-preset="light">明るい</button>
-              <button class="preset-btn" type="button" data-look-preset="minimal">文字だけ</button>
-              <button class="preset-btn" type="button" data-look-preset="neon">ネオン</button>
-            </div>
-            <div class="field-grid">
-              <label class="field">
-                <span>文字サイズ <em id="look-font-size-value">20px</em></span>
-                <input id="look-font-size" type="range" min="10" max="60" />
-              </label>
-              <label class="field">
-                <span>背景の濃さ <em id="look-bg-opacity-value">72%</em></span>
-                <input id="look-bg-opacity" type="range" min="0" max="100" />
-              </label>
-              <label class="field">
-                <span>角の丸み <em id="look-radius-value">12px</em></span>
-                <input id="look-radius" type="range" min="0" max="28" />
-              </label>
-              <label class="field">
-                <span>ギフトアイコン <em id="look-gift-size-value">40px</em></span>
-                <input id="look-gift-size" type="range" min="16" max="80" />
-              </label>
-              <label class="field" id="look-neon-hue-field" hidden>
-                <span>ネオンの色 <em id="look-neon-hue-value" class="hue-swatch"></em></span>
-                <input id="look-neon-hue" class="hue-range" type="range" min="0" max="360" value="280" />
-              </label>
-              <label class="field">
-                <span>コメントの位置</span>
-                <select id="look-align">
-                  <option value="full">横いっぱいに</option>
-                  <option value="left">左に寄せる</option>
-                  <option value="right">右に寄せる</option>
-                </select>
-              </label>
-              <label class="field">
-                <span>プレビュー背景</span>
-                <select id="look-backdrop">
-                  <option value="checker">市松（透過確認）</option>
-                  <option value="green">配信グリーン</option>
-                  <option value="magenta">マゼンタ</option>
-                  <option value="dark">暗い無地</option>
-                </select>
-              </label>
-            </div>
-            <label class="field">
-              <span>フォント</span>
-              <select id="look-font"></select>
+            <h2 id="overlay-url-card-title">配信ソースURL</h2>
+            <label class="field" hidden>
+              <span id="overlay-url-kind-label">配信ソースの種類</span>
+              <select id="overlay-url-kind" aria-label="配信ソースの種類">
+                <option value="chat" id="overlay-url-kind-chat-label" selected>
+                  コメント列（固定枠あり）
+                </option>
+                <option value="alerts" id="overlay-url-kind-alerts-label">イベントアラート</option>
+                <option value="ranking" id="overlay-url-kind-likes-label">ランキング</option>
+              </select>
             </label>
-            <label class="check check--wrap">
-              <input id="look-show-avatar" type="checkbox" />
-              <span>アイコン（アバター）を出す</span>
-            </label>
-            <label class="check check--wrap">
-              <input id="hide-user-name" type="checkbox" />
-              <span>名前を出さない</span>
-            </label>
-            <p class="hint">ニックネームは配信ソースのコメント列から消えます。ギフトやフォローにも効きます。このアプリのコメント画面には名前が出ます。読み上げはテンプレートのままです。</p>
-            <label class="field">
-              <span id="look-motion-label">動き</span>
-              <select id="look-motion"></select>
-            </label>
-            <div class="field">
-              <span id="look-motion-speed-label">速さ</span>
-              <div class="mode-switch look-speed" id="look-motion-speed" role="group" aria-labelledby="look-motion-speed-label">
-                <button class="mode-switch__btn" type="button" data-motion-speed="1">とても遅い</button>
-                <button class="mode-switch__btn" type="button" data-motion-speed="2">遅い</button>
-                <button class="mode-switch__btn is-active" type="button" data-motion-speed="3" aria-pressed="true">ふつう</button>
-                <button class="mode-switch__btn" type="button" data-motion-speed="4">速い</button>
-                <button class="mode-switch__btn" type="button" data-motion-speed="5">とても速い</button>
+            <p class="hint" id="overlay-url-kind-hint" aria-live="polite">
+              TikTok LIVE Studio でソース追加 → リンクに貼るときは LIVE Studio用、OBS のブラウザソースには OBS用を使います。
+            </p>
+            <div class="url-block">
+              <p class="url-line" id="overlay-url" aria-live="polite"></p>
+              <div class="row overlay-url-copy-row" role="group" aria-label="URLのコピー">
+                <button
+                  class="btn is-active"
+                  id="btn-copy-url"
+                  type="button"
+                  data-overlay-copy="live"
+                  aria-pressed="true"
+                >
+                  LIVE Studio用をコピー
+                </button>
+                <button
+                  class="btn"
+                  id="btn-copy-obs-url"
+                  type="button"
+                  data-overlay-copy="obs"
+                  aria-pressed="false"
+                >
+                  OBS用をコピー
+                </button>
+                <button
+                  class="btn btn--ghost"
+                  id="btn-copy-studio-url"
+                  type="button"
+                  data-overlay-copy="studio"
+                  aria-pressed="false"
+                >
+                  別のURLをコピー
+                </button>
               </div>
             </div>
-            <button class="btn btn--ghost" id="btn-look-motion-replay" type="button">動きを見る</button>
-            <p class="hint" id="look-motion-hint">コメントと固定枠が出るときと消えるときの動きです。次に出る行から効きます。プレビューは選ぶと再生されます。</p>
-            <input id="look-theme" type="hidden" />
-          </div>
-          <div class="card">
-            <h2 id="look-chat-title">コメント列</h2>
-            <div class="field-grid">
-              <label class="field">
-                <span>表示行数</span>
-                <input id="chat-max-rows" type="number" min="1" max="50" />
-              </label>
-              <label class="field">
-                <span>文字数上限</span>
-                <input id="max-display-chars" type="number" min="10" max="400" />
-              </label>
+            <p class="hint" id="overlay-url-variant-hint" aria-live="polite">
+              「正しいURLを入力してください」と出るときは、127.0.0.1 を手打ちしていないか確認してください。LIVE Studio用を使います。
+            </p>
+            <div class="row" id="overlay-connect-sample-row" role="group" aria-label="配信ソースの確認">
+              <button class="btn btn--ghost" id="btn-connect-overlay-sample" type="button">
+                サンプルを出す
+              </button>
+              <button class="btn btn--ghost" id="btn-connect-overlay-clear" type="button">
+                表示を消す
+              </button>
             </div>
-            <label class="check check--wrap">
-              <input id="chat-display-unlimited" type="checkbox" />
-              <span>時間で消えない</span>
+            <p class="hint" id="overlay-connect-sample-hint">
+              上で選んだ種類の配信ソースにサンプルを出します。URLを貼ったあと確認に使えます。
+            </p>
+            <label class="field field--num-wide">
+              <span>ポート</span>
+              <input id="overlay-port" type="number" min="1024" max="65535" />
             </label>
-            <label class="field" id="chat-display-sec-field">
-              <span>表示時間（秒）</span>
-              <input id="chat-display-sec" type="number" min="1" max="120" />
-            </label>
-            <p class="hint">時間で消えないときは、表示行数を超えた古い行だけ消えます。長いコメントは文字数上限で切り、末尾に … を付けます。読み上げ側の上限は読み上げタブです。</p>
-            <h3 id="look-pin-title">固定枠</h3>
-            <p class="hint" id="look-pin-hint">ギフトなどはコメント列のすぐ上に1件ずつ出します。来た順です。表示時間は入場から退場が終わるまでです。コメント画面には出ません。</p>
-            <label class="check check--wrap">
-              <input id="look-pin-enabled" type="checkbox" checked />
-              <span id="look-pin-enabled-label">固定枠を使う</span>
-            </label>
-            <p class="hint" id="look-pin-enabled-hint">オフにすると、今までどおり全部下から流れます。</p>
-            <div id="look-pin-options" class="option-extra">
+            <p class="hint">ポートを変えると、上の URL も変わります。配信ソフトに貼り直してください。</p>
+            <p class="hint" id="overlay-status-line"></p>
+          </div>
+          <div id="look-section-panel-comment" data-look-section="comment" role="tabpanel" aria-labelledby="look-section-comment">
+          <div class="subtabs subtabs--nested" id="look-comment-sections" role="tablist" aria-label="コメントの区分">
+            <button
+              class="subtabs__btn is-active"
+              type="button"
+              role="tab"
+              id="look-section-easy"
+              data-look-comment-btn="easy"
+              aria-controls="look-section-panel-easy"
+              aria-selected="true"
+              tabindex="0"
+            >
+              かんたん見た目
+            </button>
+            <button
+              class="subtabs__btn"
+              type="button"
+              role="tab"
+              id="look-section-chat"
+              data-look-comment-btn="chat"
+              aria-controls="look-section-panel-chat"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              コメントと固定枠
+            </button>
+            <button
+              class="subtabs__btn"
+              type="button"
+              role="tab"
+              id="look-section-name"
+              data-look-comment-btn="name"
+              aria-controls="look-section-panel-name"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              名前と色
+            </button>
+          </div>
+          <div
+            id="look-section-panel-easy"
+            class="subtab-panel"
+            data-look-comment="easy"
+            role="tabpanel"
+            aria-labelledby="look-section-easy"
+          >
+            <div class="card">
+              <h2>かんたん見た目</h2>
+              <p class="hint">プリセットを選んでから、スライダーで微調整できます。このタブは少し待つと配信ソースにも保存されます。</p>
+              <div class="preset-grid">
+                <button class="preset-btn" type="button" data-look-preset="dark">標準</button>
+                <button class="preset-btn" type="button" data-look-preset="light">明るい</button>
+                <button class="preset-btn" type="button" data-look-preset="minimal">文字だけ</button>
+                <button class="preset-btn" type="button" data-look-preset="neon">ネオン</button>
+              </div>
+              <div class="field-grid">
+                <label class="field">
+                  <span>文字サイズ <em id="look-font-size-value">20px</em></span>
+                  <input id="look-font-size" type="range" min="10" max="60" />
+                </label>
+                <label class="field">
+                  <span>背景の濃さ <em id="look-bg-opacity-value">72%</em></span>
+                  <input id="look-bg-opacity" type="range" min="0" max="100" />
+                </label>
+                <label class="field">
+                  <span>角の丸み <em id="look-radius-value">12px</em></span>
+                  <input id="look-radius" type="range" min="0" max="28" />
+                </label>
+                <label class="field">
+                  <span>ギフトアイコン <em id="look-gift-size-value">40px</em></span>
+                  <input id="look-gift-size" type="range" min="16" max="80" />
+                </label>
+                <label class="field" id="look-neon-hue-field" hidden>
+                  <span>ネオンの色 <em id="look-neon-hue-value" class="hue-swatch"></em></span>
+                  <input id="look-neon-hue" class="hue-range" type="range" min="0" max="360" value="280" />
+                </label>
+                <label class="field">
+                  <span>コメントの位置</span>
+                  <select id="look-align">
+                    <option value="full">横いっぱいに</option>
+                    <option value="left">左に寄せる</option>
+                    <option value="right">右に寄せる</option>
+                  </select>
+                </label>
+                <label class="field">
+                  <span>プレビュー背景</span>
+                  <select id="look-backdrop">
+                    <option value="checker">市松（透過確認）</option>
+                    <option value="green">配信グリーン</option>
+                    <option value="magenta">マゼンタ</option>
+                    <option value="dark">暗い無地</option>
+                  </select>
+                </label>
+              </div>
               <label class="field">
-                <span id="look-pin-sec-label">固定枠の表示時間（秒）</span>
-                <input id="look-pin-sec" type="number" min="1" max="120" value="4" />
+                <span>フォント</span>
+                <select id="look-font"></select>
               </label>
               <label class="check check--wrap">
-                <input id="look-pin-hold" type="checkbox" />
-                <span id="look-pin-hold-label">次が無いときは出したまま</span>
+                <input id="look-show-avatar" type="checkbox" />
+                <span>アイコン（アバター）を出す</span>
               </label>
-              <p class="hint" id="look-pin-hold-hint">オンのとき、待ちが無ければ枠を消しません。次が来たら表示時間のあと切り替わります。</p>
+              <label class="check check--wrap">
+                <input id="hide-user-name" type="checkbox" />
+                <span>名前を出さない</span>
+              </label>
+              <p class="hint">ニックネームは配信ソースのコメント列から消えます。ギフトやフォローにも効きます。このアプリのコメント画面には名前が出ます。読み上げはテンプレートのままです。</p>
+              <label class="field">
+                <span id="look-motion-label">動き</span>
+                <select id="look-motion"></select>
+              </label>
               <div class="field">
-                <span id="look-pin-types-label">固定枠に出す種類</span>
-                <div id="look-pin-types" class="pin-types"></div>
+                <span id="look-motion-speed-label">速さ</span>
+                <div class="mode-switch look-speed" id="look-motion-speed" role="group" aria-labelledby="look-motion-speed-label">
+                  <button class="mode-switch__btn" type="button" data-motion-speed="1">とても遅い</button>
+                  <button class="mode-switch__btn" type="button" data-motion-speed="2">遅い</button>
+                  <button class="mode-switch__btn is-active" type="button" data-motion-speed="3" aria-pressed="true">ふつう</button>
+                  <button class="mode-switch__btn" type="button" data-motion-speed="4">速い</button>
+                  <button class="mode-switch__btn" type="button" data-motion-speed="5">とても速い</button>
+                </div>
               </div>
-              <p class="hint" id="look-pin-types-hint">オフにすると、その種類はコメントと一緒に流れます。初期はコメント以外が全部固定枠です。</p>
+              <button class="btn btn--ghost" id="btn-look-motion-replay" type="button">動きを見る</button>
+              <p class="hint" id="look-motion-hint">コメントと固定枠が出るときと消えるときの動きです。次に出る行から効きます。プレビューは選ぶと再生されます。</p>
+              <input id="look-theme" type="hidden" />
+            </div>
+          </div>
+          <div
+            id="look-section-panel-chat"
+            class="subtab-panel"
+            data-look-comment="chat"
+            role="tabpanel"
+            aria-labelledby="look-section-chat"
+            hidden
+          >
+            <div class="card">
+              <h2 id="look-chat-title">コメント列</h2>
+              <div class="field-grid">
+                <label class="field field--num-sm">
+                  <span>表示行数</span>
+                  <input id="chat-max-rows" type="number" min="1" max="50" />
+                </label>
+                <label class="field">
+                  <span>文字数上限</span>
+                  <input id="max-display-chars" type="number" min="10" max="400" />
+                </label>
+              </div>
               <label class="check check--wrap">
-                <input id="look-pin-preview" type="checkbox" checked />
-                <span id="look-pin-preview-label">プレビューも固定枠で見る</span>
+                <input id="chat-display-unlimited" type="checkbox" />
+                <span>時間で消えない</span>
               </label>
-              <p class="hint" id="look-pin-preview-hint">オフにすると、プレビューだけ今までどおり全部流れます。オンのときは固定枠の種類を表示時間ごとに順に切り替えます。プレビューでは音は鳴りません。配信ソースは常に上の設定です。</p>
+              <label class="field field--num-sm" id="chat-display-sec-field">
+                <span>表示時間（秒）</span>
+                <input id="chat-display-sec" type="number" min="1" max="120" />
+              </label>
+              <p class="hint">時間で消えないときは、表示行数を超えた古い行だけ消えます。長いコメントは文字数上限で切り、末尾に … を付けます。読み上げ側の上限は読み上げタブです。</p>
             </div>
-          </div>
-          <div class="card">
-            <h3 id="look-name-color-title">名前の色</h3>
-            <label class="check check--wrap">
-              <input id="look-name-color-enabled" type="checkbox" checked />
-              <span id="look-name-color-enabled-label">配信ソースで名前に色をつける</span>
-            </label>
-            <p class="hint" id="look-name-color-enabled-hint">同じユーザーは常に同じ色になります。プリセットを変えても色は変わりません。</p>
-            <div class="name-color-palette">
-              <span id="look-name-color-palette-label">色のパレット（5色）</span>
-              <div class="name-color-palette__swatches">
-                <input type="color" id="look-name-color-0" value="#5eead4" aria-label="名前色1" />
-                <input type="color" id="look-name-color-1" value="#93c5fd" aria-label="名前色2" />
-                <input type="color" id="look-name-color-2" value="#fcd34d" aria-label="名前色3" />
-                <input type="color" id="look-name-color-3" value="#f9a8d4" aria-label="名前色4" />
-                <input type="color" id="look-name-color-4" value="#86efac" aria-label="名前色5" />
+            <div class="card">
+              <h2 id="look-pin-title">固定枠</h2>
+              <p class="hint" id="look-pin-hint">ギフトなどはコメント列のすぐ上に1件ずつ出します。来た順です。表示時間は入場から退場が終わるまでです。コメント画面には出ません。</p>
+              <label class="check check--wrap">
+                <input id="look-pin-enabled" type="checkbox" checked />
+                <span id="look-pin-enabled-label">固定枠を使う</span>
+              </label>
+              <p class="hint" id="look-pin-enabled-hint">オフにすると、今までどおり全部下から流れます。</p>
+              <div id="look-pin-options" class="option-extra">
+                <label class="field field--num-sm">
+                  <span id="look-pin-sec-label">固定枠の表示時間（秒）</span>
+                  <input id="look-pin-sec" type="number" min="1" max="120" value="4" />
+                </label>
+                <label class="check check--wrap">
+                  <input id="look-pin-hold" type="checkbox" />
+                  <span id="look-pin-hold-label">次が無いときは出したまま</span>
+                </label>
+                <p class="hint" id="look-pin-hold-hint">オンのとき、待ちが無ければ枠を消しません。次が来たら表示時間のあと切り替わります。</p>
+                <div class="field">
+                  <span id="look-pin-types-label">固定枠に出す種類</span>
+                  <div id="look-pin-types" class="pin-types"></div>
+                </div>
+                <p class="hint" id="look-pin-types-hint">オフにすると、その種類はコメントと一緒に流れます。初期はコメント以外が全部固定枠です。</p>
+                <label class="check check--wrap">
+                  <input id="look-pin-preview" type="checkbox" checked />
+                  <span id="look-pin-preview-label">プレビューも固定枠で見る</span>
+                </label>
+                <p class="hint" id="look-pin-preview-hint">オフにすると、プレビューだけ今までどおり全部流れます。オンのときは固定枠の種類を表示時間ごとに順に切り替えます。プレビューでは音は鳴りません。配信ソースは常に上の設定です。</p>
               </div>
             </div>
           </div>
-          <details class="advanced">
-            <summary>カスタム CSS（上級者向け）</summary>
-            <label class="field">
-              <span>上書き用 CSS（空ならかんたん設定のまま）</span>
-              <textarea id="overlay-css" class="css-editor" spellcheck="false" placeholder=".chat__item { background: rgb(0 0 0 / 55%); }&#10;.chat__body { font-size: 20px; }"></textarea>
+          <div
+            id="look-section-panel-name"
+            class="subtab-panel"
+            data-look-comment="name"
+            role="tabpanel"
+            aria-labelledby="look-section-name"
+            hidden
+          >
+            <div class="card">
+              <h2 id="look-name-color-title">名前の色</h2>
+              <label class="check check--wrap">
+                <input id="look-name-color-enabled" type="checkbox" checked />
+                <span id="look-name-color-enabled-label">配信ソースで名前に色をつける</span>
+              </label>
+              <p class="hint" id="look-name-color-enabled-hint">同じユーザーは常に同じ色になります。プリセットを変えても色は変わりません。</p>
+              <div class="name-color-palette">
+                <span id="look-name-color-palette-label">色のパレット（5色）</span>
+                <div class="name-color-palette__swatches">
+                  <div class="color-picker-wrap">
+                    <input type="color" class="color-picker" id="look-name-color-0" value="#5eead4" aria-label="名前色1" />
+                    <button type="button" class="btn btn--ghost color-picker-reset" data-name-color-reset="0" hidden aria-label="初期色に戻す" title="初期色に戻す">×</button>
+                  </div>
+                  <div class="color-picker-wrap">
+                    <input type="color" class="color-picker" id="look-name-color-1" value="#93c5fd" aria-label="名前色2" />
+                    <button type="button" class="btn btn--ghost color-picker-reset" data-name-color-reset="1" hidden aria-label="初期色に戻す" title="初期色に戻す">×</button>
+                  </div>
+                  <div class="color-picker-wrap">
+                    <input type="color" class="color-picker" id="look-name-color-2" value="#fcd34d" aria-label="名前色3" />
+                    <button type="button" class="btn btn--ghost color-picker-reset" data-name-color-reset="2" hidden aria-label="初期色に戻す" title="初期色に戻す">×</button>
+                  </div>
+                  <div class="color-picker-wrap">
+                    <input type="color" class="color-picker" id="look-name-color-3" value="#f9a8d4" aria-label="名前色4" />
+                    <button type="button" class="btn btn--ghost color-picker-reset" data-name-color-reset="3" hidden aria-label="初期色に戻す" title="初期色に戻す">×</button>
+                  </div>
+                  <div class="color-picker-wrap">
+                    <input type="color" class="color-picker" id="look-name-color-4" value="#86efac" aria-label="名前色5" />
+                    <button type="button" class="btn btn--ghost color-picker-reset" data-name-color-reset="4" hidden aria-label="初期色に戻す" title="初期色に戻す">×</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <details class="advanced">
+              <summary id="overlay-css-summary">カスタム CSS（上級者向け）</summary>
+              <label class="field">
+                <span id="overlay-css-label">上書き用 CSS（空ならかんたん設定のまま）</span>
+                <textarea id="overlay-css" class="css-editor" spellcheck="false" placeholder=".chat__item { background: rgb(0 0 0 / 55%); }&#10;.chat__body { font-size: 20px; }"></textarea>
+              </label>
+              <p class="hint" id="overlay-css-hint">コメント列の配信ソースだけに効きます。イベントアラート・いいねランキングには入りません。かんたん見た目のあとに上書きされます。</p>
+              <pre class="code-ref" id="overlay-css-ref" tabindex="0">骨格
+.overlay-root
+  ol#pin.chat.chat--pin          …固定枠
+  ol#chat.chat                   …コメント列
+    li.chat__item.chat__item--{種類}
+      img.chat__avatar
+      img.chat__gift             …ギフト時
+      .chat__body
+        .chat__name-line
+          .chat__name
+        .chat__text-line
+          .chat__text / .chat__accent / .chat__emote
+
+種類: comment gift follow share superFan envelope portal like member
+修飾: .chat--pin .chat--theme-* .chat--align-* .chat--hide-avatar .is-leaving
+
+.chat の変数（例）
+--bubble-rgb --bubble-text --bubble-alpha
+--body-size --avatar-size --gift-size --item-radius --chat-font
+--gift-color --event-color --like-color
+
+例
+.chat__item { background: rgb(0 0 0 / 55%); }
+.chat__body { font-size: 22px; }
+.chat--pin .chat__item { box-shadow: inset 0 0 0 2px #f59f00; }</pre>
+            </details>
+          </div>
+          </div>
+          <div id="look-section-panel-ranking" data-look-section="ranking" role="tabpanel" aria-labelledby="look-section-ranking" hidden>
+            <div class="card" id="overlay-ranking-settings">
+            <label class="check">
+              <input id="overlay-like-ranking-enabled" type="checkbox" checked />
+              <span id="overlay-like-ranking-enabled-label">ランキングを配信ソースに出す</span>
             </label>
-            <p class="hint">.chat / .chat--pin / .chat--pin .chat__item / .chat__item / .chat__body / .chat__avatar / .chat__gift / .chat__item--gift などが使えます。</p>
-          </details>
+            <p class="hint" id="overlay-like-ranking-hint">
+              上の URL を別ソースとして貼ります。配信中の累計トップです（接続し直すとリセット）。見た目は下で変えられます。
+            </p>
+            <label class="field">
+              <span id="overlay-ranking-mode-label">ランキングの種類</span>
+              <select id="overlay-ranking-mode" aria-label="ランキングの種類">
+                <option value="likes" id="overlay-ranking-mode-likes-label" selected>いいね</option>
+                <option value="diamonds" id="overlay-ranking-mode-diamonds-label">ダイヤ</option>
+              </select>
+            </label>
+            <p class="hint" id="overlay-ranking-mode-hint">
+              いいねはセッション中のいいね累計、ダイヤは通常ギフトの個数×ダイヤの累計です。
+            </p>
+            <div id="overlay-ranking-like-sync-settings">
+              <label class="field">
+                <span id="overlay-ranking-like-sync-label">いいねの更新</span>
+                <select id="overlay-ranking-like-sync" aria-label="いいねの更新">
+                  <option value="live" id="overlay-ranking-like-sync-live-label" selected>常時</option>
+                  <option value="poll" id="overlay-ranking-like-sync-poll-label">ポーリング</option>
+                </select>
+              </label>
+              <p class="hint" id="overlay-ranking-like-sync-hint">
+                いいねが多い配信ではポーリングにすると配信ソースの負荷を抑えられます。ダイヤは常に即時です。
+              </p>
+              <label class="field field--num-sm" id="overlay-ranking-like-poll-sec-field" hidden>
+                <span id="overlay-ranking-like-poll-sec-label">ポーリング間隔（秒）</span>
+                <input
+                  id="overlay-ranking-like-poll-sec"
+                  type="number"
+                  min="1"
+                  max="300"
+                  value="30"
+                  aria-label="ポーリング間隔（秒）"
+                />
+              </label>
+            </div>
+            <label class="field field--num-sm">
+              <span id="overlay-like-ranking-max-label">ランキングの表示人数</span>
+              <input id="overlay-like-ranking-max" type="number" min="1" max="10" value="5" />
+            </label>
+            <div class="likes-look-block">
+              <h2 id="likes-look-title">ランキングの見た目</h2>
+              <p class="hint" id="likes-look-hint">
+                ランキング配信ソース専用の見た目です。プリセットを選んでから微調整できます。確認は上の「サンプルを出す」で行います。
+              </p>
+              <div class="preset-grid">
+                <button class="preset-btn" type="button" data-likes-look-preset="standard">標準</button>
+                <button class="preset-btn" type="button" data-likes-look-preset="luxury">豪華</button>
+                <button class="preset-btn" type="button" data-likes-look-preset="compact">コンパクト</button>
+                <button class="preset-btn" type="button" data-likes-look-preset="neon">ネオン</button>
+                <button class="preset-btn" type="button" data-likes-look-preset="minimal">シンプル</button>
+              </div>
+              <div class="field-grid">
+                <label class="field">
+                  <span>文字サイズ <em id="likes-look-font-size-value">22px</em></span>
+                  <input id="likes-look-font-size" type="range" min="10" max="60" />
+                </label>
+                <label class="field">
+                  <span>背景の濃さ <em id="likes-look-bg-opacity-value">48%</em></span>
+                  <input id="likes-look-bg-opacity" type="range" min="0" max="100" />
+                </label>
+                <label class="field">
+                  <span>角の丸み <em id="likes-look-radius-value">14px</em></span>
+                  <input id="likes-look-radius" type="range" min="0" max="28" />
+                </label>
+                <label class="field">
+                  <span>アイコンサイズ <em id="likes-look-avatar-size-value">36px</em></span>
+                  <input id="likes-look-avatar-size" type="range" min="16" max="80" />
+                </label>
+                <label class="field">
+                  <span>行の間隔 <em id="likes-look-row-gap-value">6px</em></span>
+                  <input id="likes-look-row-gap" type="range" min="0" max="20" />
+                </label>
+                <label class="field">
+                  <span>パネル幅 <em id="likes-look-panel-width-value">420px</em></span>
+                  <input id="likes-look-panel-width" type="range" min="240" max="720" />
+                </label>
+                <label class="field" id="likes-look-neon-hue-field" hidden>
+                  <span>ネオンの色 <em id="likes-look-neon-hue-value" class="hue-swatch"></em></span>
+                  <input id="likes-look-neon-hue" class="hue-range" type="range" min="0" max="360" value="280" />
+                </label>
+              </div>
+              <label class="field">
+                <span>フォント</span>
+                <select id="likes-look-font"></select>
+              </label>
+              <label class="check check--wrap">
+                <input id="likes-look-show-avatar" type="checkbox" checked />
+                <span id="likes-look-show-avatar-label">アイコン（アバター）を出す</span>
+              </label>
+              <label class="check check--wrap">
+                <input id="likes-look-show-unit" type="checkbox" checked />
+                <span id="likes-look-show-unit-label">「likes」を付ける</span>
+              </label>
+              <label class="field">
+                <span id="overlay-ranking-motion-label">入れ替わりの動き</span>
+                <select id="overlay-ranking-motion" aria-label="入れ替わりの動き">
+                  <option value="slide" id="overlay-ranking-motion-slide-label" selected>スライド</option>
+                  <option value="soft" id="overlay-ranking-motion-soft-label">ふわっと</option>
+                  <option value="emphasis" id="overlay-ranking-motion-emphasis-label">スライド＋強調</option>
+                </select>
+              </label>
+              <p class="hint" id="overlay-ranking-motion-hint">
+                順位が変わったときの動きです。スライドは行が上下に移動し、ふわっとは切り替わり、強調は上がった行を光らせます。
+              </p>
+              <div class="field">
+                <span id="overlay-ranking-motion-speed-label">入れ替わりの速さ</span>
+                <div
+                  class="mode-switch look-speed"
+                  id="overlay-ranking-motion-speed"
+                  role="group"
+                  aria-labelledby="overlay-ranking-motion-speed-label"
+                >
+                  <button class="mode-switch__btn" type="button" data-ranking-motion-speed="1">遅い</button>
+                  <button
+                    class="mode-switch__btn is-active"
+                    type="button"
+                    data-ranking-motion-speed="2"
+                    aria-pressed="true"
+                  >
+                    ふつう
+                  </button>
+                  <button class="mode-switch__btn" type="button" data-ranking-motion-speed="3">速い</button>
+                </div>
+              </div>
+              <input id="likes-look-theme" type="hidden" value="standard" />
+            </div>
+            </div>
+          </div>
+          <div id="look-section-panel-alerts" data-look-section="alerts" role="tabpanel" aria-labelledby="look-section-alerts" hidden>
+            <div class="card">
+              <h2 id="look-alerts-title">イベントアラート</h2>
+              <p class="hint" id="look-alerts-hint">画像・文言・表示秒はイベントタブです。ここは配信用の URL です。右のプレビューはアラート用の画面で、中身は「サンプルを出す」で確認します。</p>
+            </div>
+          </div>
+          <div class="tab-reset">
+            <p class="hint" id="reset-tab-hint-look">配信ソースの見た目と動きを最初の状態に戻します。ポートは残します。</p>
+            <button class="btn btn--ghost" type="button" id="btn-reset-tab-look" data-reset-tab="look">このタブを初期化する</button>
+          </div>
         </section>
 
         <section class="tab" role="tabpanel" id="panel-tts" aria-labelledby="tab-tts" data-tab-panel="tts" hidden>
@@ -1691,7 +2025,7 @@
                   <span>VOICEVOX ホスト</span>
                   <input id="voicevox-host" type="text" autocomplete="off" />
                 </label>
-                <label class="field">
+                <label class="field field--num-wide">
                   <span>VOICEVOX ポート</span>
                   <input id="voicevox-port" type="number" min="1024" max="65535" />
                 </label>
@@ -1711,11 +2045,11 @@
             </label>
             <p class="hint">VOICEVOX を起動したあとや、エンジンを切り替えたあとに声が出ないときは再取得してください。</p>
             <div class="field-grid">
-              <label class="field">
+              <label class="field field--num-sm">
                 <span>速度（-10〜10）</span>
                 <input id="tts-rate" type="number" min="-10" max="10" />
               </label>
-              <label class="field">
+              <label class="field field--num-sm">
                 <span>音量（0〜100）</span>
                 <input id="tts-volume" type="number" min="0" max="100" />
               </label>
@@ -1730,14 +2064,14 @@
               <input id="max-speech-chars" type="number" min="10" max="400" />
             </label>
             <p class="hint">超えた分は切って、末尾に … を付けて読みます。表示の上限とは別です。</p>
-            <label class="field">
+            <label class="field field--num-sm">
               <span>同時に待つ読み上げの上限</span>
               <input id="max-queue" type="number" min="1" max="100" />
             </label>
             <p class="hint">上限を超えたコメントは読み上げません。捨てたときは画面下に知らせます。</p>
             <details class="advanced">
               <summary>拍の長さ（読み上げテンプレートの半角ピリオド）</summary>
-              <label class="field">
+              <label class="field field--num-wide">
                 <span>1拍の長さ（ミリ秒）</span>
                 <input id="beat-ms" type="number" min="50" max="2000" />
               </label>
@@ -1753,6 +2087,10 @@
             <div class="row">
               <button class="btn" id="btn-copy-credit" type="button">クレジットをコピー</button>
             </div>
+          </div>
+          <div class="tab-reset">
+            <p class="hint" id="reset-tab-hint-tts">読み上げエンジンと速度などを最初の状態に戻します。</p>
+            <button class="btn btn--ghost" type="button" id="btn-reset-tab-tts" data-reset-tab="tts">このタブを初期化する</button>
           </div>
         </section>
       </main>
@@ -1827,9 +2165,17 @@
     <script src="js/user-lists.js"></script>
     <script src="js/list-editor.js"></script>
     <script src="js/event-alert-ui.js"></script>
+    <script src="js/overlay-name-colors.js"></script>
+    <script src="js/color-picker-reset.js"></script>
+    <script src="js/template-accent-colors.js"></script>
+    <script src="js/template-placeholders.js"></script>
+    <script src="js/template-editor-ui.js"></script>
     <script src="js/feature-batch-ui.js"></script>
     <script src="js/toast.js"></script>
     <script src="js/test-gifts.js"></script>
+    <script src="js/overlay-likes-look.js"></script>
+    <script src="js/overlay-ranking-motion.js"></script>
+    <script src="js/likes-look-ui.js"></script>
     <script src="js/look-ui.js"></script>
     <script src="js/viewer-items.js"></script>
     <script src="js/viewer-dock-view.js"></script>
@@ -1842,6 +2188,8 @@
     <script src="js/live-duration-ui.js"></script>
     <script src="js/viewer-room-stats.js"></script>
     <script src="js/connect-ui.js"></script>
+    <script src="js/overlay-url.js"></script>
+    <script src="js/overlay-url-ui.js"></script>
     <script src="js/titlebar-ui.js"></script>
     <script src="js/main.js"></script>
   </body>

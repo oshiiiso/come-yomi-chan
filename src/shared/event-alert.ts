@@ -1,3 +1,5 @@
+import { isPortalJoinEvent } from './portal-event';
+import { isSuperFanBoxEvent } from './super-fan-event';
 import type { EventToggleMap, OverlayEventType } from './types';
 
 export const EVENT_ALERT_TYPES = [
@@ -14,9 +16,21 @@ export const EVENT_ALERT_TYPES = [
 export type EventAlertType = (typeof EVENT_ALERT_TYPES)[number];
 export type EventAlertEnabledMap = Record<EventAlertType, boolean>;
 
-/** 同梱の簡易アニメ。イベント種別と同じ ID。 */
+/** 同梱テンプレの論理 ID（イベント種別と同じ）。実ファイル名は EVENT_ALERT_TEMPLATE_FILES。 */
 export const EVENT_ALERT_TEMPLATE_IDS = EVENT_ALERT_TYPES;
 export type EventAlertTemplateId = (typeof EVENT_ALERT_TEMPLATE_IDS)[number];
+
+/** 種類ごとの既定同梱 GIF（subtype は resolveEventAlertTemplateFileName）。 */
+export const EVENT_ALERT_TEMPLATE_FILES: Record<EventAlertType, string> = {
+  gift: 'gift.gif',
+  follow: 'follow.gif',
+  share: 'share.gif',
+  superFan: 'superfan.gif',
+  envelope: 'chest.gif',
+  portal: 'portal.gif',
+  like: 'heart.gif',
+  member: 'door.gif',
+};
 
 export type AlertMediaRef =
   | { kind: 'auto' }
@@ -42,15 +56,44 @@ export function isEventAlertTemplateId(value: unknown): value is EventAlertTempl
   return isEventAlertType(value);
 }
 
+export function eventAlertTemplateFileName(id: EventAlertTemplateId): string {
+  return EVENT_ALERT_TEMPLATE_FILES[id];
+}
+
+/** 同梱 GIF のファイル名。スパファンボックス・ポータル入室は giftName で分ける。 */
+export function resolveEventAlertTemplateFileName(params: {
+  type: EventAlertType;
+  giftName?: string | null;
+}): string {
+  const giftName = typeof params.giftName === 'string' ? params.giftName : '';
+  if (isSuperFanBoxEvent({ type: params.type, giftName })) {
+    return 'superfan_box.gif';
+  }
+  if (isPortalJoinEvent({ type: params.type, giftName })) {
+    return 'portal_door.gif';
+  }
+  return EVENT_ALERT_TEMPLATE_FILES[params.type];
+}
+
 export function eventAlertTemplatePath(id: EventAlertTemplateId): string {
-  return `/overlay/alert-templates/${id}.svg`;
+  return `/overlay/alert-templates/${encodeURIComponent(eventAlertTemplateFileName(id))}`;
+}
+
+export function eventAlertTemplatePathForEvent(params: {
+  type: EventAlertType;
+  giftName?: string | null;
+}): string {
+  return `/overlay/alert-templates/${encodeURIComponent(resolveEventAlertTemplateFileName(params))}`;
 }
 
 export function defaultAlertMediaFor(type?: EventAlertType): AlertMediaRef {
+  if (type === 'gift') {
+    return { kind: 'auto' };
+  }
   if (type && isEventAlertTemplateId(type)) {
     return { kind: 'template', id: type };
   }
-  return { kind: 'template', id: 'gift' };
+  return { kind: 'auto' };
 }
 
 export function canonicalEventAlertType(type: unknown): EventAlertType | null {
@@ -248,11 +291,12 @@ export function shouldShowEventAlert(
   return enabled?.[key] === true;
 }
 
-/** アラートに出す画像。file / template はルート相対パス、auto は giftImageUrl があれば使う。 */
+/** アラートに出す画像。file / template はルート相対パス、auto は giftImageUrl（無ければギフト同梱GIF）。 */
 export function resolveEventAlertImageUrl(params: {
   type: OverlayEventType | string;
   media: AlertMediaRef | undefined;
   giftImageUrl?: string | null;
+  giftName?: string | null;
 }): string | null {
   const alertType = canonicalEventAlertType(params.type);
   if (!alertType) {
@@ -266,10 +310,20 @@ export function resolveEventAlertImageUrl(params: {
     return `/media/alerts/${encodeURIComponent(media.fileName)}`;
   }
   if (media.kind === 'template') {
-    return eventAlertTemplatePath(media.id);
+    // 設定のテンプレは種類単位。中身（ボックス／ポータル入室）で同梱GIFを分ける
+    return eventAlertTemplatePathForEvent({
+      type: alertType,
+      giftName: params.giftName,
+    });
   }
   const url = typeof params.giftImageUrl === 'string' ? params.giftImageUrl.trim() : '';
-  return url || null;
+  if (url) {
+    return url;
+  }
+  // ギフトの自動は画像が取れないとき同梱 GIF へ
+  return alertType === 'gift'
+    ? eventAlertTemplatePathForEvent({ type: 'gift', giftName: params.giftName })
+    : null;
 }
 
 /** ON かつ画像が解決できるときだけアラートソースへ出す。画像なしは文言も出さない。 */
@@ -278,6 +332,7 @@ export function shouldEmitEventAlert(params: {
   enabled: EventAlertEnabledMap | undefined;
   media: EventAlertMediaMap | undefined;
   giftImageUrl?: string | null;
+  giftName?: string | null;
 }): boolean {
   if (!shouldShowEventAlert(params.type, params.enabled)) {
     return false;
@@ -291,13 +346,15 @@ export function shouldEmitEventAlert(params: {
       type: params.type,
       media: params.media?.[key],
       giftImageUrl: params.giftImageUrl,
+      giftName: params.giftName,
     }) != null
   );
 }
 
 export type AlertDisplayPart =
   | { kind: 'text'; value: string }
-  | { kind: 'name'; value: string; color: string };
+  | { kind: 'name'; value: string; color: string }
+  | { kind: 'accent'; value: string; color: string; token?: string };
 
 const NAME_COLOR_HEX = /^#[0-9a-fA-F]{6}$/;
 

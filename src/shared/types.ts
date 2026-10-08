@@ -148,6 +148,31 @@ export interface AppConfig {
   configProfiles: ConfigProfile[];
   activeConfigProfileId: string;
   likeMilestone: number;
+  /** ランキング配信ソースを出すか（初期オン） */
+  overlayLikeRankingEnabled: boolean;
+  /** ランキングの表示人数（1〜10・初期5） */
+  overlayLikeRankingMax: number;
+  /** ランキングの集計モード（いいね／ダイヤ） */
+  overlayRankingMode: 'likes' | 'diamonds';
+  /** いいねランキングの更新方式（常時／ポーリング） */
+  overlayRankingLikeSyncMode: 'live' | 'poll';
+  /** いいねランキングのポーリング間隔（秒・1〜300） */
+  overlayRankingLikePollSec: number;
+  /** ランキング入れ替わりの動き（slide / soft / emphasis） */
+  overlayRankingMotion: string;
+  /** ランキング入れ替わりの速さ（1遅い〜3速い） */
+  overlayRankingMotionSpeed: number;
+  overlayLikesTheme: string;
+  overlayLikesFontFamily: string;
+  overlayLikesFontSize: number;
+  overlayLikesBgOpacity: number;
+  overlayLikesShowAvatar: boolean;
+  overlayLikesAvatarSize: number;
+  overlayLikesItemRadius: number;
+  overlayLikesRowGap: number;
+  overlayLikesPanelWidth: number;
+  overlayLikesShowUnit: boolean;
+  overlayLikesNeonHue: number;
   chatMaxRows: number;
   chatDisplayMs: number;
   overlayCustomCss: string;
@@ -171,6 +196,8 @@ export interface AppConfig {
   overlayPinPreview: boolean;
   overlayNameColorEnabled: boolean;
   overlayNameColors: string[];
+  /** テンプレ差し込み／**強調** の色（{user} は名前色）。 */
+  templateAccentColors: Record<string, string>;
   uiTheme: UiTheme;
   settingsPreviewPx: number;
   viewerEventPanePx: number;
@@ -216,6 +243,9 @@ export interface AppConfigView extends AppConfig {
   overlayAlertsUrl: string;
   overlayAlertsStudioUrl: string;
   overlayAlertsPreviewUrl: string;
+  overlayLikesUrl: string;
+  overlayLikesStudioUrl: string;
+  overlayLikesPreviewUrl: string;
   overlayLookPresets: Record<string, {
     theme: string;
     fontFamily: string;
@@ -230,6 +260,23 @@ export interface AppConfigView extends AppConfig {
   }>;
   /** かんたん見た目プリセット ID → 名前色5色 */
   overlayNameColorPresets: Record<string, [string, string, string, string, string]>;
+  /** いいねランキング見た目プリセット */
+  overlayLikesLookPresets: Record<
+    string,
+    {
+      theme: string;
+      fontFamily: string;
+      fontSize: number;
+      bgOpacity: number;
+      showAvatar: boolean;
+      avatarSize: number;
+      itemRadius: number;
+      rowGap: number;
+      panelWidth: number;
+      showUnit: boolean;
+      neonHue: number;
+    }
+  >;
   overlayFonts: Array<{ id: string; label: string; css: string }>;
   voicevoxCreditText: string;
   voicevoxExeSuggested: string;
@@ -241,7 +288,16 @@ export interface LiveStatus {
   state: LiveConnectionState;
   uniqueId: string;
   message: string;
+  /** コメント列 LIVE Studio 用（互換のため残す） */
   overlayUrl: string;
+  overlayStudioUrl: string;
+  overlayPreviewUrl: string;
+  overlayAlertsUrl: string;
+  overlayAlertsStudioUrl: string;
+  overlayAlertsPreviewUrl: string;
+  overlayLikesUrl: string;
+  overlayLikesStudioUrl: string;
+  overlayLikesPreviewUrl: string;
   overlayListening: boolean;
   overlayClients: number;
   lastUpdated: string;
@@ -286,10 +342,18 @@ export interface NormalizedLiveEvent {
   receivedAt: string;
 }
 
+/** 配信ソース（コメント列・固定枠）の色付き表示パーツ */
+export type OverlayDisplayPart =
+  | { kind: 'text'; value: string }
+  | { kind: 'name'; value: string; color?: string }
+  | { kind: 'accent'; value: string; color?: string; token?: string };
+
 export interface OverlayPayload {
   type: OverlayEventType;
   user: OverlayUser;
   displayText: string;
+  /** テンプレ差し込み・強調色付き。無いときは displayText だけ使う */
+  displayParts?: OverlayDisplayPart[];
   comment: string;
   commentEmotes: CommentEmote[];
   giftImageUrl: string;

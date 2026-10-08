@@ -451,7 +451,7 @@ function appendViewerEvent(payload) {
   const text = document.createElement('p');
   text.className = 'viewer__text';
   const emotes = Array.isArray(payload.commentEmotes) ? payload.commentEmotes : [];
-  if (type === 'comment' && emotes.length > 0 && typeof buildCommentSegments === 'function') {
+  if (type === 'comment' && typeof buildCommentSegments === 'function') {
     const segments = buildCommentSegments(commentBody || bodyText, emotes);
     appendCommentSegments(text, segments, 'viewer__emote', giftIconSrc);
     if (!text.childNodes.length) {

@@ -34,6 +34,7 @@ function applyViewerRoomStats(status) {
     return;
   }
 
+  countEl.hidden = false;
   countEl.textContent = uiCopy.viewerRoomCount.replace(
     '{count}',
     formatViewerRoomCount(stats.viewerCount),

@@ -1,16 +1,33 @@
 import Store from 'electron-store';
 import { APP_CONFIG } from './app-config';
+import { overlayPublicUrl, overlayUrlFieldsForPort } from './overlay-url';
 import {
-  overlayAlertsPreviewUrl,
-  overlayAlertsPublicUrl,
-  overlayAlertsStudioUrl,
-  overlayPreviewUrl,
-  overlayPublicUrl,
-  overlayStudioUrl,
-} from './overlay-url';
+  DEFAULT_OVERLAY_LIKE_RANKING_ENABLED,
+  DEFAULT_OVERLAY_LIKE_RANKING_MAX,
+  DEFAULT_OVERLAY_RANKING_MODE,
+  DEFAULT_OVERLAY_RANKING_LIKE_SYNC_MODE,
+  DEFAULT_OVERLAY_RANKING_LIKE_POLL_SEC,
+  normalizeOverlayRankingMode,
+  normalizeOverlayRankingLikeSyncMode,
+  normalizeOverlayRankingLikePollSec,
+  normalizeOverlayLikeRankingEnabled,
+  normalizeOverlayLikeRankingMax,
+} from './like-ranking';
+import {
+  DEFAULT_OVERLAY_RANKING_MOTION,
+  DEFAULT_OVERLAY_RANKING_MOTION_SPEED,
+  normalizeOverlayRankingMotion,
+  normalizeOverlayRankingMotionSpeed,
+} from './overlay-ranking-motion';
+import {
+  DEFAULT_OVERLAY_LIKES_LOOK,
+  OVERLAY_LIKES_LOOK_PRESETS,
+  overlayLikesLookFromConfig,
+} from './overlay-likes-look';
 import { DEFAULT_OVERLAY_LOOK, overlayLookFromConfig, OVERLAY_FONTS, OVERLAY_LOOK_PRESETS } from './overlay-look';
 import { normalizeChatDisplayMs } from './chat-display';
 import { MSG } from './messages';
+import { resetSettingsTab, type SettingsTabId } from './settings-tab-reset';
 import { normalizeVoicevoxHost } from '../tts/voicevox-url';
 import { formatVoicevoxDescriptionCredit } from '../tts/voicevox-credit';
 import { resolveVoicevoxExecutable } from '../tts/voicevox-launcher';
@@ -104,6 +121,10 @@ import {
   normalizeOverlayNameColorEnabled,
   normalizeOverlayNameColors,
 } from './overlay-name-colors';
+import {
+  DEFAULT_TEMPLATE_ACCENT_COLORS,
+  normalizeTemplateAccentColors,
+} from './template-accent-colors';
 import { normalizeSpeechReplaceMap } from './speech-replace-map';
 import {
   clampViewerLogMaxRows,
@@ -233,6 +254,24 @@ export const DEFAULT_CONFIG: AppConfig = {
   configProfiles: [],
   activeConfigProfileId: '',
   likeMilestone: 100,
+  overlayLikeRankingEnabled: DEFAULT_OVERLAY_LIKE_RANKING_ENABLED,
+  overlayLikeRankingMax: DEFAULT_OVERLAY_LIKE_RANKING_MAX,
+  overlayRankingMode: DEFAULT_OVERLAY_RANKING_MODE,
+  overlayRankingLikeSyncMode: DEFAULT_OVERLAY_RANKING_LIKE_SYNC_MODE,
+  overlayRankingLikePollSec: DEFAULT_OVERLAY_RANKING_LIKE_POLL_SEC,
+  overlayRankingMotion: DEFAULT_OVERLAY_RANKING_MOTION,
+  overlayRankingMotionSpeed: DEFAULT_OVERLAY_RANKING_MOTION_SPEED,
+  overlayLikesTheme: DEFAULT_OVERLAY_LIKES_LOOK.theme,
+  overlayLikesFontFamily: DEFAULT_OVERLAY_LIKES_LOOK.fontFamily,
+  overlayLikesFontSize: DEFAULT_OVERLAY_LIKES_LOOK.fontSize,
+  overlayLikesBgOpacity: DEFAULT_OVERLAY_LIKES_LOOK.bgOpacity,
+  overlayLikesShowAvatar: DEFAULT_OVERLAY_LIKES_LOOK.showAvatar,
+  overlayLikesAvatarSize: DEFAULT_OVERLAY_LIKES_LOOK.avatarSize,
+  overlayLikesItemRadius: DEFAULT_OVERLAY_LIKES_LOOK.itemRadius,
+  overlayLikesRowGap: DEFAULT_OVERLAY_LIKES_LOOK.rowGap,
+  overlayLikesPanelWidth: DEFAULT_OVERLAY_LIKES_LOOK.panelWidth,
+  overlayLikesShowUnit: DEFAULT_OVERLAY_LIKES_LOOK.showUnit,
+  overlayLikesNeonHue: DEFAULT_OVERLAY_LIKES_LOOK.neonHue,
   chatMaxRows: 8,
   chatDisplayMs: 12000,
   overlayCustomCss: '',
@@ -256,6 +295,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   overlayPinPreview: DEFAULT_OVERLAY_PIN.previewPinned,
   overlayNameColorEnabled: DEFAULT_OVERLAY_NAME_COLOR_ENABLED,
   overlayNameColors: [...DEFAULT_OVERLAY_NAME_COLORS],
+  templateAccentColors: { ...DEFAULT_TEMPLATE_ACCENT_COLORS },
   uiTheme: DEFAULT_UI_THEME,
   settingsPreviewPx: DEFAULT_SETTINGS_PREVIEW_PX,
   viewerEventPanePx: DEFAULT_VIEWER_EVENT_PANE_PX,
@@ -456,6 +496,37 @@ export class ConfigStore {
       configProfiles: normalizeConfigProfiles(merged.configProfiles),
       activeConfigProfileId: asString(merged.activeConfigProfileId, '').slice(0, 80),
       likeMilestone: clampInt(merged.likeMilestone, DEFAULT_CONFIG.likeMilestone, 1, 100000),
+      overlayLikeRankingEnabled: normalizeOverlayLikeRankingEnabled(
+        merged.overlayLikeRankingEnabled,
+      ),
+      overlayLikeRankingMax: normalizeOverlayLikeRankingMax(merged.overlayLikeRankingMax),
+      overlayRankingMode: normalizeOverlayRankingMode(merged.overlayRankingMode),
+      overlayRankingLikeSyncMode: normalizeOverlayRankingLikeSyncMode(
+        merged.overlayRankingLikeSyncMode,
+      ),
+      overlayRankingLikePollSec: normalizeOverlayRankingLikePollSec(
+        merged.overlayRankingLikePollSec,
+      ),
+      overlayRankingMotion: normalizeOverlayRankingMotion(merged.overlayRankingMotion),
+      overlayRankingMotionSpeed: normalizeOverlayRankingMotionSpeed(
+        merged.overlayRankingMotionSpeed,
+      ),
+      ...(() => {
+        const likesLook = overlayLikesLookFromConfig(merged);
+        return {
+          overlayLikesTheme: likesLook.theme,
+          overlayLikesFontFamily: likesLook.fontFamily,
+          overlayLikesFontSize: likesLook.fontSize,
+          overlayLikesBgOpacity: likesLook.bgOpacity,
+          overlayLikesShowAvatar: likesLook.showAvatar,
+          overlayLikesAvatarSize: likesLook.avatarSize,
+          overlayLikesItemRadius: likesLook.itemRadius,
+          overlayLikesRowGap: likesLook.rowGap,
+          overlayLikesPanelWidth: likesLook.panelWidth,
+          overlayLikesShowUnit: likesLook.showUnit,
+          overlayLikesNeonHue: likesLook.neonHue,
+        };
+      })(),
       chatMaxRows: clampInt(merged.chatMaxRows, 8, 1, 50),
       chatDisplayMs: normalizeChatDisplayMs(merged.chatDisplayMs, DEFAULT_CONFIG.chatDisplayMs),
       overlayCustomCss: asString(merged.overlayCustomCss, '').slice(0, 80_000),
@@ -479,6 +550,7 @@ export class ConfigStore {
       overlayPinPreview: asBoolean(merged.overlayPinPreview, DEFAULT_CONFIG.overlayPinPreview),
       overlayNameColorEnabled: normalizeOverlayNameColorEnabled(merged.overlayNameColorEnabled),
       overlayNameColors: normalizeOverlayNameColors(merged.overlayNameColors),
+      templateAccentColors: normalizeTemplateAccentColors(merged.templateAccentColors),
       uiTheme: normalizeUiTheme(merged.uiTheme),
       settingsPreviewPx: clampSettingsPreviewPx(merged.settingsPreviewPx),
       viewerEventPanePx: clampViewerEventPanePx(merged.viewerEventPanePx),
@@ -603,13 +675,9 @@ export class ConfigStore {
     const config = this.get();
     return {
       ...config,
-      overlayUrl: overlayUrlFrom(config.overlayPort),
-      overlayStudioUrl: overlayStudioUrl(config.overlayPort),
-      overlayPreviewUrl: overlayPreviewUrl(config.overlayPort),
-      overlayAlertsUrl: overlayAlertsPublicUrl(config.overlayPort),
-      overlayAlertsStudioUrl: overlayAlertsStudioUrl(config.overlayPort),
-      overlayAlertsPreviewUrl: overlayAlertsPreviewUrl(config.overlayPort),
+      ...overlayUrlFieldsForPort(config.overlayPort),
       overlayLookPresets: OVERLAY_LOOK_PRESETS,
+      overlayLikesLookPresets: OVERLAY_LIKES_LOOK_PRESETS,
       overlayNameColorPresets: OVERLAY_NAME_COLORS_BY_LOOK_PRESET,
       overlayFonts: OVERLAY_FONTS.map((font) => ({
         id: font.id,
@@ -665,6 +733,15 @@ export class ConfigStore {
     const current = this.get();
     const next = this.normalize({
       ...resetConfigKeepingIdentity(current),
+      configVersion: CONFIG_VERSION,
+    });
+    this.persist(next);
+    return this.get();
+  }
+
+  resetTab(tab: SettingsTabId): AppConfig {
+    const next = this.normalize({
+      ...resetSettingsTab(this.get(), DEFAULT_CONFIG, tab),
       configVersion: CONFIG_VERSION,
     });
     this.persist(next);

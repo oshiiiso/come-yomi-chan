@@ -15,6 +15,8 @@
   let chatDisplayMs = 12000;
   let showAvatar = true;
   let hideUserName = false;
+  let settingsReady = false;
+  const earlyRows = [];
   let motionName = 'fuwatto';
   let motionMs = 180;
   const pendingRows = [];
@@ -51,8 +53,23 @@
   let pinLeaving = false;
   let pinSwitchTimer = 0;
   let nameColorEnabled = true;
-  const DEFAULT_NAME_COLORS = ['#5eead4', '#93c5fd', '#fcd34d', '#f9a8d4', '#86efac'];
+  const DEFAULT_NAME_COLORS = window.OverlayNameColors?.DEFAULT_NAME_COLORS || [
+    '#5eead4',
+    '#93c5fd',
+    '#fcd34d',
+    '#f9a8d4',
+    '#86efac',
+  ];
   let nameColors = [...DEFAULT_NAME_COLORS];
+  const DEFAULT_TEMPLATE_ACCENT_COLORS = {
+    gift: '#5eead4',
+    count: '#93c5fd',
+    likes: '#93c5fd',
+    comment: '#f1f3f5',
+    event: '#f9a8d4',
+    emphasis: '#86efac',
+  };
+  let templateAccentColors = { ...DEFAULT_TEMPLATE_ACCENT_COLORS };
   let connectGen = 0;
   let reconnectTimer = 0;
   let activeSocket = null;
@@ -61,6 +78,8 @@
   let chatSampleIndex = 0;
   let chatSampleTimer = 0;
   let pinSampleTemplates = [];
+  /** IPC / sample-display でテンプレ由来サンプルを受け取ったか */
+  let hasOverlaySamplePlan = false;
   const isPreview = new URLSearchParams(location.search).has('preview');
 
   function usesOverlaySampleLoop() {
@@ -147,10 +166,15 @@
     return typeof typed === 'number' ? typed : baseMs;
   }
 
-  function nameColorIndex(uniqueId, nickname) {
-    const id = String(uniqueId ?? '').replace(/^@/, '').trim().toLowerCase();
+  function nameColorIndexLocal(uniqueId, nickname) {
+    const id = String(uniqueId ?? '')
+      .replace(/^@/, '')
+      .trim()
+      .toLowerCase();
     const key = id || String(nickname ?? '').trim().toLowerCase();
-    if (!key) return 0;
+    if (!key) {
+      return 0;
+    }
     let hash = 0;
     for (let i = 0; i < key.length; i += 1) {
       hash = (hash * 31 + key.charCodeAt(i)) | 0;
@@ -159,13 +183,18 @@
   }
 
   function nameColorForUser(uniqueId, nickname) {
-    const colors = nameColors.length === DEFAULT_NAME_COLORS.length
-      ? nameColors
-      : [...DEFAULT_NAME_COLORS];
-    return colors[nameColorIndex(uniqueId, nickname)];
+    if (window.OverlayNameColors?.nameColorForUser) {
+      return window.OverlayNameColors.nameColorForUser(uniqueId, nickname, nameColors);
+    }
+    const colors =
+      nameColors.length === DEFAULT_NAME_COLORS.length ? nameColors : [...DEFAULT_NAME_COLORS];
+    return colors[nameColorIndexLocal(uniqueId, nickname)];
   }
 
   function normalizeNameColors(raw) {
+    if (window.OverlayNameColors?.normalizeNameColors) {
+      return window.OverlayNameColors.normalizeNameColors(raw);
+    }
     const list = Array.isArray(raw) ? raw : [];
     return DEFAULT_NAME_COLORS.map((def, i) => {
       const candidate = list[i];
@@ -176,6 +205,9 @@
   }
 
   function sameNameColors(left, right) {
+    if (window.OverlayNameColors?.sameNameColors) {
+      return window.OverlayNameColors.sameNameColors(left, right);
+    }
     if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
       return false;
     }
@@ -215,6 +247,51 @@
         const uniqueId = nameEl.dataset.uniqueId || '';
         const nickname = nameEl.dataset.nickname || nameEl.textContent || '';
         nameEl.style.color = nameColorForUser(uniqueId, nickname);
+      }
+    }
+  }
+
+  function normalizeTemplateAccentColors(raw) {
+    const record = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    const out = { ...DEFAULT_TEMPLATE_ACCENT_COLORS };
+    for (const key of Object.keys(DEFAULT_TEMPLATE_ACCENT_COLORS)) {
+      const value = record[key];
+      if (typeof value === 'string' && /^#[0-9a-fA-F]{6}$/.test(value)) {
+        out[key] = value.toLowerCase();
+      }
+    }
+    return out;
+  }
+
+  function sameTemplateAccentColors(left, right) {
+    return Object.keys(DEFAULT_TEMPLATE_ACCENT_COLORS).every((key) => left?.[key] === right?.[key]);
+  }
+
+  /** 差し込み色の設定を取り込み、変わったときだけ true。 */
+  function applyTemplateAccentSettings(message) {
+    if (!message || typeof message !== 'object' || !('templateAccentColors' in message)) {
+      return false;
+    }
+    const next = normalizeTemplateAccentColors(message.templateAccentColors);
+    if (sameTemplateAccentColors(next, templateAccentColors)) {
+      return false;
+    }
+    templateAccentColors = next;
+    return true;
+  }
+
+  /** 出ている行の差し込み色を今の設定に合わせる。 */
+  function refreshAccentColors() {
+    for (const list of lookLists()) {
+      for (const accentEl of list.querySelectorAll('.chat__accent[data-accent-token]')) {
+        if (!(accentEl instanceof HTMLElement)) {
+          continue;
+        }
+        const token = accentEl.dataset.accentToken || '';
+        const color = templateAccentColors[token];
+        if (typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)) {
+          accentEl.style.color = color.toLowerCase();
+        }
       }
     }
   }
@@ -288,6 +365,7 @@
     const backdrop =
       typeof look.previewBackdrop === 'string' ? look.previewBackdrop : 'checker';
     showAvatar = look.showAvatar !== false;
+    settingsReady = true;
     const motionChanged = applyMotion(look);
     const opacity = Number(look.bgOpacity);
     const neonHue = Number(look.neonHue);
@@ -349,8 +427,11 @@
       applyCustomCss(message.customCss);
     }
     const nameColorChanged = applyNameColorSettings(message);
+    const accentChanged = applyTemplateAccentSettings(message);
     if (message.look) {
       applyLook(message.look);
+    } else {
+      settingsReady = true;
     }
     const previewChanged = applyPinSettings(message.pin);
     trimOverflow();
@@ -358,13 +439,26 @@
     if (nameColorChanged) {
       refreshColoredNames();
     }
+    if (accentChanged) {
+      refreshAccentColors();
+    }
+    if (!usesOverlaySampleLoop()) {
+      releaseEarlyRows();
+    }
     if (options.skipSampleSeed) {
       return;
     }
-    if (isPreview && (previewChanged || nameColorChanged)) {
+    if (isPreview && (previewChanged || nameColorChanged || accentChanged)) {
       seedPreviewSamples(true);
     } else {
       seedPreviewSamples();
+    }
+  }
+
+  function releaseEarlyRows() {
+    const queued = earlyRows.splice(0, earlyRows.length);
+    for (const payload of queued) {
+      addRow(payload);
     }
   }
 
@@ -386,6 +480,7 @@
     chatSampleQueue = [];
     chatSampleIndex = 0;
     pinSampleTemplates = [];
+    hasOverlaySamplePlan = false;
   }
 
   function normalizeSamplePayload(raw) {
@@ -428,7 +523,7 @@
     }, randomSampleChatIntervalMs());
   }
 
-  function applyStreamSampleDisplay(message) {
+  function applySampleQueues(message) {
     resetSampleTemplates();
     resetPinState();
     pendingRows.length = 0;
@@ -440,18 +535,21 @@
       ? message.chatSamples.map(normalizeSamplePayload).filter(Boolean)
       : [];
     chatSampleIndex = 0;
-    applySettings(message, { skipSampleSeed: true });
+    hasOverlaySamplePlan = true;
     if (chatSampleQueue.length > 0) {
       pushNextChatSample();
       scheduleChatSampleAdvance();
     }
     if (pinSampleTemplates.length > 0) {
       pinQueue.push(...pinSampleTemplates);
-    } else if (isPreview) {
-      refillPreviewPinQueue();
     }
     pumpPin();
     trimOverflow();
+  }
+
+  function applyStreamSampleDisplay(message) {
+    applySampleQueues(message);
+    applySettings(message, { skipSampleSeed: true });
   }
 
   function stopCurrentAudio() {
@@ -1122,6 +1220,13 @@
     if (!payload?.displayText) {
       return;
     }
+    if (!settingsReady) {
+      earlyRows.push(payload);
+      if (earlyRows.length > 40) {
+        earlyRows.shift();
+      }
+      return;
+    }
     if (shouldPinType(payload.type) && pin instanceof HTMLOListElement) {
       enqueuePin(payload);
       return;
@@ -1147,6 +1252,45 @@
   // src/shared/comment-emotes.ts と同じ判定（配信ソースは単一 JS）
   const EMOTE_ONLY_COMMENT = '絵文字';
   const MAX_COMMENT_EMOTES = 32;
+  const COMMENT_EMOTE_PLACEHOLDER_RE = /\[[^\[\]\s]{1,32}\]/g;
+  const COMMENT_EMOTE_SHORTCODES = {
+    heart: '❤️',
+    love: '❤️',
+    like: '👍',
+    wow: '😮',
+    surprised: '😮',
+    smile: '😊',
+    happy: '😊',
+    laugh: '😂',
+    lol: '😂',
+    cool: '😎',
+    cry: '😢',
+    sad: '😢',
+    angry: '😠',
+    mad: '😠',
+    kiss: '😘',
+    cute: '🥰',
+    shy: '😳',
+    sleepy: '😴',
+    think: '🤔',
+    applaud: '👏',
+    clap: '👏',
+    hi: '👋',
+    bye: '👋',
+    wave: '👋',
+    ok: '👌',
+    yes: '✅',
+    no: '❌',
+    thankyou: '🙏',
+    thanks: '🙏',
+    pray: '🙏',
+    fire: '🔥',
+    star: '⭐',
+    gift: '🎁',
+    rose: '🌹',
+    music: '🎵',
+    dance: '💃',
+  };
 
   function normalizeOverlayCommentEmotes(emotes) {
     if (!Array.isArray(emotes) || emotes.length === 0) {
@@ -1171,33 +1315,125 @@
     return next;
   }
 
-  function buildOverlayCommentSegments(comment, emotes) {
-    const raw = String(comment || '');
-    const base = raw.trim() === EMOTE_ONLY_COMMENT ? '' : raw;
-    const list = normalizeOverlayCommentEmotes(emotes);
-    if (list.length === 0) {
-      return base ? [{ kind: 'text', text: base }] : [];
+  function overlayPlaceholderAt(text, index) {
+    const sliced = text.slice(index);
+    const match = sliced.match(/^\[([^\[\]\s]{1,32})\]/);
+    return match ? match[0] : '';
+  }
+
+  function overlayShortcodeToEmoji(token) {
+    const inner = String(token || '')
+      .replace(/^\[|\]$/g, '')
+      .trim()
+      .toLowerCase();
+    if (!inner) {
+      return '';
     }
-    const ordered = list
+    return COMMENT_EMOTE_SHORTCODES[inner] || '';
+  }
+
+  function expandOverlayShortcodes(text) {
+    COMMENT_EMOTE_PLACEHOLDER_RE.lastIndex = 0;
+    return text.replace(COMMENT_EMOTE_PLACEHOLDER_RE, (token) => {
+      return overlayShortcodeToEmoji(token) || token;
+    });
+  }
+
+  function pushOverlayTextSegment(segments, text) {
+    if (!text) {
+      return;
+    }
+    const expanded = expandOverlayShortcodes(text);
+    if (expanded) {
+      segments.push({ kind: 'text', text: expanded });
+    }
+  }
+
+  function buildOverlayByIndexWithPlaceholders(base, emotes) {
+    const ordered = emotes
       .map((item, order) => ({
-        index: item.index > base.length ? base.length : item.index,
+        index: item.index > base.length ? base.length : Math.max(0, item.index),
         imageUrl: item.imageUrl,
         order,
       }))
       .sort((a, b) => a.index - b.index || a.order - b.order);
     const segments = [];
     let cursor = 0;
+    let consumedPlaceholder = false;
     for (const emote of ordered) {
-      if (emote.index > cursor) {
-        segments.push({ kind: 'text', text: base.slice(cursor, emote.index) });
-        cursor = emote.index;
+      let index = emote.index;
+      if (index < cursor) {
+        index = cursor;
+      }
+      if (index > cursor) {
+        pushOverlayTextSegment(segments, base.slice(cursor, index));
+        cursor = index;
       }
       segments.push({ kind: 'emote', imageUrl: emote.imageUrl });
+      const placeholder = overlayPlaceholderAt(base, cursor);
+      if (placeholder) {
+        cursor += placeholder.length;
+        consumedPlaceholder = true;
+      }
     }
     if (cursor < base.length) {
-      segments.push({ kind: 'text', text: base.slice(cursor) });
+      pushOverlayTextSegment(segments, base.slice(cursor));
+    }
+    return { segments, consumedPlaceholder };
+  }
+
+  function buildOverlayByPlaceholderOrder(base, emotes) {
+    const ordered = [...emotes].sort((a, b) => a.index - b.index || 0);
+    const segments = [];
+    let cursor = 0;
+    let emoteOrder = 0;
+    COMMENT_EMOTE_PLACEHOLDER_RE.lastIndex = 0;
+    for (const match of base.matchAll(COMMENT_EMOTE_PLACEHOLDER_RE)) {
+      const start = match.index ?? 0;
+      if (start > cursor) {
+        pushOverlayTextSegment(segments, base.slice(cursor, start));
+      }
+      if (emoteOrder < ordered.length) {
+        segments.push({ kind: 'emote', imageUrl: ordered[emoteOrder].imageUrl });
+        emoteOrder += 1;
+      } else {
+        const emoji = overlayShortcodeToEmoji(match[0]);
+        pushOverlayTextSegment(segments, emoji || match[0]);
+      }
+      cursor = start + match[0].length;
+    }
+    if (cursor < base.length) {
+      pushOverlayTextSegment(segments, base.slice(cursor));
+    }
+    while (emoteOrder < ordered.length) {
+      segments.push({ kind: 'emote', imageUrl: ordered[emoteOrder].imageUrl });
+      emoteOrder += 1;
     }
     return segments;
+  }
+
+  function buildOverlayCommentSegments(comment, emotes) {
+    const raw = String(comment || '');
+    const base = raw.trim() === EMOTE_ONLY_COMMENT ? '' : raw;
+    const list = normalizeOverlayCommentEmotes(emotes);
+    if (list.length === 0) {
+      if (!base) {
+        return [];
+      }
+      const expanded = expandOverlayShortcodes(base);
+      return expanded ? [{ kind: 'text', text: expanded }] : [];
+    }
+    COMMENT_EMOTE_PLACEHOLDER_RE.lastIndex = 0;
+    const hasPlaceholders = COMMENT_EMOTE_PLACEHOLDER_RE.test(base);
+    COMMENT_EMOTE_PLACEHOLDER_RE.lastIndex = 0;
+    if (hasPlaceholders) {
+      const byIndex = buildOverlayByIndexWithPlaceholders(base, list);
+      if (byIndex.consumedPlaceholder) {
+        return byIndex.segments;
+      }
+      return buildOverlayByPlaceholderOrder(base, list);
+    }
+    return buildOverlayByIndexWithPlaceholders(base, list).segments;
   }
 
   function createGiftImagePlaceholder(className) {
@@ -1261,12 +1497,18 @@
     }
   }
 
-  function appendColoredName(body, nickname, uniqueId) {
+  function appendColoredName(body, nickname, uniqueId, color) {
     const nameSpan = document.createElement('span');
     nameSpan.className = 'chat__name';
     nameSpan.dataset.uniqueId = String(uniqueId || '');
     nameSpan.dataset.nickname = String(nickname || '');
-    nameSpan.style.color = nameColorForUser(uniqueId, nickname);
+    const resolved =
+      typeof color === 'string' && /^#[0-9a-fA-F]{6}$/.test(color)
+        ? color.toLowerCase()
+        : nameColorForUser(uniqueId, nickname);
+    if (nameColorEnabled && resolved) {
+      nameSpan.style.color = resolved;
+    }
     nameSpan.textContent = nickname;
     body.appendChild(nameSpan);
   }
@@ -1281,13 +1523,143 @@
     body.appendChild(textSpan);
   }
 
-  function fillChatBody(body, payload) {
-    const nickname = payload.user?.nickname;
+  function appendAccentChatText(body, value, color, token) {
+    if (!value) {
+      return;
+    }
+    const accentSpan = document.createElement('span');
+    accentSpan.className =
+      token === 'emphasis' ? 'chat__accent chat__accent--emphasis' : 'chat__accent';
+    if (typeof token === 'string' && token) {
+      accentSpan.dataset.accentToken = token;
+    }
+    const resolved =
+      typeof token === 'string' && templateAccentColors[token]
+        ? templateAccentColors[token]
+        : color;
+    if (typeof resolved === 'string' && /^#[0-9a-fA-F]{6}$/.test(resolved)) {
+      accentSpan.style.color = resolved.toLowerCase();
+    }
+    accentSpan.textContent = value;
+    body.appendChild(accentSpan);
+  }
+
+  function appendCommentWithEmotes(body, comment, emotes) {
+    const segments = buildOverlayCommentSegments(comment, emotes);
+    const commentHost = document.createElement('span');
+    commentHost.className = 'chat__text';
+    appendOverlayCommentSegments(commentHost, segments);
+    body.appendChild(commentHost);
+  }
+
+  function lineHasContent(line) {
+    if (!(line instanceof HTMLElement)) {
+      return false;
+    }
+    if (line.querySelector('img')) {
+      return true;
+    }
+    return Boolean(String(line.textContent || '').trim());
+  }
+
+  function stripLeadingNameSeparator(line) {
+    if (!(line instanceof HTMLElement)) {
+      return;
+    }
+    const first = line.firstElementChild;
+    if (!(first instanceof HTMLElement) || !first.classList.contains('chat__text') || first.children.length > 0) {
+      return;
+    }
+    const next = String(first.textContent || '').replace(/^\s*[:：]\s*/, '');
+    if (!next) {
+      first.remove();
+      return;
+    }
+    first.textContent = next;
+  }
+
+  function trimTextLineEdges(line) {
+    if (!(line instanceof HTMLElement)) {
+      return;
+    }
+    const trimEdge = (el, edge) => {
+      if (!(el instanceof HTMLElement) || !el.classList.contains('chat__text') || el.children.length > 0) {
+        return;
+      }
+      const raw = String(el.textContent || '');
+      const next = edge === 'start' ? raw.replace(/^\s+/, '') : raw.replace(/\s+$/, '');
+      if (!next) {
+        el.remove();
+        return;
+      }
+      el.textContent = next;
+    };
+    trimEdge(line.firstElementChild, 'start');
+    trimEdge(line.lastElementChild, 'end');
+  }
+
+  function fillChatBodyFromParts(nameLine, textLine, payload, parts, emotes) {
+    const comment = String(payload.comment || '');
+    COMMENT_EMOTE_PLACEHOLDER_RE.lastIndex = 0;
+    const hasPlaceholders = COMMENT_EMOTE_PLACEHOLDER_RE.test(comment);
+    COMMENT_EMOTE_PLACEHOLDER_RE.lastIndex = 0;
+    const useCommentSegments = emotes.length > 0 || hasPlaceholders;
+    const needle =
+      comment && useCommentSegments
+        ? comment
+        : emotes.length > 0
+          ? EMOTE_ONLY_COMMENT
+          : '';
+    let emotesPlaced = false;
+    for (const part of parts) {
+      if (!part || typeof part.value !== 'string' || !part.value) {
+        continue;
+      }
+      if (part.kind === 'name') {
+        if (!hideUserName) {
+          appendColoredName(nameLine, part.value, payload.user?.uniqueId, part.color);
+        }
+        continue;
+      }
+      if (
+        !emotesPlaced &&
+        needle &&
+        (part.kind === 'text' || part.kind === 'accent') &&
+        part.value.includes(needle)
+      ) {
+        const idx = part.value.indexOf(needle);
+        const before = part.value.slice(0, idx);
+        const after = part.value.slice(idx + needle.length);
+        const commentText = needle === EMOTE_ONLY_COMMENT ? comment || needle : needle;
+        if (part.kind === 'accent') {
+          appendAccentChatText(textLine, before, part.color, part.token);
+          appendCommentWithEmotes(textLine, commentText, emotes);
+          appendAccentChatText(textLine, after, part.color, part.token);
+        } else {
+          appendPlainChatText(textLine, before);
+          appendCommentWithEmotes(textLine, commentText, emotes);
+          appendPlainChatText(textLine, after);
+        }
+        emotesPlaced = true;
+        continue;
+      }
+      if (part.kind === 'accent') {
+        appendAccentChatText(textLine, part.value, part.color, part.token);
+        continue;
+      }
+      appendPlainChatText(textLine, part.value);
+    }
+    if (!emotesPlaced && useCommentSegments) {
+      appendCommentWithEmotes(textLine, comment || EMOTE_ONLY_COMMENT, emotes);
+    }
+  }
+
+  function fillChatBodyPlain(nameLine, textLine, payload) {
+    const nickname = String(payload.user?.nickname || '');
     const displayText = String(payload.displayText || '');
     const comment = String(payload.comment || '');
     const emotes = normalizeOverlayCommentEmotes(payload.commentEmotes);
-    const segments =
-      emotes.length > 0 ? buildOverlayCommentSegments(comment, emotes) : [];
+    const segments = buildOverlayCommentSegments(comment, emotes);
     const needle =
       comment && displayText.includes(comment)
         ? comment
@@ -1299,51 +1671,73 @@
     if (segments.length > 0 && commentAt >= 0) {
       const before = displayText.slice(0, commentAt);
       const after = displayText.slice(commentAt + needle.length);
-      const colorName =
-        nameColorEnabled &&
-        !hideUserName &&
-        nickname &&
-        before.includes(nickname);
-      if (colorName) {
+      if (!hideUserName && nickname && before.includes(nickname)) {
         const idx = before.indexOf(nickname);
-        appendPlainChatText(body, before.slice(0, idx));
-        appendColoredName(body, nickname, payload.user?.uniqueId);
-        appendPlainChatText(body, before.slice(idx + nickname.length));
+        appendPlainChatText(textLine, before.slice(0, idx));
+        appendColoredName(nameLine, nickname, payload.user?.uniqueId);
+        appendPlainChatText(textLine, before.slice(idx + nickname.length));
       } else if (before) {
-        appendPlainChatText(body, before);
+        appendPlainChatText(textLine, before);
       }
-      const commentHost = document.createElement('span');
-      commentHost.className = 'chat__text';
-      appendOverlayCommentSegments(commentHost, segments);
-      body.appendChild(commentHost);
-      appendPlainChatText(body, after);
+      appendCommentWithEmotes(textLine, needle === EMOTE_ONLY_COMMENT ? comment || needle : needle, emotes);
+      appendPlainChatText(textLine, after);
       return;
     }
 
-    if (
-      nameColorEnabled &&
-      !hideUserName &&
-      nickname &&
-      displayText.includes(nickname)
-    ) {
+    if (!hideUserName && nickname && displayText.includes(nickname)) {
       const idx = displayText.indexOf(nickname);
-      if (idx === 0) {
-        appendColoredName(body, nickname, payload.user?.uniqueId);
-        appendPlainChatText(body, displayText.slice(nickname.length));
-      } else {
-        appendPlainChatText(body, displayText.slice(0, idx));
-        appendColoredName(body, nickname, payload.user?.uniqueId);
-        appendPlainChatText(body, displayText.slice(idx + nickname.length));
-      }
-    } else {
-      body.textContent = displayText;
+      appendPlainChatText(textLine, expandOverlayShortcodes(displayText.slice(0, idx)));
+      appendColoredName(nameLine, nickname, payload.user?.uniqueId);
+      appendPlainChatText(textLine, expandOverlayShortcodes(displayText.slice(idx + nickname.length)));
+      return;
     }
 
-    if (segments.length > 0) {
-      const host = document.createElement('span');
-      host.className = 'chat__text';
-      appendOverlayCommentSegments(host, segments);
-      body.appendChild(host);
+    const fallback = expandOverlayShortcodes(displayText);
+    if (fallback) {
+      textLine.textContent = fallback;
+    }
+  }
+
+  function fillChatBody(body, payload) {
+    if (!(body instanceof HTMLElement) || !payload || typeof payload !== 'object') {
+      return;
+    }
+    const nameLine = document.createElement('div');
+    nameLine.className = 'chat__name-line';
+    const textLine = document.createElement('div');
+    textLine.className = 'chat__text-line';
+    const emotes = normalizeOverlayCommentEmotes(payload.commentEmotes);
+    const parts = Array.isArray(payload.displayParts)
+      ? payload.displayParts.filter(
+          (part) => part && typeof part.value === 'string' && part.value,
+        )
+      : [];
+
+    try {
+      if (parts.length > 0) {
+        fillChatBodyFromParts(nameLine, textLine, payload, parts, emotes);
+      } else {
+        fillChatBodyPlain(nameLine, textLine, payload);
+      }
+    } catch {
+      nameLine.replaceChildren();
+      textLine.replaceChildren();
+      textLine.textContent = String(payload.displayText || '');
+    }
+
+    trimTextLineEdges(textLine);
+    if (lineHasContent(nameLine)) {
+      stripLeadingNameSeparator(textLine);
+      body.appendChild(nameLine);
+    }
+    if (lineHasContent(textLine)) {
+      body.appendChild(textLine);
+    }
+    if (!body.childNodes.length) {
+      textLine.textContent = String(payload.displayText || '');
+      if (textLine.textContent) {
+        body.appendChild(textLine);
+      }
     }
   }
 
@@ -1358,12 +1752,17 @@
     const rowMs = list === pin ? pinPhaseMs() : motionMs;
     item.style.setProperty('--motion-ms', `${rowMs}ms`);
 
-    if ((isPreview || showAvatar) && payload.user && payload.user.avatarUrl) {
+    if (showAvatar && payload.user && payload.user.avatarUrl) {
       const img = document.createElement('img');
       img.className = 'chat__avatar';
       img.alt = '';
       img.referrerPolicy = 'no-referrer';
-      img.addEventListener('error', () => img.remove());
+      img.addEventListener('error', () => {
+        const placeholder = document.createElement('span');
+        placeholder.className = 'chat__avatar chat__avatar--empty';
+        placeholder.setAttribute('aria-hidden', 'true');
+        img.replaceWith(placeholder);
+      });
       img.src = payload.user.avatarUrl;
       item.appendChild(img);
     }
@@ -1655,7 +2054,7 @@
     const samples =
       pinSampleTemplates.length > 0
         ? [...pinSampleTemplates]
-        : isPreview
+        : isPreview && !hasOverlaySamplePlan
           ? previewPinnedSamples()
           : [];
     if (samples.length === 0) {
@@ -1676,11 +2075,17 @@
     resetPinState();
     clearList(chat);
 
-    if (isPreview) {
+    // テンプレ由来がまだ無いときだけ仮文言。受け取済みならキューを維持して周回
+    if (
+      isPreview &&
+      !hasOverlaySamplePlan &&
+      chatSampleQueue.length === 0 &&
+      pinSampleTemplates.length === 0
+    ) {
       chatSampleQueue = buildPreviewChatSampleQueue();
-      chatSampleIndex = 0;
       pinSampleTemplates = previewPinnedSamples();
     }
+    chatSampleIndex = 0;
 
     if (chatSampleQueue.length > 0) {
       pushNextChatSample();
@@ -1822,12 +2227,21 @@
 
   window.addEventListener('message', (event) => {
     const data = event.data;
-    if (!data || (data.kind !== 'overlay-look' && data.kind !== 'overlay-replay')) {
+    if (
+      !data ||
+      (data.kind !== 'overlay-look' &&
+        data.kind !== 'overlay-replay' &&
+        data.kind !== 'preview-samples')
+    ) {
       return;
     }
     try {
       if (data.kind === 'overlay-replay') {
         seedPreviewSamples(true);
+        return;
+      }
+      if (data.kind === 'preview-samples') {
+        applySampleQueues(data);
         return;
       }
       const nextHide = data.look?.hideUserName === true;
@@ -1837,11 +2251,18 @@
         applyCustomCss(data.customCss);
       }
       const nameColorChanged = applyNameColorSettings(data);
+      const accentChanged = applyTemplateAccentSettings(data);
       if (nameColorChanged) {
         refreshColoredNames();
       }
+      if (accentChanged) {
+        refreshAccentColors();
+      }
       const previewChanged = applyPinSettings(data.pin);
-      applyLook(data.look, hideChanged || previewChanged || nameColorChanged);
+      applyLook(
+        data.look,
+        hideChanged || previewChanged || nameColorChanged || accentChanged,
+      );
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.warn(`見た目の更新に失敗しました: ${detail}`);
@@ -1849,5 +2270,15 @@
   });
 
   connect();
-  seedPreviewSamples();
+  window.setTimeout(() => {
+    if (settingsReady) {
+      return;
+    }
+    settingsReady = true;
+    if (usesOverlaySampleLoop()) {
+      seedPreviewSamples();
+      return;
+    }
+    releaseEarlyRows();
+  }, 1500);
 })();

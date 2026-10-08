@@ -1,3 +1,4 @@
+import { COMMENT_EMOTE_PLACEHOLDER_RE } from './comment-emotes';
 import { MSG } from './messages';
 
 const COMMENT_URL_RE = /(?:https?:\/\/|www\.|discord\.gg\/)[^\s　<>"]+/gi;
@@ -26,7 +27,9 @@ export function isEmoteOnlyComment(comment: string): boolean {
   if (trimmed === MSG.ui.emoteComment) {
     return true;
   }
+  COMMENT_EMOTE_PLACEHOLDER_RE.lastIndex = 0;
   const leftover = trimmed
+    .replace(COMMENT_EMOTE_PLACEHOLDER_RE, '')
     .replace(EMOJI_TOKEN_RE, '')
     .replace(/[\s\uFE0F\u200D]/g, '');
   return leftover === '';

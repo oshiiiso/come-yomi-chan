@@ -2,6 +2,9 @@ function applyPreviewPane(px) {
   const workspace = document.querySelector('.workspace');
   previewPanePx = clampSettingsPreviewPx(px, workspace?.clientWidth || 0);
   workspace?.style.setProperty('--preview-pane', `${previewPanePx}px`);
+  if (typeof applyPreviewZoom === 'function') {
+    applyPreviewZoom();
+  }
   const split = $('workspace-split');
   if (split) {
     split.setAttribute('aria-valuenow', String(previewPanePx));

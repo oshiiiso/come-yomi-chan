@@ -112,22 +112,110 @@ export function giftIdFromEvent(raw: Record<string, unknown>): string {
   );
 }
 
+/** 日本語・ハングルなど、視聴者向けの短い表示名。英語の正式名よりこちらを使う。 */
+function regionalGiftLabel(value: unknown): string {
+  const text = asString(value).trim();
+  if (!text || text.length > 48) {
+    return '';
+  }
+  if (/[\r\n。！？!?]/.test(text)) {
+    return '';
+  }
+  if (!/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/.test(text)) {
+    return '';
+  }
+  return text;
+}
+
+function firstRegionalGiftLabel(values: unknown[]): string {
+  for (const value of values) {
+    const label = regionalGiftLabel(value);
+    if (label) {
+      return label;
+    }
+  }
+  return '';
+}
+
+const GIFT_TEXT_KEYS = [
+  'stringValue',
+  'string_value',
+  'defaultPattern',
+  'default_pattern',
+  'giftTextName',
+  'gift_text_name',
+  'describe',
+  'name',
+  'giftName',
+  'gift_name',
+  'pieces',
+  'giftTexts',
+  'gift_texts',
+] as const;
+
+/** 文字の入れ子（giftTexts や Text.pieces）から表示候補を出す。 */
+function collectGiftTextLeaves(value: unknown, depth = 0): string[] {
+  if (depth > 5 || value == null) {
+    return [];
+  }
+  if (typeof value === 'string') {
+    const trimmed = value.trim();
+    return trimmed ? [trimmed] : [];
+  }
+  if (Array.isArray(value)) {
+    return value.flatMap((item) => collectGiftTextLeaves(item, depth + 1));
+  }
+  const record = asRecord(value);
+  const leaves: string[] = [];
+  for (const key of GIFT_TEXT_KEYS) {
+    if (record[key] !== undefined) {
+      leaves.push(...collectGiftTextLeaves(record[key], depth + 1));
+    }
+  }
+  return leaves;
+}
+
 export function giftNameFromEvent(raw: Record<string, unknown>): string {
-  const gift = asRecord(raw.giftDetails ?? raw.gift);
+  const details = asRecord(raw.giftDetails);
+  const gift = asRecord(raw.gift);
   const extra = asRecord(raw.extendedGiftInfo);
+  const regional = firstRegionalGiftLabel([
+    ...collectGiftTextLeaves(details.describe),
+    ...collectGiftTextLeaves(gift.describe),
+    ...collectGiftTextLeaves(extra.describe),
+    ...collectGiftTextLeaves(details.giftTexts ?? details.gift_texts),
+    ...collectGiftTextLeaves(gift.giftTexts ?? gift.gift_texts),
+    ...collectGiftTextLeaves(extra.giftTexts ?? extra.gift_texts),
+    raw.giftName,
+    details.giftName,
+    gift.giftName,
+    extra.giftName,
+    details.name,
+    gift.name,
+    extra.name,
+  ]);
+  if (regional) {
+    return regional;
+  }
   const named =
     asString(raw.giftName) ||
+    asString(details.giftName) ||
     asString(gift.giftName) ||
+    asString(details.name) ||
     asString(gift.name) ||
     asString(extra.name) ||
     asString(extra.giftName);
   if (named) {
     return named;
   }
-  if (gift.isRandomGift === true || extra.isRandomGift === true) {
+  if (
+    details.isRandomGift === true ||
+    gift.isRandomGift === true ||
+    extra.isRandomGift === true
+  ) {
     return MSG.ui.mysteryGift;
   }
-  if (gift.isBoxGift === true || extra.isBoxGift === true) {
+  if (details.isBoxGift === true || gift.isBoxGift === true || extra.isBoxGift === true) {
     return MSG.ui.giftBox;
   }
   return MSG.ui.genericGift;
@@ -140,6 +228,16 @@ export function catalogGiftNameById(catalog: CatalogGift[] | undefined, giftId: 
   }
   const hit = catalog.find((gift) => gift.id === id);
   return String(hit?.name ?? '').trim();
+}
+
+/** サウンド設定の一覧にあるアイコン。イベント本体に画像が無いときの代替。 */
+export function catalogGiftImageById(catalog: CatalogGift[] | undefined, giftId: string): string {
+  const id = String(giftId || '').trim();
+  if (!id || !Array.isArray(catalog) || catalog.length === 0) {
+    return '';
+  }
+  const hit = catalog.find((gift) => gift.id === id);
+  return String(hit?.imageUrl ?? '').trim();
 }
 
 export function resolveGiftNameWithCatalog(
@@ -198,11 +296,20 @@ export function catalogGiftsFromList(
 
   for (const item of unwrapGiftList(raw)) {
     const record = asRecord(item);
-    const name =
+    const canonical =
       asString(record.name) ||
       asString(record.giftName) ||
-      asString(record.gift_name) ||
-      asString(record.describe);
+      asString(record.gift_name);
+    const name =
+      firstRegionalGiftLabel([
+        ...collectGiftTextLeaves(record.describe),
+        ...collectGiftTextLeaves(record.giftTexts ?? record.gift_texts),
+        record.giftName,
+        record.gift_name,
+        record.name,
+      ]) ||
+      canonical ||
+      asString(record.describe).trim();
     if (!name) {
       continue;
     }

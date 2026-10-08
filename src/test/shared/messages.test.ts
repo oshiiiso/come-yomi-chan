@@ -27,3 +27,30 @@ test('UI の fallback 文言は getRendererCopy のキーを揃える', () => {
     );
   }
 });
+
+test('UI の fallback 文言は主要な文字列も getRendererCopy と一致する', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'ui', 'js', 'renderer-copy.js'),
+    'utf8',
+  );
+  const copy = getRendererCopy();
+  const criticalKeys = [
+    'overlayUrlCardTitle',
+    'overlayUrlCopyLiveLabel',
+    'copyObsLabel',
+    'colorPickerResetLabel',
+    'eventAlertChatUrlTitle',
+    'eventAlertAlertsUrlTitle',
+    'overlayUrlLikesTitle',
+  ] as const;
+  for (const key of criticalKeys) {
+    const value = copy[key];
+    assert.equal(typeof value, 'string');
+    const escaped = value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    assert.match(
+      source,
+      new RegExp(`${key}:\\s*'${escaped}'`),
+      `${key} の文言が renderer-copy.js と違う`,
+    );
+  }
+});

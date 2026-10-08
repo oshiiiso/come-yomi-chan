@@ -19,10 +19,36 @@ import {
 import { soundFilePath, getSoundsDir } from '../shared/sound-files';
 import { alertMediaFilePath, getAlertMediaDir } from '../shared/alert-media-files';
 import { DEFAULT_EVENT_ALERT_MS } from '../shared/event-alert';
+import type { OverlayRankingPayload, RankEntry } from '../shared/like-ranking';
+import {
+  DEFAULT_OVERLAY_LIKE_RANKING_ENABLED,
+  DEFAULT_OVERLAY_LIKE_RANKING_MAX,
+  DEFAULT_OVERLAY_RANKING_MODE,
+  normalizeOverlayRankingMode,
+} from '../shared/like-ranking';
+import {
+  DEFAULT_OVERLAY_LIKES_LOOK,
+  type OverlayLikesLook,
+  overlayLikesFontCss,
+} from '../shared/overlay-likes-look';
+import {
+  DEFAULT_OVERLAY_RANKING_MOTION,
+  DEFAULT_OVERLAY_RANKING_MOTION_SPEED,
+  normalizeOverlayRankingMotion,
+  normalizeOverlayRankingMotionSpeed,
+  overlayRankingMotionMs,
+  type OverlayRankingMotion,
+  type OverlayRankingMotionSpeed,
+} from '../shared/overlay-ranking-motion';
+import {
+  DEFAULT_TEMPLATE_ACCENT_COLORS,
+  normalizeTemplateAccentColors,
+  type TemplateAccentColors,
+} from '../shared/template-accent-colors';
 
 const logger = getLogger('overlay-server');
 
-export type OverlayClientRole = 'chat' | 'alerts';
+export type OverlayClientRole = 'chat' | 'alerts' | 'ranking';
 
 export function isPreviewOverlayRequest(rawUrl: string | undefined): boolean {
   if (!rawUrl) {
@@ -42,7 +68,15 @@ export function overlayClientRoleFromUrl(rawUrl: string | undefined): OverlayCli
   }
   try {
     const url = new URL(rawUrl, 'http://overlay.local');
-    return url.searchParams.get('role') === 'alerts' ? 'alerts' : 'chat';
+    const role = url.searchParams.get('role');
+    if (role === 'alerts') {
+      return 'alerts';
+    }
+    // 旧 likes ロールもランキングとして扱う
+    if (role === 'ranking' || role === 'likes') {
+      return 'ranking';
+    }
+    return 'chat';
   } catch {
     return 'chat';
   }
@@ -76,10 +110,14 @@ export class OverlayServer {
   private chatDisplayMs = 12_000;
   private customCss = '';
   private look = DEFAULT_OVERLAY_LOOK;
+  private likesLook = DEFAULT_OVERLAY_LIKES_LOOK;
+  private rankingMotion: OverlayRankingMotion = DEFAULT_OVERLAY_RANKING_MOTION;
+  private rankingMotionSpeed: OverlayRankingMotionSpeed = DEFAULT_OVERLAY_RANKING_MOTION_SPEED;
   private pin = DEFAULT_OVERLAY_PIN;
   private hideUserName = false;
   private nameColorEnabled = true;
   private nameColors: string[] = [];
+  private templateAccentColors: TemplateAccentColors = { ...DEFAULT_TEMPLATE_ACCENT_COLORS };
   private eventAlertDisplayMs = DEFAULT_EVENT_ALERT_MS;
   private audioSeq = 0;
   private lastNoClientWarnAt = 0;
@@ -88,6 +126,12 @@ export class OverlayServer {
   private readonly clientRoles = new WeakMap<WebSocket, OverlayClientRole>();
   private readonly maxAudioEntries = 40;
   private clientChangeHandler: (() => void) | null = null;
+  private lastRanking: OverlayRankingPayload = {
+    entries: [],
+    max: DEFAULT_OVERLAY_LIKE_RANKING_MAX,
+    enabled: DEFAULT_OVERLAY_LIKE_RANKING_ENABLED,
+    mode: DEFAULT_OVERLAY_RANKING_MODE,
+  };
 
   constructor(
     private readonly host: string,
@@ -105,15 +149,23 @@ export class OverlayServer {
     nameColorEnabled = true,
     nameColors: string[] = [],
     eventAlertDisplayMs: number = DEFAULT_EVENT_ALERT_MS,
+    likesLook: OverlayLikesLook = DEFAULT_OVERLAY_LIKES_LOOK,
+    templateAccentColors: TemplateAccentColors | unknown = DEFAULT_TEMPLATE_ACCENT_COLORS,
+    rankingMotion: OverlayRankingMotion | unknown = DEFAULT_OVERLAY_RANKING_MOTION,
+    rankingMotionSpeed: OverlayRankingMotionSpeed | unknown = DEFAULT_OVERLAY_RANKING_MOTION_SPEED,
   ): void {
     this.chatMaxRows = chatMaxRows;
     this.chatDisplayMs = chatDisplayMs;
     this.customCss = customCss;
     this.look = look;
+    this.likesLook = likesLook;
+    this.rankingMotion = normalizeOverlayRankingMotion(rankingMotion);
+    this.rankingMotionSpeed = normalizeOverlayRankingMotionSpeed(rankingMotionSpeed);
     this.pin = pin;
     this.hideUserName = hideUserName === true;
     this.nameColorEnabled = nameColorEnabled !== false;
     this.nameColors = Array.isArray(nameColors) ? nameColors : [];
+    this.templateAccentColors = normalizeTemplateAccentColors(templateAccentColors);
     this.eventAlertDisplayMs =
       typeof eventAlertDisplayMs === 'number' && Number.isFinite(eventAlertDisplayMs)
         ? Math.trunc(eventAlertDisplayMs)
@@ -190,6 +242,7 @@ export class OverlayServer {
     displayParts?: Array<
       | { kind: 'text'; value: string }
       | { kind: 'name'; value: string; color: string }
+      | { kind: 'accent'; value: string; color: string; token?: string }
     >;
     imageUrl?: string | null;
     displayMs?: number;
@@ -221,6 +274,49 @@ export class OverlayServer {
     );
   }
 
+  broadcastRanking(payload: OverlayRankingPayload): void {
+    const entries = Array.isArray(payload.entries)
+      ? payload.entries.map((entry) => {
+          const raw = entry as RankEntry & { likeCount?: unknown };
+          const legacyCount =
+            typeof raw.likeCount === 'number' && Number.isFinite(raw.likeCount)
+              ? Math.max(0, Math.trunc(raw.likeCount))
+              : 0;
+          const count =
+            typeof raw.count === 'number' && Number.isFinite(raw.count)
+              ? Math.max(0, Math.trunc(raw.count))
+              : legacyCount;
+          return {
+            uniqueId: typeof raw.uniqueId === 'string' ? raw.uniqueId : '',
+            nickname: typeof raw.nickname === 'string' ? raw.nickname : '',
+            count,
+            avatarUrl: typeof raw.avatarUrl === 'string' ? raw.avatarUrl : '',
+          };
+        })
+      : [];
+    this.lastRanking = {
+      entries,
+      max:
+        typeof payload.max === 'number' && Number.isFinite(payload.max)
+          ? Math.trunc(payload.max)
+          : DEFAULT_OVERLAY_LIKE_RANKING_MAX,
+      enabled: payload.enabled !== false,
+      mode: normalizeOverlayRankingMode(payload.mode),
+    };
+    this.sendAll(
+      {
+        kind: 'ranking',
+        payload: this.lastRanking,
+      },
+      { roles: ['ranking'] },
+    );
+  }
+
+  /** @deprecated broadcastRanking を使う */
+  broadcastLikeRanking(payload: OverlayRankingPayload): void {
+    this.broadcastRanking(payload);
+  }
+
   broadcastAudio(audioUrl: string): void {
     this.warnIfNoClients();
     this.sendAll({ kind: 'audio', audioUrl }, { roles: ['chat'] });
@@ -238,7 +334,16 @@ export class OverlayServer {
   }
 
   clearChat(): void {
-    this.sendAll({ kind: 'clear' }, { roles: ['chat', 'alerts'] });
+    // 互換: コメント列とアラートを消す（ランキングはセッション側で戻す）
+    this.clearRoles(['chat', 'alerts']);
+  }
+
+  clearRoles(roles: OverlayClientRole[]): void {
+    if (roles.length === 0) {
+      return;
+    }
+    // 見た目プレビューのサンプル周回は消さない
+    this.sendAll({ kind: 'clear' }, { excludePreview: true, roles });
   }
 
   showSampleDisplay(plan: OverlaySamplePlan): void {
@@ -256,7 +361,10 @@ export class OverlayServer {
   }
 
   clearPin(): void {
-    this.sendAll({ kind: 'pin-control', action: 'clear' }, { roles: ['chat'] });
+    this.sendAll(
+      { kind: 'pin-control', action: 'clear' },
+      { excludePreview: true, roles: ['chat'] },
+    );
   }
 
   skipPlayback(): void {
@@ -267,7 +375,7 @@ export class OverlayServer {
     this.sendAll({ kind: 'audio-control', action: 'clear-pending' }, { roles: ['chat'] });
   }
 
-  clientCount(): number {
+  clientCountForRole(role: OverlayClientRole): number {
     if (!this.wss) {
       return 0;
     }
@@ -275,20 +383,28 @@ export class OverlayServer {
       (client) =>
         client.readyState === WebSocket.OPEN &&
         !this.previewClients.has(client) &&
-        this.clientRoles.get(client) !== 'alerts',
+        this.clientRoles.get(client) === role,
     ).length;
   }
 
+  clientCount(): number {
+    return this.clientCountForRole('chat');
+  }
+
   alertClientCount(): number {
-    if (!this.wss) {
-      return 0;
-    }
-    return [...this.wss.clients].filter(
-      (client) =>
-        client.readyState === WebSocket.OPEN &&
-        !this.previewClients.has(client) &&
-        this.clientRoles.get(client) === 'alerts',
-    ).length;
+    return this.clientCountForRole('alerts');
+  }
+
+  likesClientCount(): number {
+    return this.clientCountForRole('ranking');
+  }
+
+  rankingClientCount(): number {
+    return this.clientCountForRole('ranking');
+  }
+
+  anyClientCount(): number {
+    return this.clientCount() + this.alertClientCount() + this.rankingClientCount();
   }
 
   getPort(): number {
@@ -312,11 +428,19 @@ export class OverlayServer {
       hideUserName: this.hideUserName,
       nameColorEnabled: this.nameColorEnabled,
       nameColors: this.nameColors,
+      templateAccentColors: this.templateAccentColors,
       eventAlertDisplayMs: this.eventAlertDisplayMs,
       look: {
         ...this.look,
         fontCss: overlayFontCss(this.look.fontFamily),
       },
+      likesLook: {
+        ...this.likesLook,
+        fontCss: overlayLikesFontCss(this.likesLook.fontFamily),
+      },
+      rankingMotion: this.rankingMotion,
+      rankingMotionSpeed: this.rankingMotionSpeed,
+      rankingMotionMs: overlayRankingMotionMs(this.rankingMotionSpeed),
       pin: this.pin,
     };
   }
@@ -373,6 +497,14 @@ export class OverlayServer {
     }
     try {
       socket.send(JSON.stringify(this.settingsPayload()));
+      if (this.clientRoles.get(socket) === 'ranking') {
+        socket.send(
+          JSON.stringify({
+            kind: 'ranking',
+            payload: this.lastRanking,
+          }),
+        );
+      }
     } catch (error) {
       logger.warning(`オーバーレイ初期通知に失敗しました: ${getErrorMessage(error)}`);
     }
@@ -485,6 +617,23 @@ export class OverlayServer {
         return;
       }
 
+      if (url.pathname === '/overlay/ranking') {
+        res.writeHead(302, { Location: `/overlay/ranking/${url.search}` });
+        res.end();
+        return;
+      }
+
+      if (url.pathname === '/overlay/ranking/') {
+        this.serveFile(path.join(this.overlayDir, 'ranking.html'), res);
+        return;
+      }
+
+      if (url.pathname === '/overlay/likes' || url.pathname === '/overlay/likes/') {
+        res.writeHead(302, { Location: `/overlay/ranking/${url.search}` });
+        res.end();
+        return;
+      }
+
       if (url.pathname === '/overlay.js' || url.pathname === '/overlay.css') {
         this.serveFile(path.join(this.overlayDir, path.basename(url.pathname)), res);
         return;
@@ -497,6 +646,15 @@ export class OverlayServer {
         }
         if (relative === 'alerts' || relative === 'alerts/') {
           this.serveFile(path.join(this.overlayDir, 'alerts.html'), res);
+          return;
+        }
+        if (relative === 'ranking' || relative === 'ranking/') {
+          this.serveFile(path.join(this.overlayDir, 'ranking.html'), res);
+          return;
+        }
+        if (relative === 'likes' || relative === 'likes/') {
+          res.writeHead(302, { Location: `/overlay/ranking/${url.search}` });
+          res.end();
           return;
         }
         const safe = path.normalize(relative).replace(/^(\.\.(\/|\\|$))+/, '');

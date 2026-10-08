@@ -65,6 +65,26 @@ function applyCopy(config) {
   if (giftSpeakListHint && uiCopy.giftSpeakListHint) {
     giftSpeakListHint.textContent = uiCopy.giftSpeakListHint;
   }
+  const templateEditorHint = $('template-editor-hint');
+  if (templateEditorHint && uiCopy.templateEditorHint) {
+    templateEditorHint.textContent = uiCopy.templateEditorHint;
+  }
+  if (uiCopy.colorPickerResetLabel) {
+    for (const el of document.querySelectorAll('.color-picker-reset')) {
+      el.setAttribute('aria-label', uiCopy.colorPickerResetLabel);
+      el.title = uiCopy.colorPickerResetLabel;
+    }
+  }
+  if (typeof syncNameColorResetButtons === 'function') {
+    syncNameColorResetButtons();
+  }
+  if (typeof syncTemplateAccentResetButtons === 'function') {
+    syncTemplateAccentResetButtons(
+      typeof collectTemplateAccentColors === 'function'
+        ? collectTemplateAccentColors()
+        : undefined,
+    );
+  }
   const previewFont = $('preview-font');
   if (previewFont && uiCopy.previewZoomLabel) {
     previewFont.setAttribute('aria-label', uiCopy.previewZoomLabel);
@@ -125,13 +145,13 @@ function applyCopy(config) {
   if (guideClearSamples && uiCopy.guideClearSamplesButton) {
     guideClearSamples.textContent = uiCopy.guideClearSamplesButton;
   }
-  for (const id of ['btn-overlay-preview-samples', 'btn-look-overlay-samples']) {
+  for (const id of ['btn-overlay-preview-samples']) {
     const overlaySamples = $(id);
     if (overlaySamples && uiCopy.overlayPreviewSamples) {
       overlaySamples.textContent = uiCopy.overlayPreviewSamples;
     }
   }
-  for (const id of ['btn-overlay-clear', 'btn-look-overlay-clear']) {
+  for (const id of ['btn-overlay-clear']) {
     const overlayClear = $(id);
     if (overlayClear && uiCopy.overlayClearChat) {
       overlayClear.textContent = uiCopy.overlayClearChat;
@@ -212,7 +232,6 @@ function applyCopy(config) {
     ['tab-look', 'settingsTabLook'],
     ['look-tab-hint', 'lookTabHint'],
     ['look-chat-title', 'lookChatTitle'],
-    ['btn-copy-obs-url', 'copyObsLabel'],
     ['look-motion-label', 'overlayMotionLabel'],
     ['look-motion-speed-label', 'overlayMotionSpeedLabel'],
     ['look-motion-hint', 'overlayMotionHint'],
@@ -228,12 +247,58 @@ function applyCopy(config) {
     ['look-pin-types-hint', 'overlayPinTypesHint'],
     ['look-pin-preview-label', 'overlayPinPreviewLabel'],
     ['look-pin-preview-hint', 'overlayPinPreviewHint'],
+    ['overlay-like-ranking-enabled-label', 'overlayLikeRankingEnabledLabel'],
+    ['overlay-like-ranking-max-label', 'overlayLikeRankingMaxLabel'],
+    ['overlay-like-ranking-hint', 'overlayLikeRankingHint'],
+    ['overlay-ranking-mode-label', 'overlayRankingModeLabel'],
+    ['overlay-ranking-mode-hint', 'overlayRankingModeHint'],
+    ['overlay-ranking-mode-likes-label', 'overlayRankingModeLikes'],
+    ['overlay-ranking-mode-diamonds-label', 'overlayRankingModeDiamonds'],
+    ['overlay-ranking-like-sync-label', 'overlayRankingLikeSyncLabel'],
+    ['overlay-ranking-like-sync-hint', 'overlayRankingLikeSyncHint'],
+    ['overlay-ranking-like-sync-live-label', 'overlayRankingLikeSyncLive'],
+    ['overlay-ranking-like-sync-poll-label', 'overlayRankingLikeSyncPoll'],
+    ['overlay-ranking-like-poll-sec-label', 'overlayRankingLikePollSecLabel'],
+    ['look-section-comment', 'lookSectionComment'],
+    ['look-section-ranking', 'lookSectionRanking'],
+    ['look-section-alerts', 'lookSectionAlerts'],
+    ['look-alerts-hint', 'lookAlertsHint'],
+    ['look-section-easy', 'lookSectionEasy'],
+    ['look-section-chat', 'lookSectionChat'],
+    ['look-section-name', 'lookSectionName'],
+    ['overlay-css-summary', 'overlayCustomCssSummary'],
+    ['overlay-css-label', 'overlayCustomCssLabel'],
+    ['overlay-css-hint', 'overlayCustomCssHint'],
+    ['overlay-css-ref', 'overlayCustomCssRef'],
   ];
   for (const [id, key] of pairs) {
     const el = $(id);
     if (el && uiCopy[key]) {
       el.textContent = uiCopy[key];
     }
+  }
+  const resetTabs = ['connect', 'filter', 'comment', 'gift', 'events', 'look', 'tts', 'app'];
+  for (const tab of resetTabs) {
+    const hint = $(`reset-tab-hint-${tab}`);
+    const hintText = uiCopy.resetTabHints?.[tab];
+    if (hint && hintText) {
+      hint.textContent = hintText;
+    }
+    const button = $(`btn-reset-tab-${tab}`);
+    if (button && uiCopy.resetTabLabel) {
+      button.textContent = uiCopy.resetTabLabel;
+    }
+  }
+  const lookSections = $('look-sections');
+  if (lookSections && uiCopy.lookSectionsLabel) {
+    lookSections.setAttribute('aria-label', uiCopy.lookSectionsLabel);
+  }
+  const lookCommentSections = $('look-comment-sections');
+  if (lookCommentSections && uiCopy.lookCommentSectionsLabel) {
+    lookCommentSections.setAttribute('aria-label', uiCopy.lookCommentSectionsLabel);
+  }
+  if (typeof applyLikesLookCopy === 'function') {
+    applyLikesLookCopy();
   }
   const commentNotifyMode = $('comment-notify-mode');
   if (commentNotifyMode && uiCopy.commentNotifyModeLabel) {
@@ -259,31 +324,26 @@ function applyCopy(config) {
   syncMotionSpeedButtons(selectedMotionSpeed());
   fillPinTypes(collectPinTypes());
   syncPinOptions();
+  if (typeof applyOverlayUrlCopy === 'function') {
+    applyOverlayUrlCopy();
+  }
 }
 
 function fillConfig(config) {
   applyCopy(config);
   $('unique-id').value = config.uniqueId ?? '';
   $('overlay-port').value = String(config.overlayPort ?? 8787);
-  $('overlay-url').textContent = config.overlayUrl ?? '';
-  $('overlay-studio-url').textContent = config.overlayStudioUrl ?? '';
-  if ($('overlay-local-url')) {
-    $('overlay-local-url').textContent = config.overlayPreviewUrl ?? '';
-  }
-  if ($('overlay-alerts-url')) {
-    $('overlay-alerts-url').textContent = config.overlayAlertsUrl ?? '';
-  }
-  if ($('overlay-alerts-local-url')) {
-    $('overlay-alerts-local-url').textContent = config.overlayAlertsPreviewUrl ?? '';
-  }
-  if ($('overlay-alerts-studio-url')) {
-    $('overlay-alerts-studio-url').textContent = config.overlayAlertsStudioUrl ?? '';
+  if (typeof fillOverlayUrlUi === 'function') {
+    fillOverlayUrlUi(config, { force: true });
   }
   $('chat-max-rows').value = String(config.chatMaxRows ?? 8);
   fillDisplayTime(config.chatDisplayMs);
   $('overlay-css').value = config.overlayCustomCss ?? '';
   $('max-display-chars').value = String(config.maxDisplayChars ?? 80);
   fillLook(config);
+  if (typeof fillLikesLook === 'function') {
+    fillLikesLook(config);
+  }
   $('hide-user-name').checked = Boolean(config.hideUserName);
   $('max-speech-chars').value = String(config.maxSpeechChars ?? 80);
   $('max-queue').value = String(config.maxQueue ?? 20);
@@ -327,6 +387,28 @@ function fillConfig(config) {
   fillGiftSpeakMaps(config);
   fillProfilesUi(config);
   $('like-milestone').value = String(config.likeMilestone ?? 10);
+  if ($('overlay-like-ranking-enabled')) {
+    $('overlay-like-ranking-enabled').checked = config.overlayLikeRankingEnabled !== false;
+  }
+  if ($('overlay-like-ranking-max')) {
+    $('overlay-like-ranking-max').value = String(config.overlayLikeRankingMax ?? 5);
+  }
+  if ($('overlay-ranking-mode')) {
+    $('overlay-ranking-mode').value =
+      config.overlayRankingMode === 'diamonds' ? 'diamonds' : 'likes';
+  }
+  if ($('overlay-ranking-like-sync')) {
+    $('overlay-ranking-like-sync').value =
+      config.overlayRankingLikeSyncMode === 'poll' ? 'poll' : 'live';
+  }
+  if ($('overlay-ranking-like-poll-sec')) {
+    $('overlay-ranking-like-poll-sec').value = String(
+      config.overlayRankingLikePollSec ?? 30,
+    );
+  }
+  if (typeof syncOverlayRankingLikeSyncVisibility === 'function') {
+    syncOverlayRankingLikeSyncVisibility();
+  }
   $('tts-engine').value = config.ttsEngineId === 'voicevox' ? 'voicevox' : 'windows';
   $('voicevox-host').value = config.voicevoxHost ?? '127.0.0.1';
   $('voicevox-port').value = String(config.voicevoxPort ?? 50021);
@@ -413,7 +495,6 @@ function fillConfig(config) {
     fillEventAlertUi(config);
   }
 
-  syncSettingsPreview();
   updateTtsEngineUi();
   syncViewerEmpty();
   applyPreviewPane(config.settingsPreviewPx);
@@ -421,6 +502,12 @@ function fillConfig(config) {
   applyViewerDisplay(config.viewerDisplay);
   applyViewerLayout(config.viewerLayout, false);
   applyViewerFontSize(config.viewerFontSize);
+  if (typeof fillTemplateAccentColors === 'function') {
+    fillTemplateAccentColors(config);
+  } else if (typeof syncAllTemplateEditors === 'function') {
+    syncAllTemplateEditors();
+  }
+  syncSettingsPreview();
 }
 
 function readOverlayStreamSettings() {
@@ -451,6 +538,7 @@ function readOverlayStreamSettings() {
     overlayPinPreview: config.overlayPinPreview,
     overlayNameColorEnabled: config.overlayNameColorEnabled,
     overlayNameColors: config.overlayNameColors,
+    templateAccentColors: config.templateAccentColors,
     commentDisplayTemplate: config.commentDisplayTemplate,
     giftDisplayTemplate: config.giftDisplayTemplate,
     followDisplayTemplate: config.followDisplayTemplate,
@@ -464,6 +552,24 @@ function readOverlayStreamSettings() {
     likeDisplayTemplate: config.likeDisplayTemplate,
     memberDisplayTemplate: config.memberDisplayTemplate,
     likeMilestone: config.likeMilestone,
+    overlayLikeRankingEnabled: config.overlayLikeRankingEnabled,
+    overlayLikeRankingMax: config.overlayLikeRankingMax,
+    overlayRankingMode: config.overlayRankingMode,
+    overlayRankingLikeSyncMode: config.overlayRankingLikeSyncMode,
+    overlayRankingLikePollSec: config.overlayRankingLikePollSec,
+    overlayRankingMotion: config.overlayRankingMotion,
+    overlayRankingMotionSpeed: config.overlayRankingMotionSpeed,
+    overlayLikesTheme: config.overlayLikesTheme,
+    overlayLikesFontFamily: config.overlayLikesFontFamily,
+    overlayLikesFontSize: config.overlayLikesFontSize,
+    overlayLikesBgOpacity: config.overlayLikesBgOpacity,
+    overlayLikesShowAvatar: config.overlayLikesShowAvatar,
+    overlayLikesAvatarSize: config.overlayLikesAvatarSize,
+    overlayLikesItemRadius: config.overlayLikesItemRadius,
+    overlayLikesRowGap: config.overlayLikesRowGap,
+    overlayLikesPanelWidth: config.overlayLikesPanelWidth,
+    overlayLikesShowUnit: config.overlayLikesShowUnit,
+    overlayLikesNeonHue: config.overlayLikesNeonHue,
   };
 }
 
@@ -506,6 +612,9 @@ function collectConfig() {
     overlayPinMsByType: collectPinMsByType(),
     overlayPinPreview: $('look-pin-preview')?.checked !== false,
     ...currentNameColorSettings(),
+    ...(typeof collectTemplateAccentColors === 'function'
+      ? { templateAccentColors: collectTemplateAccentColors() }
+      : {}),
     maxDisplayChars: Number($('max-display-chars').value),
     hideUserName: $('hide-user-name').checked,
     maxSpeechChars: Number($('max-speech-chars').value),
@@ -554,6 +663,13 @@ function collectConfig() {
     alwaysOnTop: Boolean($('always-on-top')?.checked),
     compactViewer: Boolean($('compact-viewer')?.checked),
     likeMilestone: Number($('like-milestone').value),
+    overlayLikeRankingEnabled: Boolean($('overlay-like-ranking-enabled')?.checked),
+    overlayLikeRankingMax: Number($('overlay-like-ranking-max')?.value),
+    overlayRankingMode: $('overlay-ranking-mode')?.value === 'diamonds' ? 'diamonds' : 'likes',
+    overlayRankingLikeSyncMode:
+      $('overlay-ranking-like-sync')?.value === 'poll' ? 'poll' : 'live',
+    overlayRankingLikePollSec: Number($('overlay-ranking-like-poll-sec')?.value),
+    ...(typeof collectLikesLookConfig === 'function' ? collectLikesLookConfig() : {}),
     ttsEngineId: $('tts-engine').value === 'voicevox' ? 'voicevox' : 'windows',
     ttsVoice: $('tts-voice').value,
     ttsTestText: $('tts-test-text').value,
@@ -612,6 +728,8 @@ function isStaleFormToast() {
   const validation = [
     uiCopy.invalidPort,
     uiCopy.invalidLikeMilestone,
+    uiCopy.invalidOverlayLikeRankingMax,
+    uiCopy.invalidOverlayRankingLikePollSec,
     uiCopy.invalidDisplaySec,
     uiCopy.invalidDisplayChars,
     uiCopy.invalidSpeechChars,
@@ -646,6 +764,22 @@ function validateForm() {
   const milestone = Number($('like-milestone').value);
   if (!Number.isInteger(milestone) || milestone < 1) {
     return uiCopy.invalidLikeMilestone;
+  }
+
+  const likeRankingMax = Number($('overlay-like-ranking-max')?.value);
+  if (!Number.isInteger(likeRankingMax) || likeRankingMax < 1 || likeRankingMax > 10) {
+    return uiCopy.invalidOverlayLikeRankingMax;
+  }
+
+  const rankingMode =
+    $('overlay-ranking-mode')?.value === 'diamonds' ? 'diamonds' : 'likes';
+  const likeSync =
+    $('overlay-ranking-like-sync')?.value === 'poll' ? 'poll' : 'live';
+  if (rankingMode === 'likes' && likeSync === 'poll') {
+    const likePollSec = Number($('overlay-ranking-like-poll-sec')?.value);
+    if (!Number.isInteger(likePollSec) || likePollSec < 1 || likePollSec > 300) {
+      return uiCopy.invalidOverlayRankingLikePollSec;
+    }
   }
 
   if (!$('chat-display-unlimited').checked) {

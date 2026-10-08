@@ -186,44 +186,26 @@ function fillPin(config) {
   syncPinOptions();
 }
 
-/** src/shared/overlay-name-colors.ts の DEFAULT / プリセットと同じ。 */
-const DEFAULT_NAME_COLORS_UI = ['#5eead4', '#93c5fd', '#fcd34d', '#f9a8d4', '#86efac'];
 /** @type {Record<string, string[]>} */
-let nameColorPresets = {
-  dark: [...DEFAULT_NAME_COLORS_UI],
-  light: ['#0f766e', '#1d4ed8', '#a16207', '#be185d', '#15803d'],
-  minimal: [...DEFAULT_NAME_COLORS_UI],
-  neon: ['#67e8f9', '#e879f9', '#f0abfc', '#fde047', '#86efac'],
-};
+let nameColorPresets = { ...OVERLAY_NAME_COLORS_BY_LOOK_PRESET };
 
 function sameNameColorsUi(left, right) {
-  if (!Array.isArray(left) || !Array.isArray(right) || left.length !== right.length) {
-    return false;
-  }
-  return left.every((color, index) => color === right[index]);
+  return sameOverlayNameColors(left, right);
 }
 
 function normalizeNameColorsUi(raw) {
-  const list = Array.isArray(raw) ? raw : [];
-  return DEFAULT_NAME_COLORS_UI.map((def, index) => {
-    const candidate = list[index];
-    return typeof candidate === 'string' && /^#[0-9a-fA-F]{6}$/.test(candidate)
-      ? candidate.toLowerCase()
-      : def;
-  });
+  return normalizeOverlayNameColors(raw);
 }
 
 function isAutoNameColorsUi(raw) {
-  const colors = normalizeNameColorsUi(raw);
-  if (sameNameColorsUi(colors, DEFAULT_NAME_COLORS_UI)) {
-    return true;
-  }
-  return Object.values(nameColorPresets).some((palette) => sameNameColorsUi(colors, palette));
+  return isAutoOverlayNameColors(raw);
 }
 
 function nameColorsForLookPresetUi(presetId) {
-  const palette = nameColorPresets[presetId];
-  return palette ? [...palette] : [...DEFAULT_NAME_COLORS_UI];
+  if (nameColorPresets[presetId]) {
+    return [...nameColorPresets[presetId]];
+  }
+  return nameColorsForLookPreset(presetId);
 }
 
 function resolveNameColorsForLookPresetUi(presetId, current) {
@@ -233,24 +215,72 @@ function resolveNameColorsForLookPresetUi(presetId, current) {
   return nameColorsForLookPresetUi(presetId);
 }
 
+function syncNameColorResetButtons() {
+  for (let i = 0; i < DEFAULT_OVERLAY_NAME_COLORS.length; i += 1) {
+    const el = document.getElementById(`look-name-color-${i}`);
+    const reset = document.querySelector(`[data-name-color-reset="${i}"]`);
+    if (!(el instanceof HTMLInputElement)) {
+      continue;
+    }
+    syncColorPickerResetButton(reset, el.value, DEFAULT_OVERLAY_NAME_COLORS[i]);
+  }
+}
+
 function fillNameColors(config) {
   const enabledEl = $('look-name-color-enabled');
   if (enabledEl) {
-    enabledEl.checked = config.overlayNameColorEnabled !== false;
+    enabledEl.checked = normalizeOverlayNameColorEnabled(config.overlayNameColorEnabled);
   }
   const colors = normalizeNameColorsUi(config.overlayNameColors);
-  for (let i = 0; i < 5; i += 1) {
+  for (let i = 0; i < DEFAULT_OVERLAY_NAME_COLORS.length; i += 1) {
     const el = document.getElementById(`look-name-color-${i}`);
     if (el) {
       el.value = colors[i];
     }
   }
+  syncNameColorResetButtons();
 }
 
 function collectNameColors() {
   return normalizeNameColorsUi(
-    Array.from({ length: 5 }, (_, i) => document.getElementById(`look-name-color-${i}`)?.value || ''),
+    Array.from(
+      { length: DEFAULT_OVERLAY_NAME_COLORS.length },
+      (_, i) => document.getElementById(`look-name-color-${i}`)?.value || '',
+    ),
   );
+}
+
+function bindNameColorResets() {
+  const host = document.querySelector('.name-color-palette__swatches');
+  if (!host || host.dataset.boundNameColorReset === '1') {
+    return;
+  }
+  host.dataset.boundNameColorReset = '1';
+  host.addEventListener('input', (event) => {
+    if (!(event.target instanceof HTMLInputElement) || event.target.type !== 'color') {
+      return;
+    }
+    syncNameColorResetButtons();
+  });
+  host.addEventListener('click', (event) => {
+    const reset = event.target.closest('[data-name-color-reset]');
+    if (!(reset instanceof HTMLButtonElement)) {
+      return;
+    }
+    const index = Number(reset.dataset.nameColorReset);
+    const el = document.getElementById(`look-name-color-${index}`);
+    if (!(el instanceof HTMLInputElement) || !DEFAULT_OVERLAY_NAME_COLORS[index]) {
+      return;
+    }
+    el.value = DEFAULT_OVERLAY_NAME_COLORS[index];
+    syncNameColorResetButtons();
+    if (typeof noteFormChanged === 'function') {
+      noteFormChanged();
+    }
+    if (typeof pushLookPreview === 'function') {
+      pushLookPreview();
+    }
+  });
 }
 
 function currentNameColorSettings() {
@@ -302,20 +332,40 @@ function fillLook(config) {
   syncLookPresetButtons();
 }
 
+/** 100%のとき、この幅の配信ソースを枠に縮小して見せる */
+const PREVIEW_LAYOUT_WIDTH = 560;
+
 function applyPreviewZoom() {
-  const percent = Number($('preview-font-size')?.value || 100);
-  const scale = Number.isFinite(percent) ? percent / 100 : 1;
   const frame = document.querySelector('.preview-frame');
-  if (!frame) {
+  const iframe = frame?.querySelector('iframe');
+  if (!(frame instanceof HTMLElement) || !(iframe instanceof HTMLIFrameElement)) {
     return;
   }
-  if (scale === 1) {
-    frame.style.removeProperty('transform');
-    frame.style.removeProperty('transform-origin');
-  } else {
-    frame.style.transform = `scale(${scale})`;
-    frame.style.transformOrigin = 'top center';
+  frame.style.removeProperty('transform');
+  frame.style.removeProperty('transform-origin');
+  const percent = Number($('preview-font-size')?.value || 100);
+  const zoom = Number.isFinite(percent) && percent > 0 ? percent / 100 : 1;
+  const width = frame.clientWidth;
+  if (width <= 0) {
+    iframe.style.removeProperty('width');
+    iframe.style.removeProperty('height');
+    iframe.style.removeProperty('transform');
+    iframe.style.removeProperty('transform-origin');
+    return;
   }
+  const scale = Math.min(1, width / PREVIEW_LAYOUT_WIDTH) * zoom;
+  if (scale >= 0.995) {
+    iframe.style.removeProperty('width');
+    iframe.style.removeProperty('height');
+    iframe.style.removeProperty('transform');
+    iframe.style.removeProperty('transform-origin');
+    return;
+  }
+  const layout = `${100 / scale}%`;
+  iframe.style.width = layout;
+  iframe.style.height = layout;
+  iframe.style.transformOrigin = 'top left';
+  iframe.style.transform = `scale(${scale})`;
 }
 
 function syncLookLabels() {
@@ -395,13 +445,63 @@ function applyLookPreset(id) {
     overlayNameColorEnabled: $('look-name-color-enabled')?.checked !== false,
     overlayNameColors: nextColors || currentColors,
   });
+  // 差し込み色も名前色と同じ自動差し替えルール
+  if (
+    typeof collectTemplateAccentColors === 'function' &&
+    typeof resolveTemplateAccentColorsForLookPreset === 'function' &&
+    typeof fillTemplateAccentColors === 'function'
+  ) {
+    const currentAccents = collectTemplateAccentColors();
+    const nextAccents = resolveTemplateAccentColorsForLookPreset(id, currentAccents);
+    if (nextAccents) {
+      fillTemplateAccentColors({ templateAccentColors: nextAccents });
+    }
+  }
   noteFormChanged();
   pushLookPreview();
 }
 
-function pushLookPreview() {
+let lookPreviewSampleGen = 0;
+
+function activeLookSection() {
+  const name = document.querySelector('[data-look-section-btn].is-active')?.dataset.lookSectionBtn;
+  return name === 'ranking' || name === 'alerts' ? name : 'comment';
+}
+
+async function pushLookPreview() {
+  if (typeof window.liveTts?.pushOverlayLook === 'function' && typeof collectConfig === 'function') {
+    try {
+      void window.liveTts.pushOverlayLook(collectConfig());
+    } catch {
+      // 配信ソースへ届かなくても、この窓のプレビューは続ける
+    }
+  }
   const frame = $('overlay-preview');
   if (!frame?.contentWindow) {
+    return;
+  }
+  const section = activeLookSection();
+  if (section === 'ranking') {
+    const motion =
+      typeof collectRankingMotionConfig === 'function' ? collectRankingMotionConfig() : {};
+    const nameSettings = currentNameColorSettings();
+    frame.contentWindow.postMessage(
+      {
+        kind: 'ranking-look',
+        look: typeof currentLikesLook === 'function' ? currentLikesLook() : {},
+        rankingMotion: motion.overlayRankingMotion,
+        rankingMotionSpeed: motion.overlayRankingMotionSpeed,
+        nameColorEnabled: nameSettings.overlayNameColorEnabled,
+        nameColors: nameSettings.overlayNameColors,
+        backdrop: $('look-backdrop')?.value || 'checker',
+        max: Number($('overlay-like-ranking-max')?.value),
+        mode: $('overlay-ranking-mode')?.value === 'diamonds' ? 'diamonds' : 'likes',
+      },
+      '*',
+    );
+    return;
+  }
+  if (section === 'alerts') {
     return;
   }
   const nameSettings = currentNameColorSettings();
@@ -414,8 +514,31 @@ function pushLookPreview() {
     pin: currentPin(),
     nameColorEnabled: nameSettings.overlayNameColorEnabled,
     nameColors: nameSettings.overlayNameColors,
+    templateAccentColors:
+      typeof collectTemplateAccentColors === 'function' ? collectTemplateAccentColors() : undefined,
     customCss: $('overlay-css')?.value ?? '',
   }, '*');
+  // 各タブの表示テンプレ・差し込み色でサンプル文言を作る
+  if (typeof window.liveTts?.getOverlaySamplePlan !== 'function' || typeof collectConfig !== 'function') {
+    return;
+  }
+  const gen = ++lookPreviewSampleGen;
+  try {
+    const result = await window.liveTts.getOverlaySamplePlan(collectConfig());
+    if (gen !== lookPreviewSampleGen || !result?.ok || !result.plan || !frame.contentWindow) {
+      return;
+    }
+    frame.contentWindow.postMessage(
+      {
+        kind: 'preview-samples',
+        chatSamples: result.plan.chatSamples || [],
+        pinSamples: result.plan.pinSamples || [],
+      },
+      '*',
+    );
+  } catch (_error) {
+    // プレビュー文言が取れなくても見た目の更新は残す
+  }
 }
 
 function overlayPreviewSrc(overlayUrl) {
@@ -423,7 +546,26 @@ function overlayPreviewSrc(overlayUrl) {
     return '';
   }
   const backdrop = $('look-backdrop')?.value || 'checker';
-  return `${overlayUrl}?preview=1&backdrop=${encodeURIComponent(backdrop)}`;
+  const joiner = overlayUrl.includes('?') ? '&' : '?';
+  return `${overlayUrl}${joiner}preview=1&backdrop=${encodeURIComponent(backdrop)}`;
+}
+
+function overlayPreviewBaseUrl() {
+  const section = activeLookSection();
+  const kind = section === 'ranking' ? 'ranking' : section === 'alerts' ? 'alerts' : 'chat';
+  if (typeof overlayUrlFor === 'function') {
+    const url = overlayUrlFor(kind, 'obs');
+    if (url) {
+      return url;
+    }
+  }
+  if (section === 'ranking') {
+    return savedConfig?.overlayLikesPreviewUrl || '';
+  }
+  if (section === 'alerts') {
+    return savedConfig?.overlayAlertsPreviewUrl || '';
+  }
+  return savedConfig?.overlayPreviewUrl || savedConfig?.overlayUrl || '';
 }
 
 function unloadPreviewFrame() {
@@ -440,19 +582,19 @@ function syncSettingsPreview() {
   const show = appMode === 'settings' && activeTabName() === 'look';
   workspace?.classList.toggle('is-preview-hidden', !show);
   if (show) {
-    refreshPreviewFrame(savedConfig?.overlayPreviewUrl || savedConfig?.overlayUrl);
+    refreshPreviewFrame();
     applyPreviewZoom();
     return;
   }
   unloadPreviewFrame();
 }
 
-function refreshPreviewFrame(overlayUrl) {
+function refreshPreviewFrame() {
   if (appMode !== 'settings' || activeTabName() !== 'look') {
     return;
   }
   const frame = $('overlay-preview');
-  const next = overlayPreviewSrc(overlayUrl);
+  const next = overlayPreviewSrc(overlayPreviewBaseUrl());
   if (frame && frame.dataset.src !== next) {
     frame.dataset.src = next;
     frame.src = next;

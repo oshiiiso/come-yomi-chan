@@ -58,19 +58,25 @@ test('/overlay/ はスクリプトを絶対パスで含む', async () => {
   const response = await fetchPath('/overlay/', 'follow');
   assert.equal(response.status, 200);
   const html = await response.text();
+  assert.match(html, /src="\/overlay\/name-colors\.js(?:\?[^"]*)?"/);
   assert.match(html, /src="\/overlay\/overlay\.js(?:\?[^"]*)?"/);
-  assert.match(html, /href="\/overlay\/overlay\.css"/);
+  assert.match(html, /href="\/overlay\/overlay\.css(?:\?[^"]*)?"/);
   assert.match(html, /id="pin"/);
   assert.match(html, /id="chat"/);
 });
 
 test('オーバーレイの JS と CSS を返す', async () => {
+  const nameColors = await fetchPath('/overlay/name-colors.js', 'follow');
   const script = await fetchPath('/overlay/overlay.js', 'follow');
   const fallback = await fetchPath('/overlay.js', 'follow');
   const css = await fetchPath('/overlay/overlay.css', 'follow');
+  assert.equal(nameColors.status, 200);
   assert.equal(script.status, 200);
   assert.equal(fallback.status, 200);
   assert.equal(css.status, 200);
+  const nameBody = await nameColors.text();
+  assert.match(nameBody, /OverlayNameColors/);
+  assert.match(nameBody, /nameColorForUser/);
   const body = await script.text();
   assert.match(body, /function connect/);
 });
@@ -110,17 +116,37 @@ test('/overlay/alerts/ はアラート用HTMLを返す', async () => {
   const response = await fetchPath('/overlay/alerts/', 'follow');
   assert.equal(response.status, 200);
   const html = await response.text();
+  assert.match(html, /src="\/overlay\/name-colors\.js(?:\?[^"]*)?"/);
   assert.match(html, /src="\/overlay\/alerts\.js(?:\?[^"]*)?"/);
   assert.match(html, /href="\/overlay\/alerts\.css(?:\?[^"]*)?"/);
   assert.match(html, /id="alert-stage"/);
 });
 
-test('アラート用テンプレSVGを返す', async () => {
-  const response = await fetchPath('/overlay/alert-templates/follow.svg', 'follow');
+test('/overlay/ranking/ はランキング用HTMLを返す', async () => {
+  const response = await fetchPath('/overlay/ranking/', 'follow');
   assert.equal(response.status, 200);
-  const body = await response.text();
-  assert.match(body, /<svg[\s\S]*<\/svg>/);
-  assert.match(body, /animate/i);
+  const html = await response.text();
+  assert.match(html, /src="\/overlay\/name-colors\.js(?:\?[^"]*)?"/);
+  assert.match(html, /src="\/overlay\/likes\.js(?:\?[^"]*)?"/);
+  assert.match(html, /href="\/overlay\/likes\.css(?:\?[^"]*)?"/);
+  assert.match(html, /id="likes-list"/);
+});
+
+test('/overlay/likes/ は /overlay/ranking/ へリダイレクトする', async () => {
+  const response = await fetchPath('/overlay/likes/', 'manual');
+  assert.equal(response.status, 302);
+  assert.match(response.headers.get('location') || '', /\/overlay\/ranking\/$/);
+});
+
+test('アラート用テンプレGIFを返す', async () => {
+  const response = await fetchPath('/overlay/alert-templates/follow.gif', 'follow');
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get('content-type') || '', /image\/gif/i);
+  const body = Buffer.from(await response.arrayBuffer());
+  assert.ok(body.length > 0);
+  assert.equal(body[0], 0x47); // G
+  assert.equal(body[1], 0x49); // I
+  assert.equal(body[2], 0x46); // F
 });
 
 test('アラート通知は alerts ロールだけに届く', async () => {
@@ -210,6 +236,97 @@ test('アラート通知は alerts ロールだけに届く', async () => {
   ]);
 });
 
+test('ランキング通知は ranking ロールだけに届く', async () => {
+  const chat = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws?role=chat`);
+  const ranking = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws?role=ranking`);
+  const legacyLikes = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws?role=likes`);
+  const chatMessages: unknown[] = [];
+  const rankingMessages: unknown[] = [];
+  const legacyMessages: unknown[] = [];
+
+  await Promise.all([
+    new Promise<void>((resolve, reject) => {
+      chat.once('open', () => resolve());
+      chat.once('error', reject);
+    }),
+    new Promise<void>((resolve, reject) => {
+      ranking.once('open', () => resolve());
+      ranking.once('error', reject);
+    }),
+    new Promise<void>((resolve, reject) => {
+      legacyLikes.once('open', () => resolve());
+      legacyLikes.once('error', reject);
+    }),
+  ]);
+
+  chat.on('message', (raw) => {
+    chatMessages.push(JSON.parse(String(raw)));
+  });
+  ranking.on('message', (raw) => {
+    rankingMessages.push(JSON.parse(String(raw)));
+  });
+  legacyLikes.on('message', (raw) => {
+    legacyMessages.push(JSON.parse(String(raw)));
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  server.broadcastRanking({
+    enabled: true,
+    max: 5,
+    mode: 'likes',
+    entries: [
+      { uniqueId: 'u1', nickname: '太郎', count: 12, avatarUrl: '/overlay/gift-image?u=1' },
+    ],
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+
+  chat.close();
+  ranking.close();
+  legacyLikes.close();
+
+  const chatRank = chatMessages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'ranking',
+  );
+  const rankingMsg = rankingMessages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'ranking',
+  ) as
+    | {
+        kind: string;
+        payload: {
+          enabled?: boolean;
+          max?: number;
+          mode?: string;
+          entries?: Array<{ uniqueId: string; nickname: string; count: number }>;
+        };
+      }
+    | undefined;
+  const legacyMsg = legacyMessages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'ranking',
+  );
+
+  assert.equal(chatRank, undefined);
+  assert.ok(rankingMsg);
+  assert.ok(legacyMsg);
+  assert.equal(rankingMsg.payload.enabled, true);
+  assert.equal(rankingMsg.payload.max, 5);
+  assert.equal(rankingMsg.payload.mode, 'likes');
+  assert.deepEqual(rankingMsg.payload.entries, [
+    { uniqueId: 'u1', nickname: '太郎', count: 12, avatarUrl: '/overlay/gift-image?u=1' },
+  ]);
+});
+
 test('クリアは WebSocket でコメント列を空にする合図を送る', async () => {
   const socket = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
   const messages: unknown[] = [];
@@ -236,6 +353,51 @@ test('クリアは WebSocket でコメント列を空にする合図を送る', 
       item.kind === 'clear',
   );
   assert.ok(cleared);
+});
+
+test('クリアと固定枠クリアは見た目プレビュー接続には送らない', async () => {
+  const preview = new WebSocket(
+    `ws://127.0.0.1:${server.getPort()}/overlay/ws?preview=1`,
+  );
+  const messages: unknown[] = [];
+
+  await new Promise<void>((resolve, reject) => {
+    preview.once('open', () => resolve());
+    preview.once('error', reject);
+  });
+
+  preview.on('message', (raw) => {
+    messages.push(JSON.parse(String(raw)));
+  });
+
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  const before = messages.length;
+  server.clearChat();
+  server.clearPin();
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  preview.close();
+
+  const after = messages.slice(before);
+  assert.equal(
+    after.some(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        'kind' in item &&
+        item.kind === 'clear',
+    ),
+    false,
+  );
+  assert.equal(
+    after.some(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        'kind' in item &&
+        item.kind === 'pin-control',
+    ),
+    false,
+  );
 });
 
 test('初期通知に固定枠の設定を含む', async () => {

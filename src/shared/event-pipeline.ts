@@ -1,3 +1,4 @@
+import { stripCommentEmotePlaceholders } from './comment-emotes';
 import {
   hasCommentUrl,
   isEmoteOnlyComment,
@@ -122,6 +123,16 @@ export function resolveEventSpeech(params: {
     }
     if (shouldSpeak && params.config.skipEmoteSpeech && isEmoteOnlyComment(params.event.comment)) {
       shouldSpeak = false;
+    }
+    if (shouldSpeak) {
+      const withoutEmotes = stripCommentEmotePlaceholders(speechComment);
+      if (!withoutEmotes) {
+        if (params.config.skipEmoteSpeech) {
+          shouldSpeak = false;
+        }
+      } else {
+        speechComment = withoutEmotes;
+      }
     }
     if (
       !params.options.skipFilters &&

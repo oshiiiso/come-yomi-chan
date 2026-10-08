@@ -185,21 +185,36 @@ function renderFanLevelLook() {
       swatch.className = 'fan-level-swatch';
       swatch.style.background = color;
       swatch.dataset.color = color;
-      if (color === step.color) {
+      if (String(color).toLowerCase() === String(step.color || '').toLowerCase()) {
         swatch.classList.add('is-active');
       }
       swatches.appendChild(swatch);
     }
+    const pickerWrap = document.createElement('div');
+    pickerWrap.className = 'color-picker-wrap';
     const picker = document.createElement('input');
     picker.type = 'color';
-    picker.className = 'fan-level-look__picker';
+    picker.className = 'color-picker fan-level-look__picker';
     picker.dataset.fanColor = String(index);
     picker.value = step.color;
+    const colorKey = String(step.color || '').toLowerCase();
+    const presetMatch = FAN_LEVEL_COLOR_PRESETS.some(
+      (color) => String(color).toLowerCase() === colorKey,
+    );
+    if (!presetMatch) {
+      picker.classList.add('is-active');
+    }
+    const reset = createColorPickerResetButton({
+      datasetKey: 'fanColorReset',
+      datasetValue: String(index),
+    });
+    syncColorPickerResetButton(reset, step.color, DEFAULT_FAN_LEVEL_COLORS[index]);
+    pickerWrap.append(picker, reset);
     const preview = document.createElement('span');
     preview.className = 'viewer__badge viewer__badge--fan';
     preview.textContent = `${uiCopy.viewerBadgeFan}${step.minLevel}`;
     applyFanBadgeColor(preview, step.minLevel);
-    row.append(min, swatches, picker, preview);
+    row.append(min, swatches, pickerWrap, preview);
     host.appendChild(row);
   });
 }

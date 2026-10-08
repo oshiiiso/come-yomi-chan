@@ -76,13 +76,15 @@ export const MSG = {
     invalidEventAlertSec: 'イベントアラートの表示時間は 1〜120 秒で指定してください',
     eventAlertLabel: 'イベントアラート',
     eventAlertHint:
-      '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。',
-    eventAlertMediaAuto: '自動',
+      '別の配信ソース（イベントアラート用URL）に出します。初期は種類ごとの同梱GIFです。画像を選ぶと差し替え、× でテンプレに戻せます。',
+    eventAlertGiftHint:
+      '別の配信ソース（イベントアラート用URL）に出します。初期はもらったギフトの画像です。取れないときは同梱GIFを出します。画像を選ぶと差し替え、× でもらったギフトに戻せます。',
+    eventAlertMediaAuto: 'もらったギフト',
     eventAlertMediaTemplate: 'テンプレ',
     eventAlertMediaFile: 'ファイル',
     eventAlertMediaNone: 'なし',
     eventAlertMediaAutoHint:
-      '初期は種類ごとの簡易テンプレです。画像を選ぶと差し替え、× でテンプレに戻せます。',
+      '初期はもらったギフトの画像です。取れないときは同梱GIFを出します。画像を選ぶと差し替え、× でもらったギフトに戻せます。',
     eventAlertTemplateNames: {
       gift: 'ギフト用テンプレ',
       follow: 'フォロー用テンプレ',
@@ -95,11 +97,79 @@ export const MSG = {
     },
     eventAlertPickMedia: '画像を選ぶ',
     eventAlertResetTemplate: 'テンプレに戻す',
+    eventAlertResetAuto: 'もらったギフトに戻す',
     eventAlertSecLabel: '表示時間',
     eventAlertChatUrlTitle: 'コメント列（固定枠あり）',
     eventAlertAlertsUrlTitle: 'イベントアラート',
     eventAlertAlertsUrlHint:
-      '中央に画像や GIF を出す用です。初期は簡易テンプレです。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+      '中央に画像や GIF を出す用です。ギフトはもらった画像（取れないときは同梱GIF）、他は同梱GIFが初期です。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+    overlayUrlLikesTitle: 'ランキング',
+    overlayUrlLikesHint:
+      'セッション中のいいね／ダイヤ累計トップを出す用です。コメント列とは別に、配信ソフトへソースを追加してこの URL を貼ってください。',
+    overlayLikeRankingEnabledLabel: 'ランキングを配信ソースに出す',
+    overlayLikeRankingMaxLabel: 'ランキングの表示人数',
+    overlayLikeRankingHint:
+      '上の URL を別ソースとして貼ります。配信中の累計トップです（接続し直すとリセット）。見た目は下で変えられます。',
+    overlayRankingModeLabel: 'ランキングの種類',
+    overlayRankingModeLikes: 'いいね',
+    overlayRankingModeDiamonds: 'ダイヤ',
+    overlayRankingModeHint:
+      'いいねはセッション中のいいね累計、ダイヤは通常ギフトの個数×ダイヤの累計です。',
+    overlayRankingLikeSyncLabel: 'いいねの更新',
+    overlayRankingLikeSyncLive: '常時',
+    overlayRankingLikeSyncPoll: 'ポーリング',
+    overlayRankingLikeSyncHint:
+      'いいねが多い配信ではポーリングにすると配信ソースの負荷を抑えられます。ダイヤは常に即時です。',
+    overlayRankingLikePollSecLabel: 'ポーリング間隔（秒）',
+    invalidOverlayLikeRankingMax: 'ランキングの人数は 1〜10 にしてください',
+    invalidOverlayRankingLikePollSec: 'ポーリング間隔は 1〜300 秒にしてください',
+    overlayRankingMotionLabel: '入れ替わりの動き',
+    overlayRankingMotionHint:
+      '順位が変わったときの動きです。スライドは行が上下に移動し、ふわっとは切り替わり、強調は上がった行を光らせます。「サンプルを出す」と入れ替わりを繰り返し、動きや速さを変えるとその場で切り替わります。「表示を消す」で止まります。',
+    overlayRankingMotionSlide: 'スライド',
+    overlayRankingMotionSoft: 'ふわっと',
+    overlayRankingMotionEmphasis: 'スライド＋強調',
+    overlayRankingMotionSpeedLabel: '入れ替わりの速さ',
+    overlayRankingMotionSpeed1: '遅い',
+    overlayRankingMotionSpeed2: 'ふつう',
+    overlayRankingMotionSpeed3: '速い',
+    likesLookTitle: 'ランキングの見た目',
+    likesLookHint:
+      'ランキング配信ソース専用の見た目です。プリセットを選んでから微調整できます。右のプレビューで確認できます。配信ソースへ出すときは「サンプルを出す」です。',
+    lookSectionComment: 'コメント',
+    lookSectionRanking: 'ランキング',
+    lookSectionAlerts: 'アラート',
+    lookSectionEasy: 'かんたん見た目',
+    lookSectionChat: 'コメントと固定枠',
+    lookSectionName: '名前と色',
+    lookSectionsLabel: 'オーバーレイの区分',
+    lookCommentSectionsLabel: 'コメントの区分',
+    lookAlertsHint:
+      '画像・文言・表示秒はイベントタブです。ここは配信用の URL です。右のプレビューはアラート用の画面で、中身は「サンプルを出す」で確認します。',
+    likesLookShowAvatarLabel: 'アイコン（アバター）を出す',
+    likesLookShowUnitLabel: '単位（likes／ダイヤ）を付ける',
+    likesLookPresetStandard: '標準',
+    likesLookPresetLuxury: '豪華',
+    likesLookPresetCompact: 'コンパクト',
+    likesLookPresetNeon: 'ネオン',
+    likesLookPresetMinimal: 'シンプル',
+    overlayUrlCardTitle: '配信ソースURL',
+    overlayUrlKindLabel: '配信ソースの種類',
+    overlayUrlCopyGroupLabel: 'URLのコピー',
+    overlayUrlChatHint:
+      'TikTok LIVE Studio でソース追加 → リンクに貼るときは LIVE Studio用、OBS のブラウザソースには OBS用を使います。',
+    overlayUrlLiveHint:
+      '「正しいURLを入力してください」と出るときは、127.0.0.1 を手打ちしていないか確認してください。LIVE Studio用を使います。',
+    overlayUrlObsHint:
+      'OBS のブラウザソースに貼ってください。自分の耳に二重で聞こえるときは、このソースの音声モニタリングをオフにしてください。',
+    overlayUrlAltHint: 'LIVE Studio で上のアドレスが通らないときだけ使います。',
+    overlayUrlCopyLiveLabel: 'LIVE Studio用をコピー',
+    overlayUrlCopyAltLabel: '別のURLをコピー',
+    overlayConnectSampleGroupLabel: '配信ソースの確認',
+    overlayConnectSample: 'サンプルを出す',
+    overlayConnectClear: '表示を消す',
+    overlayConnectSampleHint:
+      '今開いている区分の配信ソースにサンプルを出します。ランキングでは入れ替わりを繰り返し、「表示を消す」で止められます。',
     pickAlertMediaTitle: 'アラート用の画像・GIFを選ぶ',
     pickAlertMediaFilter: '画像',
     pickAlertMediaFailed: 'アラート画像の取り込みに失敗しました',
@@ -179,6 +249,21 @@ export const MSG = {
     resetConfigCancel: 'やめる',
     resetConfigOk: '設定を初期化しました',
     resetConfigFailed: '設定の初期化に失敗しました',
+    resetTabLabel: 'このタブを初期化する',
+    resetTabTitle: 'このタブを初期化しますか？',
+    resetTabConfirm: '初期化する',
+    resetTabOk: 'このタブを初期化しました',
+    resetTabFailed: 'このタブの初期化に失敗しました',
+    resetTabHints: {
+      connect: 'TikTok ID と、起動時の自動接続を最初の状態に戻します。',
+      filter: 'NGワード、ブロック、ミュート、呼び方、読み替えを空に戻します。',
+      comment: 'コメントの表示・読み上げ・サウンド・メンレベの色を最初の状態に戻します。',
+      gift: 'ギフトの表示・読み上げ・サウンド・アラートを最初の状態に戻します。',
+      events: 'フォローから入室までの表示・読み上げ・サウンド・アラートを最初の状態に戻します。',
+      look: '配信ソースの見た目と動きを最初の状態に戻します。ポートは残します。',
+      tts: '読み上げエンジンと速度などを最初の状態に戻します。',
+      app: '手前表示、明るさ、ショートカット、ログの最大行数を最初の状態に戻します。プロファイルは残します。',
+    },
     exportConfigLabel: 'プロファイルを書き出す',
     importConfigLabel: 'プロファイルを読み込む',
     transferConfigHint:
@@ -216,6 +301,7 @@ export const MSG = {
     copiedStudio: '別のURLをコピーしました',
     copiedObs: 'OBS用URLをコピーしました。ブラウザソースに貼ってください',
     copiedAlerts: 'イベントアラート用URLをコピーしました。このアドレスを貼ってください',
+    copiedLikes: 'ランキング用URLをコピーしました。このアドレスを貼ってください',
     copyObsLabel: 'OBS用をコピー',
     copyFailed: 'コピーに失敗しました',
     creditCopied: 'クレジットをコピーしました。配信の概要欄などに貼ってください',
@@ -287,9 +373,9 @@ export const MSG = {
       'コメントと固定枠の入退場の動きです。変更は次に出る行から反映されます。\n\nプレビューは選ぶとその場で再生されます。',
     overlayMotionSpeedLabel: '速さ',
     overlayMotionReplay: '動きを見る',
-    settingsTabLook: '配信の見た目',
+    settingsTabLook: 'オーバーレイ',
     lookTabHint:
-      '視聴者向けの配信ソースの見た目をここで調整します。\n\nコメント画面の文字サイズや欄の幅は、コメント画面上のコントロールで変えます。',
+      '視聴者の画面に出す配信ソースです。上の区分でコメント・ランキング・アラートを切り替え、右のプレビューで確認します。\n\nコメント画面の文字サイズや欄の幅は、コメント画面上のコントロールで変えます。',
     lookChatTitle: 'コメント列',
     overlayMotionFuwatto: 'ふわっと',
     overlayMotionFade: 'フェード',
@@ -327,8 +413,42 @@ export const MSG = {
     overlayNameColorTitle: '名前の色',
     overlayNameColorEnabledLabel: '配信ソースで名前に色をつける',
     overlayNameColorEnabledHint:
-      '同じユーザーは常に同じ色になります。固定枠やイベントアラートにも付きます。初期のパレットのままなら、かんたん見た目のプリセットに合わせた色へ自動で変わります。自分で変えた色はそのままです。',
+      '同じユーザーは常に同じ色になります。固定枠やイベントアラートにも付きます。初期のパレットのまま（またはかんたん見た目用の色のまま）なら、かんたん見た目のプリセットに合わせた色へ自動で変わります。自分で変えた色はそのままです。差し込み色も同じルールです。',
     overlayNameColorPaletteLabel: '色のパレット（5色）',
+    overlayCustomCssSummary: 'カスタム CSS（上級者向け）',
+    overlayCustomCssLabel: '上書き用 CSS（空ならかんたん設定のまま）',
+    overlayCustomCssHint:
+      'コメント列の配信ソースだけに効きます。イベントアラート・ランキングには入りません。かんたん見た目のあとに上書きされます。',
+    overlayCustomCssRef: `骨格
+.overlay-root
+  ol#pin.chat.chat--pin          …固定枠
+  ol#chat.chat                   …コメント列
+    li.chat__item.chat__item--{種類}
+      img.chat__avatar
+      img.chat__gift             …ギフト時
+      .chat__body
+        .chat__name-line
+          .chat__name
+        .chat__text-line
+          .chat__text / .chat__accent / .chat__emote
+
+種類: comment gift follow share superFan envelope portal like member
+修飾: .chat--pin .chat--theme-* .chat--align-* .chat--hide-avatar .is-leaving
+
+.chat の変数（例）
+--bubble-rgb --bubble-text --bubble-alpha
+--body-size --avatar-size --gift-size --item-radius --chat-font
+--gift-color --event-color --like-color
+
+例
+.chat__item { background: rgb(0 0 0 / 55%); }
+.chat__body { font-size: 22px; }
+.chat--pin .chat__item { box-shadow: inset 0 0 0 2px #f59f00; }`,
+    templateEditorHint:
+      '欄の上のボタンで差し込みを入れられます。表示欄では差し込み横の色で強調色を変えられます。色付きの差し込みと **太字** で囲んだ文字は、固定枠・コメント列・イベントアラートで同じ色・太字になります。それ以外の平文は吹き出しの文字色です。{user} だけはユーザーごとの名前色です。差し込み色が初期（またはかんたん見た目用）のままなら、かんたん見た目のプリセットに合わせて変わります。自分で変えた色はそのままです。読み上げでは ** を外して中身だけ読みます。',
+    templateEmphasisInsertLabel: '**強調** を挿入',
+    templateAccentColorLabel: '差し込みの色',
+    colorPickerResetLabel: '初期色に戻す',
     guideNeedIdTitle: '最初にやること',
     guideNeedIdExtra: '自分の TikTok ID（先頭の @ は不要）を入れると、接続できます。',
     guideNeedIdButton: '設定で ID を入れる',
@@ -473,30 +593,42 @@ export const MSG = {
     viewerUserUnblocked: '{user} のブロックを解除しました',
   },
   template: {
+    eventLabel: {
+      comment: 'コメント',
+      gift: 'ギフト',
+      follow: 'フォロー',
+      share: 'シェア',
+      superFan: 'スーパーファン',
+      superFanBox: 'スーパーファンボックス',
+      envelope: '宝箱',
+      portal: 'ポータル',
+      like: 'いいね',
+      member: '入室',
+    },
     commentDisplayDefault: '{user}: {comment}',
     commentSpeechDefault: '{user}.{comment}',
     giftDisplayDefault: '{user}さんから{gift}{count}',
     giftSpeechDefault: '{user}さんから{gift}{count}',
-    followDisplayDefault: '{user}さんがフォローしました',
-    followSpeechDefault: '{user}さんがフォローしました',
-    shareDisplayDefault: '{user}さんがシェアしました',
-    shareSpeechDefault: '{user}さんがシェアしました',
+    followDisplayDefault: '{user}さんが{event}しました',
+    followSpeechDefault: '{user}さんが{event}しました',
+    shareDisplayDefault: '{user}さんが{event}しました',
+    shareSpeechDefault: '{user}さんが{event}しました',
     subscribeDisplayDefault: '{user}さんがメンバーになりました',
     subscribeSpeechDefault: '{user}さんがメンバーになりました',
-    superFanDisplayDefault: '{user}さんがスーパーファンになりました',
-    superFanSpeechDefault: '{user}さんがスーパーファンになりました',
-    superFanBoxDisplayDefault: '{user}さんが{gift}を投げたよ',
-    superFanBoxSpeechDefault: '{user}さんが{gift}を投げたよ',
-    envelopeDisplayDefault: '{user}さんが宝箱を投げたよ',
-    envelopeSpeechDefault: '{user}さんが宝箱を投げたよ',
-    portalDisplayDefault: '{user}さんがポータルを投げたよ',
-    portalSpeechDefault: '{user}さんがポータルを投げたよ',
-    portalJoinDisplayDefault: 'ポータルから{user}さんが入室しました',
-    portalJoinSpeechDefault: 'ポータルから{user}さんが入室しました',
-    likeDisplayDefault: '{user}さんが{likes}いいね',
-    likeSpeechDefault: '{user}さんが{likes}いいね',
-    memberDisplayDefault: '{user}さんが入室しました',
-    memberSpeechDefault: '{user}さんが入室しました',
+    superFanDisplayDefault: '{user}さんが{event}になりました',
+    superFanSpeechDefault: '{user}さんが{event}になりました',
+    superFanBoxDisplayDefault: '{user}さんが{event}を投げたよ',
+    superFanBoxSpeechDefault: '{user}さんが{event}を投げたよ',
+    envelopeDisplayDefault: '{user}さんが{event}を投げたよ',
+    envelopeSpeechDefault: '{user}さんが{event}を投げたよ',
+    portalDisplayDefault: '{user}さんが{event}を投げたよ',
+    portalSpeechDefault: '{user}さんが{event}を投げたよ',
+    portalJoinDisplayDefault: 'ポータルから{user}さんが{event}しました',
+    portalJoinSpeechDefault: 'ポータルから{user}さんが{event}しました',
+    likeDisplayDefault: '{user}さんが{likes}{event}',
+    likeSpeechDefault: '{user}さんが{likes}{event}',
+    memberDisplayDefault: '{user}さんが{event}しました',
+    memberSpeechDefault: '{user}さんが{event}しました',
   },
   tester: {
     user: 'テストユーザー',
@@ -554,6 +686,7 @@ export function getRendererCopy(): {
     invalidEventAlertSec: string;
     eventAlertLabel: string;
     eventAlertHint: string;
+    eventAlertGiftHint: string;
     eventAlertMediaAuto: string;
     eventAlertMediaTemplate: string;
     eventAlertMediaFile: string;
@@ -562,10 +695,67 @@ export function getRendererCopy(): {
     eventAlertTemplateNames: Record<string, string>;
     eventAlertPickMedia: string;
     eventAlertResetTemplate: string;
+    eventAlertResetAuto: string;
     eventAlertSecLabel: string;
     eventAlertChatUrlTitle: string;
     eventAlertAlertsUrlTitle: string;
     eventAlertAlertsUrlHint: string;
+    overlayUrlLikesTitle: string;
+    overlayUrlLikesHint: string;
+    overlayLikeRankingEnabledLabel: string;
+    overlayLikeRankingMaxLabel: string;
+    overlayLikeRankingHint: string;
+    overlayRankingModeLabel: string;
+    overlayRankingModeLikes: string;
+    overlayRankingModeDiamonds: string;
+    overlayRankingModeHint: string;
+    overlayRankingLikeSyncLabel: string;
+    overlayRankingLikeSyncLive: string;
+    overlayRankingLikeSyncPoll: string;
+    overlayRankingLikeSyncHint: string;
+    overlayRankingLikePollSecLabel: string;
+    invalidOverlayLikeRankingMax: string;
+    invalidOverlayRankingLikePollSec: string;
+    overlayRankingMotionLabel: string;
+    overlayRankingMotionHint: string;
+    overlayRankingMotionSlide: string;
+    overlayRankingMotionSoft: string;
+    overlayRankingMotionEmphasis: string;
+    overlayRankingMotionSpeedLabel: string;
+    overlayRankingMotionSpeed1: string;
+    overlayRankingMotionSpeed2: string;
+    overlayRankingMotionSpeed3: string;
+    likesLookTitle: string;
+    likesLookHint: string;
+    lookSectionComment: string;
+    lookSectionRanking: string;
+    lookSectionAlerts: string;
+    lookSectionEasy: string;
+    lookSectionChat: string;
+    lookSectionName: string;
+    lookSectionsLabel: string;
+    lookCommentSectionsLabel: string;
+    lookAlertsHint: string;
+    likesLookShowAvatarLabel: string;
+    likesLookShowUnitLabel: string;
+    likesLookPresetStandard: string;
+    likesLookPresetLuxury: string;
+    likesLookPresetCompact: string;
+    likesLookPresetNeon: string;
+    likesLookPresetMinimal: string;
+    overlayUrlCardTitle: string;
+    overlayUrlKindLabel: string;
+    overlayUrlCopyGroupLabel: string;
+    overlayUrlChatHint: string;
+    overlayUrlLiveHint: string;
+    overlayUrlObsHint: string;
+    overlayUrlAltHint: string;
+    overlayUrlCopyLiveLabel: string;
+    overlayUrlCopyAltLabel: string;
+    overlayConnectSampleGroupLabel: string;
+    overlayConnectSample: string;
+    overlayConnectClear: string;
+    overlayConnectSampleHint: string;
     pickAlertMediaTitle: string;
     pickAlertMediaFilter: string;
     pickAlertMediaFailed: string;
@@ -679,6 +869,8 @@ export function getRendererCopy(): {
   lookTabHint: string;
   lookChatTitle: string;
   copyObsLabel: string;
+  copyFailed: string;
+  copied: string;
   overlayMotionFuwatto: string;
   overlayMotionFade: string;
   overlayMotionSlideUp: string;
@@ -712,6 +904,14 @@ export function getRendererCopy(): {
   overlayNameColorEnabledLabel: string;
   overlayNameColorEnabledHint: string;
   overlayNameColorPaletteLabel: string;
+  overlayCustomCssSummary: string;
+  overlayCustomCssLabel: string;
+  overlayCustomCssHint: string;
+  overlayCustomCssRef: string;
+  templateEditorHint: string;
+  templateEmphasisInsertLabel: string;
+  templateAccentColorLabel: string;
+  colorPickerResetLabel: string;
   viewerUnknownUser: string;
   viewerBadgeFan: string;
   viewerBadgeSuperFan: string;
@@ -794,6 +994,17 @@ export function getRendererCopy(): {
   alreadyConnected: string;
   resetConfigLabel: string;
   resetConfigHint: string;
+  resetTabLabel: string;
+  resetTabHints: {
+    connect: string;
+    filter: string;
+    comment: string;
+    gift: string;
+    events: string;
+    look: string;
+    tts: string;
+    app: string;
+  };
   exportConfigLabel: string;
   importConfigLabel: string;
   transferConfigHint: string;
@@ -852,6 +1063,7 @@ export function getRendererCopy(): {
     invalidEventAlertSec: MSG.ui.invalidEventAlertSec,
     eventAlertLabel: MSG.ui.eventAlertLabel,
     eventAlertHint: MSG.ui.eventAlertHint,
+    eventAlertGiftHint: MSG.ui.eventAlertGiftHint,
     eventAlertMediaAuto: MSG.ui.eventAlertMediaAuto,
     eventAlertMediaTemplate: MSG.ui.eventAlertMediaTemplate,
     eventAlertMediaFile: MSG.ui.eventAlertMediaFile,
@@ -860,10 +1072,67 @@ export function getRendererCopy(): {
     eventAlertTemplateNames: { ...MSG.ui.eventAlertTemplateNames },
     eventAlertPickMedia: MSG.ui.eventAlertPickMedia,
     eventAlertResetTemplate: MSG.ui.eventAlertResetTemplate,
+    eventAlertResetAuto: MSG.ui.eventAlertResetAuto,
     eventAlertSecLabel: MSG.ui.eventAlertSecLabel,
     eventAlertChatUrlTitle: MSG.ui.eventAlertChatUrlTitle,
     eventAlertAlertsUrlTitle: MSG.ui.eventAlertAlertsUrlTitle,
     eventAlertAlertsUrlHint: MSG.ui.eventAlertAlertsUrlHint,
+    overlayUrlLikesTitle: MSG.ui.overlayUrlLikesTitle,
+    overlayUrlLikesHint: MSG.ui.overlayUrlLikesHint,
+    overlayLikeRankingEnabledLabel: MSG.ui.overlayLikeRankingEnabledLabel,
+    overlayLikeRankingMaxLabel: MSG.ui.overlayLikeRankingMaxLabel,
+    overlayLikeRankingHint: MSG.ui.overlayLikeRankingHint,
+    overlayRankingModeLabel: MSG.ui.overlayRankingModeLabel,
+    overlayRankingModeLikes: MSG.ui.overlayRankingModeLikes,
+    overlayRankingModeDiamonds: MSG.ui.overlayRankingModeDiamonds,
+    overlayRankingModeHint: MSG.ui.overlayRankingModeHint,
+    overlayRankingLikeSyncLabel: MSG.ui.overlayRankingLikeSyncLabel,
+    overlayRankingLikeSyncLive: MSG.ui.overlayRankingLikeSyncLive,
+    overlayRankingLikeSyncPoll: MSG.ui.overlayRankingLikeSyncPoll,
+    overlayRankingLikeSyncHint: MSG.ui.overlayRankingLikeSyncHint,
+    overlayRankingLikePollSecLabel: MSG.ui.overlayRankingLikePollSecLabel,
+    invalidOverlayLikeRankingMax: MSG.ui.invalidOverlayLikeRankingMax,
+    invalidOverlayRankingLikePollSec: MSG.ui.invalidOverlayRankingLikePollSec,
+    overlayRankingMotionLabel: MSG.ui.overlayRankingMotionLabel,
+    overlayRankingMotionHint: MSG.ui.overlayRankingMotionHint,
+    overlayRankingMotionSlide: MSG.ui.overlayRankingMotionSlide,
+    overlayRankingMotionSoft: MSG.ui.overlayRankingMotionSoft,
+    overlayRankingMotionEmphasis: MSG.ui.overlayRankingMotionEmphasis,
+    overlayRankingMotionSpeedLabel: MSG.ui.overlayRankingMotionSpeedLabel,
+    overlayRankingMotionSpeed1: MSG.ui.overlayRankingMotionSpeed1,
+    overlayRankingMotionSpeed2: MSG.ui.overlayRankingMotionSpeed2,
+    overlayRankingMotionSpeed3: MSG.ui.overlayRankingMotionSpeed3,
+    likesLookTitle: MSG.ui.likesLookTitle,
+    likesLookHint: MSG.ui.likesLookHint,
+    lookSectionComment: MSG.ui.lookSectionComment,
+    lookSectionRanking: MSG.ui.lookSectionRanking,
+    lookSectionAlerts: MSG.ui.lookSectionAlerts,
+    lookSectionEasy: MSG.ui.lookSectionEasy,
+    lookSectionChat: MSG.ui.lookSectionChat,
+    lookSectionName: MSG.ui.lookSectionName,
+    lookSectionsLabel: MSG.ui.lookSectionsLabel,
+    lookCommentSectionsLabel: MSG.ui.lookCommentSectionsLabel,
+    lookAlertsHint: MSG.ui.lookAlertsHint,
+    likesLookShowAvatarLabel: MSG.ui.likesLookShowAvatarLabel,
+    likesLookShowUnitLabel: MSG.ui.likesLookShowUnitLabel,
+    likesLookPresetStandard: MSG.ui.likesLookPresetStandard,
+    likesLookPresetLuxury: MSG.ui.likesLookPresetLuxury,
+    likesLookPresetCompact: MSG.ui.likesLookPresetCompact,
+    likesLookPresetNeon: MSG.ui.likesLookPresetNeon,
+    likesLookPresetMinimal: MSG.ui.likesLookPresetMinimal,
+    overlayUrlCardTitle: MSG.ui.overlayUrlCardTitle,
+    overlayUrlKindLabel: MSG.ui.overlayUrlKindLabel,
+    overlayUrlCopyGroupLabel: MSG.ui.overlayUrlCopyGroupLabel,
+    overlayUrlChatHint: MSG.ui.overlayUrlChatHint,
+    overlayUrlLiveHint: MSG.ui.overlayUrlLiveHint,
+    overlayUrlObsHint: MSG.ui.overlayUrlObsHint,
+    overlayUrlAltHint: MSG.ui.overlayUrlAltHint,
+    overlayUrlCopyLiveLabel: MSG.ui.overlayUrlCopyLiveLabel,
+    overlayUrlCopyAltLabel: MSG.ui.overlayUrlCopyAltLabel,
+    overlayConnectSampleGroupLabel: MSG.ui.overlayConnectSampleGroupLabel,
+    overlayConnectSample: MSG.ui.overlayConnectSample,
+    overlayConnectClear: MSG.ui.overlayConnectClear,
+    overlayConnectSampleHint: MSG.ui.overlayConnectSampleHint,
     pickAlertMediaTitle: MSG.ui.pickAlertMediaTitle,
     pickAlertMediaFilter: MSG.ui.pickAlertMediaFilter,
     pickAlertMediaFailed: MSG.ui.pickAlertMediaFailed,
@@ -977,6 +1246,8 @@ export function getRendererCopy(): {
     lookTabHint: MSG.ui.lookTabHint,
     lookChatTitle: MSG.ui.lookChatTitle,
     copyObsLabel: MSG.ui.copyObsLabel,
+    copyFailed: MSG.ui.copyFailed,
+    copied: MSG.ui.copied,
     overlayMotionFuwatto: MSG.ui.overlayMotionFuwatto,
     overlayMotionFade: MSG.ui.overlayMotionFade,
     overlayMotionSlideUp: MSG.ui.overlayMotionSlideUp,
@@ -1010,6 +1281,14 @@ export function getRendererCopy(): {
     overlayNameColorEnabledLabel: MSG.ui.overlayNameColorEnabledLabel,
     overlayNameColorEnabledHint: MSG.ui.overlayNameColorEnabledHint,
     overlayNameColorPaletteLabel: MSG.ui.overlayNameColorPaletteLabel,
+    overlayCustomCssSummary: MSG.ui.overlayCustomCssSummary,
+    overlayCustomCssLabel: MSG.ui.overlayCustomCssLabel,
+    overlayCustomCssHint: MSG.ui.overlayCustomCssHint,
+    overlayCustomCssRef: MSG.ui.overlayCustomCssRef,
+    templateEditorHint: MSG.ui.templateEditorHint,
+    templateEmphasisInsertLabel: MSG.ui.templateEmphasisInsertLabel,
+    templateAccentColorLabel: MSG.ui.templateAccentColorLabel,
+    colorPickerResetLabel: MSG.ui.colorPickerResetLabel,
     viewerUnknownUser: MSG.ui.viewerUnknownUser,
     viewerBadgeFan: MSG.ui.viewerBadgeFan,
     viewerBadgeSuperFan: MSG.ui.viewerBadgeSuperFan,
@@ -1092,6 +1371,8 @@ export function getRendererCopy(): {
     alreadyConnected: MSG.connection.alreadyConnected,
     resetConfigLabel: MSG.ui.resetConfigLabel,
     resetConfigHint: MSG.ui.resetConfigHint,
+    resetTabLabel: MSG.ui.resetTabLabel,
+    resetTabHints: MSG.ui.resetTabHints,
     exportConfigLabel: MSG.ui.exportConfigLabel,
     importConfigLabel: MSG.ui.importConfigLabel,
     transferConfigHint: MSG.ui.transferConfigHint,
