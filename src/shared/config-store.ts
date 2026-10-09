@@ -26,6 +26,7 @@ import {
 } from './overlay-likes-look';
 import { DEFAULT_OVERLAY_LOOK, overlayLookFromConfig, OVERLAY_FONTS, OVERLAY_LOOK_PRESETS } from './overlay-look';
 import { normalizeChatDisplayMs } from './chat-display';
+import { defaultOverlayBoards, normalizeOverlayBoards } from './overlay-board';
 import { MSG } from './messages';
 import { resetSettingsTab, type SettingsTabId } from './settings-tab-reset';
 import { normalizeVoicevoxHost } from '../tts/voicevox-url';
@@ -331,8 +332,11 @@ export const DEFAULT_CONFIG: AppConfig = {
   memberDisplayTemplate: MSG.template.memberDisplayDefault,
   memberSpeechTemplate: MSG.template.memberSpeechDefault,
   events: DEFAULT_EVENT_TOGGLES,
+  overlayBoards: [],
   cachedTestGifts: [],
 };
+
+DEFAULT_CONFIG.overlayBoards = defaultOverlayBoards(DEFAULT_CONFIG);
 
 export function resetConfigKeepingIdentity(
   current: Pick<
@@ -658,6 +662,12 @@ export class ConfigStore {
         DEFAULT_CONFIG.memberSpeechTemplate,
       ),
       events,
+      overlayBoards: normalizeOverlayBoards(
+        raw && Object.prototype.hasOwnProperty.call(raw, 'overlayBoards')
+          ? raw.overlayBoards
+          : undefined,
+        merged as AppConfig,
+      ),
       cachedTestGifts: resolveCachedTestGifts(merged.cachedTestGifts),
     };
   }

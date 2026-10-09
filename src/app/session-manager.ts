@@ -123,6 +123,7 @@ import {
   type OverlayRankingMode,
   type RankEntry,
 } from '../shared/like-ranking';
+import { overlayRankingBroadcastPlan } from '../shared/overlay-board';
 import { overlayRankingMotionMs } from '../shared/overlay-ranking-motion';
 import { RepeatSpeechGuard, speechUserKey } from '../shared/speech-filters';
 import { SuperFanJoinDedupe, isSuperFanBoxEvent } from '../shared/super-fan-event';
@@ -173,6 +174,9 @@ export class SessionManager extends EventEmitter {
   /** ランキングサンプルの入れ替わり周回（表示を消すまで） */
   private rankingSampleLoopTimer: ReturnType<typeof setTimeout> | null = null;
   private rankingSampleLoopActive = false;
+  private rankingSampleConfig: AppConfig | null = null;
+  private chatSampleSignature = '';
+  private alertSampleTimingKey = '';
   private commentSoundMuted = false;
   private commentSoundAt = 0;
   private eventSoundAt: Partial<Record<string, number>> = {};
@@ -774,19 +778,19 @@ export class SessionManager extends EventEmitter {
     this.syncOverlayOptions(config);
     const safeKind = normalizeOverlayUrlKind(kind);
     if (safeKind === 'alerts') {
-      this.overlay.showAlertSampleDisplay(
-        buildAlertSamplePlan(config, this.pickTestGift(undefined)),
-      );
+      const samples = buildAlertSamplePlan(config, this.pickTestGift(undefined));
+      this.alertSampleTimingKey = this.alertTimingKey(config);
+      this.overlay.showAlertSampleDisplay(samples);
       return;
     }
     if (safeKind === 'ranking') {
       this.previewRankingSampleMotion(config);
       return;
     }
+    const plan = buildOverlaySamplePlan(config, this.pickTestGift(undefined));
+    this.chatSampleSignature = this.chatSampleTextSignature(plan);
     this.overlay.clearRoles(['chat']);
-    this.overlay.showSampleDisplay(
-      buildOverlaySamplePlan(config, this.pickTestGift(undefined)),
-    );
+    this.overlay.showSampleDisplay(plan);
   }
 
   /** 見た目プレビュー用。OBS には送らず計画だけ返す */
@@ -813,10 +817,12 @@ export class SessionManager extends EventEmitter {
       config.overlayRankingMotion,
       config.overlayRankingMotionSpeed,
     );
+    this.overlay.setBoards(config.overlayBoards);
   }
 
   private clearRankingSampleLoopTimer(): void {
     this.rankingSampleLoopActive = false;
+    this.rankingSampleConfig = null;
     if (this.rankingSampleLoopTimer) {
       clearTimeout(this.rankingSampleLoopTimer);
       this.rankingSampleLoopTimer = null;
@@ -851,12 +857,66 @@ export class SessionManager extends EventEmitter {
       ? { ...this.configStore.get(), ...streamSettings }
       : this.configStore.get();
     this.syncOverlayOptions(config);
+    if (this.rankingSampleLoopActive) {
+      const previous = this.rankingSampleConfig;
+      this.rankingSampleConfig = config;
+      const maxChanged =
+        !previous ||
+        normalizeOverlayLikeRankingMax(previous.overlayLikeRankingMax) !==
+          normalizeOverlayLikeRankingMax(config.overlayLikeRankingMax);
+      const modeChanged =
+        !previous ||
+        normalizeOverlayRankingMode(previous.overlayRankingMode) !==
+          normalizeOverlayRankingMode(config.overlayRankingMode);
+      if (maxChanged || modeChanged) {
+        this.overlay.broadcastRanking({ ...buildRankingSample(config), previewMotion: true });
+      }
+    }
+    this.refreshLatchedSamples(config);
+  }
+
+  private chatSampleTextSignature(plan: {
+    chatSamples: Array<{ displayText?: string }>;
+    pinSamples: Array<{ displayText?: string }>;
+  }): string {
+    return [...plan.chatSamples, ...plan.pinSamples].map((item) => item.displayText || '').join('\n');
+  }
+
+  private alertTimingKey(config: AppConfig): string {
+    return JSON.stringify({
+      common: config.eventAlertDisplayMs,
+      byType: config.eventAlertDisplayMsByType ?? null,
+    });
+  }
+
+  /** サンプル表示中に文言や表示秒を変えたら、出しているサンプルへ載せ直す */
+  private refreshLatchedSamples(config: AppConfig): void {
+    if (this.overlay.hasLatchedSample('chat')) {
+      const plan = buildOverlaySamplePlan(config, this.pickTestGift(undefined));
+      const signature = this.chatSampleTextSignature(plan);
+      if (this.chatSampleSignature && signature !== this.chatSampleSignature) {
+        this.chatSampleSignature = signature;
+        this.overlay.showSampleDisplay(plan);
+      } else if (!this.chatSampleSignature) {
+        this.chatSampleSignature = signature;
+      }
+    }
+    if (this.overlay.hasLatchedSample('alerts')) {
+      const nextKey = this.alertTimingKey(config);
+      if (this.alertSampleTimingKey && nextKey !== this.alertSampleTimingKey) {
+        this.alertSampleTimingKey = nextKey;
+        this.overlay.showAlertSampleDisplay(buildAlertSamplePlan(config, this.pickTestGift(undefined)));
+      } else if (!this.alertSampleTimingKey) {
+        this.alertSampleTimingKey = nextKey;
+      }
+    }
   }
 
   /** 表示を消すまで入れ替わりを繰り返して動きを確認できるようにする */
   private previewRankingSampleMotion(config: AppConfig): void {
     this.clearRankingSampleLoopTimer();
     this.rankingSampleLoopActive = true;
+    this.rankingSampleConfig = config;
     const intervalMs = Math.max(
       720,
       overlayRankingMotionMs(config.overlayRankingMotionSpeed) + 280,
@@ -865,7 +925,8 @@ export class SessionManager extends EventEmitter {
       if (!this.rankingSampleLoopActive) {
         return;
       }
-      this.overlay.broadcastRanking(buildRankingSample(config));
+      const current = this.rankingSampleConfig ?? config;
+      this.overlay.broadcastRanking({ ...buildRankingSample(current), previewMotion: true });
       if (!this.rankingSampleLoopActive) {
         return;
       }
@@ -1224,15 +1285,48 @@ export class SessionManager extends EventEmitter {
     const mode = normalizeOverlayRankingMode(config.overlayRankingMode);
     const likeSync = normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode);
     const likePollSec = normalizeOverlayRankingLikePollSec(config.overlayRankingLikePollSec);
-    const tracked = enabled
-      ? mode === 'diamonds'
-        ? this.diamondTracker.top(max)
-        : this.likeTracker.top(max)
-      : [];
-    const next = tracked.map((entry) => ({
-      ...entry,
-      avatarUrl: overlayGiftImagePath(entry.avatarUrl) || entry.avatarUrl || '',
-    }));
+    const boardNeedsRanking = config.overlayBoards.some((board) =>
+      board.widgets.some((widget) => widget.kind === 'ranking' && widget.visible),
+    );
+    const likeRows = this.likeTracker.top(10);
+    const diamondRows = this.diamondTracker.top(10);
+    const merged = new Map<
+      string,
+      { uniqueId: string; nickname: string; avatarUrl: string; likes: number; diamonds: number }
+    >();
+    for (const row of likeRows) {
+      const key = row.uniqueId || row.nickname;
+      merged.set(key, {
+        uniqueId: row.uniqueId,
+        nickname: row.nickname,
+        avatarUrl: row.avatarUrl,
+        likes: row.count,
+        diamonds: 0,
+      });
+    }
+    for (const row of diamondRows) {
+      const key = row.uniqueId || row.nickname;
+      const current = merged.get(key);
+      merged.set(key, {
+        uniqueId: row.uniqueId || current?.uniqueId || '',
+        nickname: row.nickname || current?.nickname || '',
+        avatarUrl: row.avatarUrl || current?.avatarUrl || '',
+        likes: current?.likes ?? 0,
+        diamonds: row.count,
+      });
+    }
+    const ranked = [...merged.values()]
+      .map((row) => ({
+        uniqueId: row.uniqueId,
+        nickname: row.nickname,
+        likes: row.likes,
+        diamonds: row.diamonds,
+        count: mode === 'diamonds' ? row.diamonds : row.likes,
+        avatarUrl: overlayGiftImagePath(row.avatarUrl) || row.avatarUrl || '',
+      }))
+      .filter((row) => row.likes > 0 || row.diamonds > 0)
+      .sort((left, right) => right.count - left.count || left.uniqueId.localeCompare(right.uniqueId));
+    const next = enabled || boardNeedsRanking ? ranked.slice(0, 10) : [];
     if (
       !force &&
       this.rankingEnabled === enabled &&
@@ -1254,18 +1348,20 @@ export class SessionManager extends EventEmitter {
     if (this.rankingSampleLoopActive && !force) {
       return;
     }
-    this.overlay.broadcastRanking({ entries: next, max, enabled, mode });
+    this.overlay.broadcastRanking({
+      entries: next,
+      max,
+      enabled,
+      mode,
+      likeSyncMode: likeSync,
+      likePollSec,
+    });
   }
 
   /** いいねランキングがポーリングのときだけ定周期で配信する */
   private syncRankingLikePollTimer(): void {
-    const config = this.configStore.get();
-    const enabled = normalizeOverlayLikeRankingEnabled(config.overlayLikeRankingEnabled);
-    const mode = normalizeOverlayRankingMode(config.overlayRankingMode);
-    const likeSync = normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode);
-    const likePollSec = normalizeOverlayRankingLikePollSec(config.overlayRankingLikePollSec);
-    const shouldPoll = enabled && mode === 'likes' && likeSync === 'poll';
-    if (!shouldPoll) {
+    const likePollSec = overlayRankingBroadcastPlan(this.configStore.get()).likePollSec;
+    if (likePollSec == null) {
       if (this.rankingLikePollTimer) {
         clearInterval(this.rankingLikePollTimer);
         this.rankingLikePollTimer = null;
@@ -1294,14 +1390,7 @@ export class SessionManager extends EventEmitter {
   }
 
   private shouldPublishLikesRankingImmediately(): boolean {
-    const config = this.configStore.get();
-    if (!normalizeOverlayLikeRankingEnabled(config.overlayLikeRankingEnabled)) {
-      return false;
-    }
-    if (normalizeOverlayRankingMode(config.overlayRankingMode) !== 'likes') {
-      return false;
-    }
-    return normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode) === 'live';
+    return overlayRankingBroadcastPlan(this.configStore.get()).likesImmediate;
   }
 
   private notify(ok: boolean, message: string): void {
@@ -1460,7 +1549,7 @@ export class SessionManager extends EventEmitter {
         current.user.avatarUrl || '',
       );
       // ダイヤモードのときだけ即時配信（いいねモードはポーリング／常時の対象外）
-      if (normalizeOverlayRankingMode(config.overlayRankingMode) === 'diamonds') {
+      if (overlayRankingBroadcastPlan(config).diamondsImmediate) {
         this.publishRankingIfChanged();
       }
     }

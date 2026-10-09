@@ -22,8 +22,6 @@
             <button class="titlebar__text" id="menu-log-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-log-list">サンプル</button>
             <div class="titlebar-menu__list" id="menu-log-list" hidden role="menu">
               <button type="button" role="menuitem" id="btn-viewer-preview-samples">コメント画面にサンプル</button>
-              <button type="button" role="menuitem" id="btn-overlay-preview-samples">配信ソースにサンプル</button>
-              <button type="button" role="menuitem" id="btn-overlay-clear">配信ソースを消す</button>
             </div>
           </div>
           <button class="titlebar__text" id="btn-help" type="button">ヘルプ</button>
@@ -94,6 +92,10 @@
         </div>
         <div class="statusbar__actions">
           <div class="statusbar__group">
+            <div class="row" role="group" id="overlay-sample-actions" aria-label="配信ソースのサンプル">
+              <button class="btn btn--ghost" id="btn-overlay-samples-all" type="button">サンプルを出す</button>
+              <button class="btn btn--ghost" id="btn-overlay-samples-clear" type="button">表示を消す</button>
+            </div>
             <div class="titlebar-menu statusbar-menu">
               <button class="btn btn--ghost" id="menu-ops-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-controls="menu-ops-list">操作</button>
               <div class="titlebar-menu__list" id="menu-ops-list" hidden role="menu">
@@ -1511,6 +1513,18 @@
             >
               アラート
             </button>
+            <button
+              class="subtabs__btn"
+              type="button"
+              role="tab"
+              id="look-section-board"
+              data-look-section-btn="board"
+              aria-controls="look-section-panel-board"
+              aria-selected="false"
+              tabindex="-1"
+            >
+              配置
+            </button>
           </div>
           <div class="card">
             <h2 id="overlay-url-card-title">配信ソースURL</h2>
@@ -1524,10 +1538,10 @@
                 <option value="ranking" id="overlay-url-kind-likes-label">ランキング</option>
               </select>
             </label>
-            <p class="hint" id="overlay-url-kind-hint" aria-live="polite">
+            <p class="hint look-url-tools" id="overlay-url-kind-hint" aria-live="polite">
               TikTok LIVE Studio でソース追加 → リンクに貼るときは LIVE Studio用、OBS のブラウザソースには OBS用を使います。
             </p>
-            <div class="url-block">
+            <div class="url-block look-url-tools">
               <p class="url-line" id="overlay-url" aria-live="polite"></p>
               <div class="row overlay-url-copy-row" role="group" aria-label="URLのコピー">
                 <button
@@ -1559,19 +1573,8 @@
                 </button>
               </div>
             </div>
-            <p class="hint" id="overlay-url-variant-hint" aria-live="polite">
+            <p class="hint look-url-tools" id="overlay-url-variant-hint" aria-live="polite">
               「正しいURLを入力してください」と出るときは、127.0.0.1 を手打ちしていないか確認してください。LIVE Studio用を使います。
-            </p>
-            <div class="row" id="overlay-connect-sample-row" role="group" aria-label="配信ソースの確認">
-              <button class="btn btn--ghost" id="btn-connect-overlay-sample" type="button">
-                サンプルを出す
-              </button>
-              <button class="btn btn--ghost" id="btn-connect-overlay-clear" type="button">
-                表示を消す
-              </button>
-            </div>
-            <p class="hint" id="overlay-connect-sample-hint">
-              上で選んだ種類の配信ソースにサンプルを出します。URLを貼ったあと確認に使えます。
             </p>
             <label class="field field--num-wide">
               <span>ポート</span>
@@ -1892,7 +1895,7 @@
             <div class="likes-look-block">
               <h2 id="likes-look-title">ランキングの見た目</h2>
               <p class="hint" id="likes-look-hint">
-                ランキング配信ソース専用の見た目です。プリセットを選んでから微調整できます。確認は上の「サンプルを出す」で行います。
+                ランキング配信ソース専用の見た目です。プリセットを選んでから微調整できます。右のプレビューで確認できます。配信ソースへ出すときは、接続の横の「サンプルを出す」です。
               </p>
               <div class="preset-grid">
                 <button class="preset-btn" type="button" data-likes-look-preset="standard">標準</button>
@@ -1981,11 +1984,55 @@
           <div id="look-section-panel-alerts" data-look-section="alerts" role="tabpanel" aria-labelledby="look-section-alerts" hidden>
             <div class="card">
               <h2 id="look-alerts-title">イベントアラート</h2>
-              <p class="hint" id="look-alerts-hint">画像・文言・表示秒はイベントタブです。右のプレビューはサンプルを繰り返します。「サンプルを出す」で配信ソースも同じ繰り返しになり、「表示を消す」で配信ソースだけ止まります。</p>
+              <p class="hint" id="look-alerts-hint">画像・文言・表示秒はイベントタブです。右のプレビューはサンプルを繰り返します。接続の横の「サンプルを出す」で配信ソースも同じ繰り返しになり、「表示を消す」で配信ソースだけ止まります。</p>
+            </div>
+          </div>
+          <div id="look-section-panel-board" data-look-section="board" role="tabpanel" aria-labelledby="look-section-board" hidden>
+            <div class="board-editor" id="board-editor">
+              <div class="board-editor__bar">
+                <div class="board-editor__group">
+                  <label class="board-editor__pick">
+                    <span>配置</span>
+                    <select id="board-list" aria-label="配置"></select>
+                  </label>
+                  <span class="board-editor__count" id="board-count" title="配置は30枚まで">0/30</span>
+                  <button class="btn" id="board-add" type="button" aria-haspopup="menu" aria-expanded="false">追加</button>
+                </div>
+                <div class="board-editor__group" id="board-actions">
+                  <button class="btn btn--ghost" id="board-rename" type="button">配置名を変える</button>
+                  <button class="btn btn--ghost" id="board-delete" type="button">この配置を削除</button>
+                </div>
+              </div>
+              <p class="hint" id="board-empty" hidden>配置がありません。「追加」から、横か縦のキャンバスを作れます。</p>
+              <div id="board-workspace">
+              <div class="url-block">
+                <p class="url-line" id="board-url" aria-live="polite"></p>
+                <div class="row overlay-url-copy-row" role="group" aria-label="配置URLのコピー">
+                  <button class="btn" id="board-copy-live" type="button">LIVE Studio用をコピー</button>
+                  <button class="btn" id="board-copy-obs" type="button">OBS用をコピー</button>
+                  <button class="btn btn--ghost" id="board-copy-studio" type="button">別のURLをコピー</button>
+                </div>
+              </div>
+              <p class="hint">サンプルは、接続の横の「サンプルを出す」でこのキャンバスと配信ソースに出ます。表示を消すまで繰り返します。</p>
+              <div class="board-editor__body">
+                <aside class="board-layers" aria-label="レイヤー">
+                  <div class="board-layers__head">
+                    <span class="board-layers__title">レイヤー</span>
+                    <span class="board-editor__count" id="board-widget-count" title="項目は20個まで">0/20</span>
+                    <button class="btn" id="board-widget-add" type="button" aria-label="項目を追加" aria-haspopup="menu" aria-expanded="false">＋</button>
+                  </div>
+                  <ul class="board-layer-list" id="board-layer-list"></ul>
+                </aside>
+                <div class="board-editor__stage" id="board-stage">
+                  <div class="board-editor__canvas" id="board-canvas"></div>
+                </div>
+              </div>
+              <p class="hint">端や角をドラッグすると、縦横比を保ったまま中身ごと大きさが変わります。キャンバスの端やほかの項目に近づくと吸い付きます。Alt を押しながらドラッグすると、中身の大きさはそのままで枠だけ変わります。切った辺は赤くなります。</p>
+              </div>
             </div>
           </div>
           <div class="tab-reset">
-            <p class="hint" id="reset-tab-hint-look">配信ソースの見た目と動きを最初の状態に戻します。ポートは残します。</p>
+            <p class="hint" id="reset-tab-hint-look">配信ソースの見た目と動きを最初の状態に戻します。配置は横1枚と縦1枚に戻します。ポートは残します。</p>
             <button class="btn btn--ghost" type="button" id="btn-reset-tab-look" data-reset-tab="look">このタブを初期化する</button>
           </div>
         </section>
@@ -2177,6 +2224,7 @@
     <script src="js/overlay-ranking-motion.js"></script>
     <script src="js/likes-look-ui.js"></script>
     <script src="js/look-ui.js"></script>
+    <script src="js/overlay-board-ui.js"></script>
     <script src="js/viewer-items.js"></script>
     <script src="js/viewer-dock-view.js"></script>
     <script src="js/viewer-filter-ui.js"></script>

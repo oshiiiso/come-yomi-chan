@@ -145,17 +145,27 @@ function applyCopy(config) {
   if (guideClearSamples && uiCopy.guideClearSamplesButton) {
     guideClearSamples.textContent = uiCopy.guideClearSamplesButton;
   }
-  for (const id of ['btn-overlay-preview-samples']) {
-    const overlaySamples = $(id);
-    if (overlaySamples && uiCopy.overlayPreviewSamples) {
-      overlaySamples.textContent = uiCopy.overlayPreviewSamples;
+  const overlaySamplesAll = $('btn-overlay-samples-all');
+  if (overlaySamplesAll) {
+    if (uiCopy.overlayConnectSample) {
+      overlaySamplesAll.textContent = uiCopy.overlayConnectSample;
+    }
+    if (uiCopy.overlayConnectSampleHint) {
+      overlaySamplesAll.title = uiCopy.overlayConnectSampleHint;
     }
   }
-  for (const id of ['btn-overlay-clear']) {
-    const overlayClear = $(id);
-    if (overlayClear && uiCopy.overlayClearChat) {
-      overlayClear.textContent = uiCopy.overlayClearChat;
+  const overlaySamplesClear = $('btn-overlay-samples-clear');
+  if (overlaySamplesClear) {
+    if (uiCopy.overlayConnectClear) {
+      overlaySamplesClear.textContent = uiCopy.overlayConnectClear;
     }
+    if (uiCopy.overlayConnectClearHint) {
+      overlaySamplesClear.title = uiCopy.overlayConnectClearHint;
+    }
+  }
+  const overlaySampleActions = $('overlay-sample-actions');
+  if (overlaySampleActions instanceof HTMLElement && uiCopy.overlayConnectSampleGroupLabel) {
+    overlaySampleActions.setAttribute('aria-label', uiCopy.overlayConnectSampleGroupLabel);
   }
   const saveLog = $('btn-viewer-save-log');
   if (saveLog && uiCopy.viewerSaveLog) {
@@ -335,6 +345,9 @@ function fillConfig(config) {
   $('overlay-port').value = String(config.overlayPort ?? 8787);
   if (typeof fillOverlayUrlUi === 'function') {
     fillOverlayUrlUi(config, { force: true });
+  }
+  if (typeof setOverlayBoards === 'function') {
+    setOverlayBoards(config.overlayBoards);
   }
   $('chat-max-rows').value = String(config.chatMaxRows ?? 8);
   fillDisplayTime(config.chatDisplayMs);
@@ -708,6 +721,9 @@ function collectConfig() {
     viewerDisplay: collectViewerDisplay(),
     fanLevelLook: collectFanLevelLook(),
     events,
+    ...(typeof getOverlayBoards === 'function' && Array.isArray(getOverlayBoards())
+      ? { overlayBoards: getOverlayBoards() }
+      : {}),
   };
 }
 

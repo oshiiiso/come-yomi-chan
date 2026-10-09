@@ -1,0 +1,55 @@
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color-scheme: normal;
+}
+
+.board {
+  position: absolute;
+  left: 0;
+  top: 0;
+  overflow: hidden;
+}
+
+.board__widget {
+  position: absolute;
+  overflow: hidden;
+  background: transparent;
+}
+
+.board__widget iframe {
+  position: absolute;
+  border: 0;
+  background: transparent;
+  color-scheme: normal;
+  transform-origin: 0 0;
+}
+
+.board__guide {
+  position: absolute;
+  border: 2px dashed rgba(255, 255, 255, 0.55);
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+}
+
+.board__guide--top {
+  left: 0;
+  top: 0;
+  right: 0;
+}
+
+.board__guide--bottom {
+  left: 0;
+  right: 0;
+  bottom: 0;
+}
+
+.board__guide--right {
+  top: 0;
+  right: 0;
+  bottom: 0;
+}

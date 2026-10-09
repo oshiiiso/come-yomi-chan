@@ -7,13 +7,16 @@
     <script>
       (() => {
         const params = new URLSearchParams(location.search);
+        if (params.get('embed') === '1') {
+          document.documentElement.dataset.embed = '1';
+        }
         if (params.has('preview')) {
           document.documentElement.dataset.preview = '1';
           document.documentElement.dataset.backdrop = params.get('backdrop') || 'checker';
         }
       })();
     </script>
-    <link rel="stylesheet" href="/overlay/alerts.css?v=nc4" />
+    <link rel="stylesheet" href="/overlay/alerts.css?v=nc5" />
   </head>
   <body>
     <div class="alert-root" id="alert-root" aria-live="polite">
@@ -25,6 +28,6 @@
       </div>
     </div>
     <script src="/overlay/name-colors.js?v=nc3"></script>
-    <script src="/overlay/alerts.js?v=nc5"></script>
+    <script src="/overlay/alerts.js?v=nc6"></script>
   </body>
 </html>

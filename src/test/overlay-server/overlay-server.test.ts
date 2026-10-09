@@ -429,6 +429,56 @@ test('初期通知に固定枠の設定を含む', async () => {
   assert.equal(hello.pin?.types?.gift, true);
 });
 
+test('サンプルは表示を消すまで、あとから繋がった配信ソースにも届く', async () => {
+  server.showSampleDisplay({
+    chatSamples: [samplePayload('サンプル')],
+    pinSamples: [],
+    alertSamples: [],
+  });
+  const socket = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
+  const messages: unknown[] = [];
+  socket.on('message', (raw) => {
+    messages.push(JSON.parse(String(raw)));
+  });
+  await new Promise<void>((resolve, reject) => {
+    socket.once('open', () => resolve());
+    socket.once('error', reject);
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  socket.close();
+  const sample = messages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'sample-display',
+  );
+  assert.ok(sample);
+
+  server.clearChat();
+  const next = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
+  const afterClear: unknown[] = [];
+  next.on('message', (raw) => {
+    afterClear.push(JSON.parse(String(raw)));
+  });
+  await new Promise<void>((resolve, reject) => {
+    next.once('open', () => resolve());
+    next.once('error', reject);
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  next.close();
+  assert.equal(
+    afterClear.some(
+      (item) =>
+        typeof item === 'object' &&
+        item !== null &&
+        'kind' in item &&
+        item.kind === 'sample-display',
+    ),
+    false,
+  );
+});
+
 test('配信ソースサンプルは WebSocket で sample-display を送る', async () => {
   const socket = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
   const messages: unknown[] = [];

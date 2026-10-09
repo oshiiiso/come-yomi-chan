@@ -20,6 +20,8 @@
   let motionName = 'fuwatto';
   let motionMs = 180;
   const pendingRows = [];
+  /** 設定到達前の earlyRows と同じ上限。溢れた分は古い方から捨てる */
+  const PENDING_ROW_MAX = 40;
   const PIN_TYPES = [
     'gift',
     'follow',
@@ -81,6 +83,10 @@
   /** IPC / sample-display でテンプレ由来サンプルを受け取ったか */
   let hasOverlaySamplePlan = false;
   const isPreview = new URLSearchParams(location.search).has('preview');
+  const isEmbed = new URLSearchParams(location.search).get('embed') === '1';
+  if (isEmbed) {
+    document.documentElement.dataset.embed = '1';
+  }
 
   function usesOverlaySampleLoop() {
     return isPreview || streamSampleActive;
@@ -335,12 +341,23 @@
     const previewChanged = (next.previewPinned !== false) !== pinPreviewPinned;
     const typesChanged = PIN_TYPES.some((type) => nextTypes[type] !== pinTypes[type]);
     const enabledChanged = nextEnabled !== pinEnabled;
+    const previousDisplayMs = pinDisplayMs;
+    const previousByType = JSON.stringify(pinMsByType);
     pinEnabled = nextEnabled;
     pinDisplayMs = normalizePinMs(next.displayMs);
     pinMsByType = normalizePinMsByType(next.displayMsByType);
     pinHold = next.hold === true;
     pinTypes = nextTypes;
     pinPreviewPinned = next.previewPinned !== false;
+    if (
+      pinShowing &&
+      !pinLeaving &&
+      (previousDisplayMs !== pinDisplayMs || previousByType !== JSON.stringify(pinMsByType))
+    ) {
+      const type = pin instanceof HTMLOListElement ? pin.dataset.eventType || '' : '';
+      pinCurrentDisplayMs = resolveOverlayPinDisplayMs(type, pinDisplayMs, pinMsByType, pinHold);
+      schedulePinAdvance();
+    }
     if (typesChanged || enabledChanged) {
       applyCurrentPinTypesToQueue();
     }
@@ -414,6 +431,8 @@
   }
 
   function applySettings(message, options = {}) {
+    const previousRows = chatMaxRows;
+    const previousMs = chatDisplayMs;
     if (typeof message.chatMaxRows === 'number' && Number.isFinite(message.chatMaxRows)) {
       chatMaxRows = Math.min(50, Math.max(1, Math.trunc(message.chatMaxRows)));
     }
@@ -434,8 +453,7 @@
       settingsReady = true;
     }
     const previewChanged = applyPinSettings(message.pin);
-    trimOverflow();
-    flushPendingRows();
+    applyRowLimits(previousRows, previousMs);
     if (nameColorChanged) {
       refreshColoredNames();
     }
@@ -537,7 +555,7 @@
     chatSampleIndex = 0;
     hasOverlaySamplePlan = true;
     if (chatSampleQueue.length > 0) {
-      pushNextChatSample();
+      fillSampleRowsToMax();
       scheduleChatSampleAdvance();
     }
     if (pinSampleTemplates.length > 0) {
@@ -1211,9 +1229,69 @@
     }
   }
 
-  function queueLatestRow(payload) {
-    pendingRows.length = 0;
+  function clearLeaveTimeout(item) {
+    const id = Number(item.dataset.leaveTimer || 0);
+    if (id) {
+      window.clearTimeout(id);
+    }
+    item.removeAttribute('data-leave-timer');
+  }
+
+  /** 今出ている行の表示時間を、変えたあとの秒数に合わせる */
+  function refreshShownRowTimers() {
+    if (!(chat instanceof HTMLOListElement)) {
+      return;
+    }
+    for (const item of [...chat.children]) {
+      if (!(item instanceof HTMLElement) || item.classList.contains('is-leaving')) {
+        continue;
+      }
+      clearLeaveTimeout(item);
+      if (chatDisplayMs <= 0) {
+        continue;
+      }
+      if (isPreview && !usesOverlaySampleLoop()) {
+        continue;
+      }
+      const timer = window.setTimeout(() => {
+        beginLeave(item);
+      }, chatDisplayMs);
+      item.dataset.leaveTimer = String(timer);
+    }
+  }
+
+  /** サンプル中は、表示行数ぶんになるまで今のキューから足す */
+  function fillSampleRowsToMax() {
+    if (!usesOverlaySampleLoop() || chatSampleQueue.length === 0) {
+      return;
+    }
+    let guard = chatMaxRows;
+    while (chat.children.length < chatMaxRows && guard > 0) {
+      guard -= 1;
+      const before = chat.children.length;
+      pushNextChatSample();
+      if (chat.children.length === before) {
+        break;
+      }
+    }
+  }
+
+  function applyRowLimits(previousRows, previousMs) {
+    if (previousRows !== chatMaxRows) {
+      trimOverflow();
+      flushPendingRows();
+      fillSampleRowsToMax();
+    }
+    if (previousMs !== chatDisplayMs) {
+      refreshShownRowTimers();
+    }
+  }
+
+  function queuePendingRow(payload) {
     pendingRows.push(payload);
+    while (pendingRows.length > PENDING_ROW_MAX) {
+      pendingRows.shift();
+    }
   }
 
   function addRow(payload) {
@@ -1222,7 +1300,7 @@
     }
     if (!settingsReady) {
       earlyRows.push(payload);
-      if (earlyRows.length > 40) {
+      if (earlyRows.length > PENDING_ROW_MAX) {
         earlyRows.shift();
       }
       return;
@@ -1246,7 +1324,7 @@
       appendRow(chat, payload);
       return;
     }
-    queueLatestRow(payload);
+    queuePendingRow(payload);
   }
 
   // src/shared/comment-emotes.ts と同じ判定（配信ソースは単一 JS）
@@ -1904,10 +1982,12 @@
       return;
     }
     pin.hidden = false;
+    pin.dataset.eventType = typeof payload.type === 'string' ? payload.type : '';
     pinCurrentDisplayMs = resolveOverlayPinDisplayMs(payload.type, pinDisplayMs, pinMsByType, pinHold);
     const existing = pin.firstElementChild;
     if (existing instanceof HTMLElement) {
       if (existing.classList.contains('is-leaving') || pinLeaving) {
+        pinQueue.unshift(payload);
         return;
       }
       pinShowing = false;
@@ -2088,7 +2168,7 @@
     chatSampleIndex = 0;
 
     if (chatSampleQueue.length > 0) {
-      pushNextChatSample();
+      fillSampleRowsToMax();
       scheduleChatSampleAdvance();
     }
     refillPreviewPinQueue();
@@ -2116,6 +2196,13 @@
 
   function applyOverlayMessage(message) {
     if (message.kind === 'hello') {
+      if (isEmbed) {
+        settingsReady = true;
+        if (!usesOverlaySampleLoop()) {
+          releaseEarlyRows();
+        }
+        return;
+      }
       applySettings(message);
       return;
     }
@@ -2132,6 +2219,10 @@
 
     if (message.kind === 'sample-display') {
       streamSampleActive = true;
+      if (isEmbed) {
+        applySampleQueues(message);
+        return;
+      }
       applyStreamSampleDisplay(message);
       return;
     }
@@ -2244,6 +2335,14 @@
         applySampleQueues(data);
         return;
       }
+      const previousRows = chatMaxRows;
+      const previousMs = chatDisplayMs;
+      if (typeof data.chatMaxRows === 'number' && Number.isFinite(data.chatMaxRows)) {
+        chatMaxRows = Math.min(50, Math.max(1, Math.trunc(data.chatMaxRows)));
+      }
+      if (typeof data.chatDisplayMs === 'number' && Number.isFinite(data.chatDisplayMs)) {
+        chatDisplayMs = Math.max(0, Math.trunc(data.chatDisplayMs));
+      }
       const nextHide = data.look?.hideUserName === true;
       const hideChanged = nextHide !== hideUserName;
       hideUserName = nextHide;
@@ -2263,6 +2362,7 @@
         data.look,
         hideChanged || previewChanged || nameColorChanged || accentChanged,
       );
+      applyRowLimits(previousRows, previousMs);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);
       console.warn(`見た目の更新に失敗しました: ${detail}`);

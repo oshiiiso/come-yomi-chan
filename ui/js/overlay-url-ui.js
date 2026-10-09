@@ -306,22 +306,6 @@ function applyOverlayUrlCopy() {
   if (copyGroup instanceof HTMLElement && uiCopy.overlayUrlCopyGroupLabel) {
     copyGroup.setAttribute('aria-label', uiCopy.overlayUrlCopyGroupLabel);
   }
-  const sampleGroup = $('overlay-connect-sample-row');
-  if (sampleGroup instanceof HTMLElement && uiCopy.overlayConnectSampleGroupLabel) {
-    sampleGroup.setAttribute('aria-label', uiCopy.overlayConnectSampleGroupLabel);
-  }
-  const sampleBtn = $('btn-connect-overlay-sample');
-  if (sampleBtn && uiCopy.overlayConnectSample) {
-    sampleBtn.textContent = uiCopy.overlayConnectSample;
-  }
-  const clearBtn = $('btn-connect-overlay-clear');
-  if (clearBtn && uiCopy.overlayConnectClear) {
-    clearBtn.textContent = uiCopy.overlayConnectClear;
-  }
-  const sampleHint = $('overlay-connect-sample-hint');
-  if (sampleHint && uiCopy.overlayConnectSampleHint) {
-    sampleHint.textContent = uiCopy.overlayConnectSampleHint;
-  }
   const liveBtn = $('btn-copy-url');
   if (liveBtn && uiCopy.overlayUrlCopyLiveLabel) {
     liveBtn.textContent = uiCopy.overlayUrlCopyLiveLabel;
@@ -505,28 +489,6 @@ function bindOverlayUrlUi() {
     btn.addEventListener('click', async () => {
       const variant = btn.getAttribute('data-overlay-copy') || 'live';
       const result = await copySelectedOverlayUrl(variant);
-      if (typeof setToast === 'function') {
-        setToast(result.message, !result.ok);
-      }
-    });
-  }
-
-  const sampleBtn = $('btn-connect-overlay-sample');
-  if (sampleBtn instanceof HTMLButtonElement && sampleBtn.dataset.boundOverlaySample !== '1') {
-    sampleBtn.dataset.boundOverlaySample = '1';
-    sampleBtn.addEventListener('click', async () => {
-      const result = await previewSelectedOverlaySample();
-      if (typeof setToast === 'function') {
-        setToast(result.message, !result.ok);
-      }
-    });
-  }
-
-  const clearBtn = $('btn-connect-overlay-clear');
-  if (clearBtn instanceof HTMLButtonElement && clearBtn.dataset.boundOverlayClear !== '1') {
-    clearBtn.dataset.boundOverlayClear = '1';
-    clearBtn.addEventListener('click', async () => {
-      const result = await clearSelectedOverlaySample();
       if (typeof setToast === 'function') {
         setToast(result.message, !result.ok);
       }

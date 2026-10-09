@@ -20,6 +20,10 @@ export interface RankEntry {
   uniqueId: string;
   nickname: string;
   count: number;
+  /** いいね累計。配置ごとの集計切替用。無いときは count */
+  likes?: number;
+  /** ダイヤ累計。配置ごとの集計切替用。無いときは count */
+  diamonds?: number;
   /** アイコンURL。無いときは空文字 */
   avatarUrl: string;
 }
@@ -32,6 +36,11 @@ export interface OverlayRankingPayload {
   max: number;
   enabled: boolean;
   mode: OverlayRankingMode;
+  /** 単独ランキングソースのいいね更新。配置側は枠ごとの設定を使う */
+  likeSyncMode?: OverlayRankingLikeSyncMode;
+  likePollSec?: number;
+  /** 入れ替わり確認。ポーリング間隔を待たずに出す */
+  previewMotion?: boolean;
 }
 
 /** @deprecated OverlayRankingPayload を使う */
@@ -83,13 +92,23 @@ export function sameRanking(
   if (left.length !== right.length) {
     return false;
   }
-  return left.every(
-    (entry, index) =>
-      entry.uniqueId === right[index]?.uniqueId &&
-      entry.nickname === right[index]?.nickname &&
-      entry.count === right[index]?.count &&
-      (entry.avatarUrl || '') === (right[index]?.avatarUrl || ''),
-  );
+  return left.every((entry, index) => {
+    const other = right[index];
+    return (
+      entry.uniqueId === other?.uniqueId &&
+      entry.nickname === other?.nickname &&
+      entry.count === other?.count &&
+      (entry.avatarUrl || '') === (other?.avatarUrl || '') &&
+      sameOptionalCount(entry.likes, other?.likes) &&
+      sameOptionalCount(entry.diamonds, other?.diamonds)
+    );
+  });
+}
+
+function sameOptionalCount(left: number | undefined, right: number | undefined): boolean {
+  const normalize = (value: number | undefined) =>
+    typeof value === 'number' && Number.isFinite(value) ? value : null;
+  return normalize(left) === normalize(right);
 }
 
 /** @deprecated sameRanking を使う */

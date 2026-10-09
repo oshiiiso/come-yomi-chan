@@ -223,19 +223,36 @@ async function init() {
     setToast(uiCopy.viewerCleared);
   });
   const showOverlaySamples = async () => {
-    // 見た目タブ／メニューはコメント列向け（接続タブは select 連動）
+    const kinds = ['chat', 'ranking', 'alerts'];
     if (typeof previewSelectedOverlaySample === 'function') {
-      const result = await previewSelectedOverlaySample('chat');
-      setToast(result.message, !result.ok);
+      let failed = null;
+      for (const kind of kinds) {
+        const result = await previewSelectedOverlaySample(kind);
+        if (!result?.ok) {
+          failed = result;
+        }
+      }
+      setToast(
+        failed?.message || uiCopy.overlayPreviewShown || '配信ソースにサンプルを表示しました',
+        Boolean(failed),
+      );
       return;
     }
     const streamSettings =
       typeof readOverlayStreamSettings === 'function' ? readOverlayStreamSettings() : undefined;
-    const result = await window.liveTts.previewOverlay('overlay', streamSettings, 'chat');
-    setToast(result?.message || uiCopy.overlayPreviewSamples, !result?.ok);
+    let failed = null;
+    for (const kind of kinds) {
+      const result = await window.liveTts.previewOverlay('overlay', streamSettings, kind);
+      if (!result?.ok) {
+        failed = result;
+      }
+    }
+    setToast(
+      failed?.message || uiCopy.overlayPreviewShown || '配信ソースにサンプルを表示しました',
+      Boolean(failed),
+    );
   };
-  const clearOverlayChat = async () => {
-    // メニュー／見た目タブは全種類を消す
+  const clearOverlaySamples = async () => {
     if (typeof clearSelectedOverlaySample === 'function') {
       const result = await clearSelectedOverlaySample('all');
       setToast(result.message, !result.ok);
@@ -244,11 +261,11 @@ async function init() {
     const result = await window.liveTts.clearOverlay('all');
     setToast(result?.message || uiCopy.overlayClearChat, !result?.ok);
   };
-  $('btn-overlay-preview-samples')?.addEventListener('click', () => {
+  $('btn-overlay-samples-all')?.addEventListener('click', () => {
     void showOverlaySamples();
   });
-  $('btn-overlay-clear')?.addEventListener('click', () => {
-    void clearOverlayChat();
+  $('btn-overlay-samples-clear')?.addEventListener('click', () => {
+    void clearOverlaySamples();
   });
   $('event-sections')?.addEventListener('click', (event) => {
     const button = event.target.closest('[data-event-section-btn]');

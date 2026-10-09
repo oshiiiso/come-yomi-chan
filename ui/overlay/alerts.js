@@ -10,6 +10,10 @@
   const media = document.getElementById('alert-media');
   const textEl = document.getElementById('alert-text');
   const isPreview = new URLSearchParams(location.search).has('preview');
+  const isEmbed = new URLSearchParams(location.search).get('embed') === '1';
+  if (isEmbed) {
+    document.documentElement.dataset.embed = '1';
+  }
   const DEFAULT_NAME_COLORS = window.OverlayNameColors?.DEFAULT_NAME_COLORS || [
     '#5eead4',
     '#93c5fd',
@@ -503,6 +507,12 @@
       return;
     }
     if (message.kind === 'hello') {
+      if (isEmbed) {
+        if (typeof message.eventAlertDisplayMs === 'number') {
+          displayMs = clampDisplayMs(message.eventAlertDisplayMs);
+        }
+        return;
+      }
       applyHello(message);
       return;
     }
@@ -607,7 +617,9 @@
   }
 
   function applyStreamSamples(message) {
-    applyHello(message);
+    if (!isEmbed) {
+      applyHello(message);
+    }
     const next = usableAlertSamples(message.alertSamples);
     if (next.length === 0) {
       streamSampleActive = false;
@@ -642,7 +654,7 @@
   }
 
   window.addEventListener('message', (event) => {
-    if (!isPreview) {
+    if (!isPreview && !isEmbed) {
       return;
     }
     const message = event.data;

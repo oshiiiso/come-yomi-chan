@@ -39,6 +39,18 @@ import {
   TEMPLATE_EDITOR_TOKENS_BY_FIELD,
   TEMPLATE_PLACEHOLDER_IDS,
 } from '../../shared/template-placeholders';
+import {
+  OVERLAY_BOARD_LANDSCAPE_HEIGHT,
+  OVERLAY_BOARD_LANDSCAPE_WIDTH,
+  OVERLAY_BOARD_MAX,
+  OVERLAY_BOARD_PORTRAIT_HEIGHT,
+  OVERLAY_BOARD_PORTRAIT_WIDTH,
+  OVERLAY_BOARD_WIDGET_MAX,
+  OVERLAY_BOARD_WIDGET_MIN_PX,
+  OVERLAY_BOARD_WIDGET_VISIBLE_PX,
+  OVERLAY_BOARD_WIDGET_KINDS,
+  overlayBoardTemplateRect,
+} from '../../shared/overlay-board';
 
 function readUi(relativePath: string): string {
   return fs.readFileSync(path.join(process.cwd(), ...relativePath.split('/')), 'utf8');
@@ -165,6 +177,28 @@ test('ランキング入れ替わりの動きは UI ミラーと一致する', (
   assert.match(source, /function normalizeOverlayRankingMotion/);
   assert.match(source, /function normalizeOverlayRankingMotionSpeed/);
   assert.match(source, /function overlayRankingMotionMs/);
+});
+
+test('配置の上限と初期位置は UI と一致する', () => {
+  const editor = readUi('ui/js/overlay-board-ui.js');
+  const page = readUi('ui/overlay/board.js');
+  assert.match(editor, new RegExp(`const OVERLAY_BOARD_MAX = ${OVERLAY_BOARD_MAX}`));
+  assert.match(editor, new RegExp(`const OVERLAY_BOARD_WIDGET_MAX = ${OVERLAY_BOARD_WIDGET_MAX}`));
+  assert.match(editor, new RegExp(`const OVERLAY_BOARD_WIDGET_MIN_PX = ${OVERLAY_BOARD_WIDGET_MIN_PX}`));
+  assert.match(editor, new RegExp(`const OVERLAY_BOARD_WIDGET_VISIBLE_PX = ${OVERLAY_BOARD_WIDGET_VISIBLE_PX}`));
+  assert.match(page, new RegExp(`\\b${OVERLAY_BOARD_LANDSCAPE_WIDTH}\\b`));
+  assert.match(page, new RegExp(`\\b${OVERLAY_BOARD_LANDSCAPE_HEIGHT}\\b`));
+  assert.match(page, new RegExp(`\\b${OVERLAY_BOARD_PORTRAIT_WIDTH}\\b`));
+  assert.match(page, new RegExp(`\\b${OVERLAY_BOARD_PORTRAIT_HEIGHT}\\b`));
+  for (const orientation of ['landscape', 'portrait'] as const) {
+    for (const kind of OVERLAY_BOARD_WIDGET_KINDS) {
+      const rect = overlayBoardTemplateRect(kind, orientation);
+      assert.match(
+        editor,
+        new RegExp(`x: ${rect.x}, y: ${rect.y}, width: ${rect.width}, height: ${rect.height}`),
+      );
+    }
+  }
 });
 
 test('ファンレベ色・境目は UI ミラーと一致する', () => {

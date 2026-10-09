@@ -7,6 +7,13 @@ body {
   overflow: hidden;
   background: transparent;
   color-scheme: dark;
+}
+
+html[data-embed="1"],
+html[data-embed="1"] body {
+  background: transparent;
+  color-scheme: normal;
+}
   font-family: "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif;
 }
 

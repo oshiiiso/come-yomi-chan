@@ -138,6 +138,7 @@ const SCALAR_KEYS = {
     'overlayNameColorEnabled',
     'overlayNameColors',
     'templateAccentColors',
+    'overlayBoards',
   ],
   tts: [
     'ttsEngineId',

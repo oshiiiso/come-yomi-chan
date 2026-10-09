@@ -59,6 +59,21 @@ test('ランキングの同一判定', () => {
   assert.equal(sameRanking(a, [{ ...a[0], avatarUrl: '/a.png' }]), false);
   assert.equal(sameRanking(null, []), false);
   assert.equal(sameRanking(null, null), true);
+  assert.equal(sameRanking(a, [{ ...a[0], likes: 10, diamonds: 0 }]), false);
+  assert.equal(
+    sameRanking(
+      [{ ...a[0], likes: 10, diamonds: 4 }],
+      [{ ...a[0], likes: 10, diamonds: 9 }],
+    ),
+    false,
+  );
+  assert.equal(
+    sameRanking(
+      [{ ...a[0], likes: 10, diamonds: 4 }],
+      [{ ...a[0], likes: 10, diamonds: 4 }],
+    ),
+    true,
+  );
 });
 
 test('ランキング数は千の位ごとにシングルクォート区切り', () => {

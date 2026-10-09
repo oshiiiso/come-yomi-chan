@@ -25,6 +25,7 @@ import type { ConfigProfile } from './config-profiles';
 import type { SpeechReplaceEntry } from './speech-replace-map';
 import type { CommentEmote } from './comment-emotes';
 import type { MainWindowBounds } from './window-bounds';
+import type { OverlayBoard } from './overlay-board';
 
 export type LiveConnectionState =
   | 'disconnected'
@@ -233,6 +234,8 @@ export interface AppConfig {
   memberDisplayTemplate: string;
   memberSpeechTemplate: string;
   events: EventToggleMap;
+  /** 横画面・縦画面の配信ソース。未保存は横1枚と縦1枚。空配列は0枚。 */
+  overlayBoards: OverlayBoard[];
   cachedTestGifts: CatalogGift[];
 }
 

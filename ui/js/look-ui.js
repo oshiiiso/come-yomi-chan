@@ -465,7 +465,10 @@ let lookPreviewSampleGen = 0;
 
 function activeLookSection() {
   const name = document.querySelector('[data-look-section-btn].is-active')?.dataset.lookSectionBtn;
-  return name === 'ranking' || name === 'alerts' ? name : 'comment';
+  if (name === 'ranking' || name === 'alerts' || name === 'board') {
+    return name;
+  }
+  return 'comment';
 }
 
 async function pushLookPreview() {
@@ -476,11 +479,14 @@ async function pushLookPreview() {
       // 配信ソースへ届かなくても、この窓のプレビューは続ける
     }
   }
+  const section = activeLookSection();
+  if (section === 'board') {
+    return;
+  }
   const frame = $('overlay-preview');
   if (!frame?.contentWindow) {
     return;
   }
-  const section = activeLookSection();
   if (section === 'ranking') {
     const motion =
       typeof collectRankingMotionConfig === 'function' ? collectRankingMotionConfig() : {};
@@ -551,6 +557,10 @@ async function pushLookPreview() {
     templateAccentColors:
       typeof collectTemplateAccentColors === 'function' ? collectTemplateAccentColors() : undefined,
     customCss: $('overlay-css')?.value ?? '',
+    chatMaxRows: Number($('chat-max-rows')?.value),
+    chatDisplayMs: $('chat-display-unlimited')?.checked
+      ? 0
+      : Math.round(Number($('chat-display-sec')?.value) * 1000),
   }, '*');
   // 各タブの表示テンプレ・差し込み色でサンプル文言を作る
   if (typeof window.liveTts?.getOverlaySamplePlan !== 'function' || typeof collectConfig !== 'function') {
@@ -613,8 +623,11 @@ function unloadPreviewFrame() {
 
 function syncSettingsPreview() {
   const workspace = document.querySelector('.view-settings .workspace');
-  const show = appMode === 'settings' && activeTabName() === 'look';
+  const onLook = appMode === 'settings' && activeTabName() === 'look';
+  const board = onLook && activeLookSection() === 'board';
+  const show = onLook && !board;
   workspace?.classList.toggle('is-preview-hidden', !show);
+  workspace?.classList.toggle('is-board-editor', board);
   if (show) {
     refreshPreviewFrame();
     applyPreviewZoom();

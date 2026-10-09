@@ -6,6 +6,7 @@ import { APP_CONFIG } from '../shared/app-config';
 import { getErrorMessage } from '../shared/error-utils';
 import { getLogger } from '../shared/logging-config';
 import type { OverlaySamplePlan } from '../app/overlay-sample-plan';
+import type { OverlayBoard } from '../shared/overlay-board';
 import { OverlayLook, DEFAULT_OVERLAY_LOOK, overlayFontCss } from '../shared/overlay-look';
 import { DEFAULT_OVERLAY_PIN, OverlayPinOptions } from '../shared/overlay-pin';
 import { OverlayPayload } from '../shared/types';
@@ -48,7 +49,7 @@ import {
 
 const logger = getLogger('overlay-server');
 
-export type OverlayClientRole = 'chat' | 'alerts' | 'ranking';
+export type OverlayClientRole = 'chat' | 'alerts' | 'ranking' | 'board';
 
 export function isPreviewOverlayRequest(rawUrl: string | undefined): boolean {
   if (!rawUrl) {
@@ -59,6 +60,19 @@ export function isPreviewOverlayRequest(rawUrl: string | undefined): boolean {
     return url.searchParams.get('preview') === '1';
   } catch {
     return false;
+  }
+}
+
+export function overlayBoardIdFromUrl(rawUrl: string | undefined): string {
+  if (!rawUrl) {
+    return '';
+  }
+  try {
+    const url = new URL(rawUrl, 'http://overlay.local');
+    const id = url.searchParams.get('board') ?? '';
+    return /^[a-zA-Z0-9_-]{1,40}$/.test(id) ? id : '';
+  } catch {
+    return '';
   }
 }
 
@@ -75,6 +89,9 @@ export function overlayClientRoleFromUrl(rawUrl: string | undefined): OverlayCli
     // 旧 likes ロールもランキングとして扱う
     if (role === 'ranking' || role === 'likes') {
       return 'ranking';
+    }
+    if (role === 'board') {
+      return 'board';
     }
     return 'chat';
   } catch {
@@ -124,8 +141,12 @@ export class OverlayServer {
   private readonly giftImages = new GiftImageCache();
   private readonly previewClients = new WeakSet<WebSocket>();
   private readonly clientRoles = new WeakMap<WebSocket, OverlayClientRole>();
+  private readonly clientBoardIds = new WeakMap<WebSocket, string>();
+  private lastBoards: OverlayBoard[] = [];
   private readonly maxAudioEntries = 40;
   private clientChangeHandler: (() => void) | null = null;
+  /** 表示を消すまで、新しく繋がった配信ソースへ出し直すサンプル */
+  private readonly latchedSamples = new Map<'chat' | 'alerts', Record<string, unknown>>();
   private lastRanking: OverlayRankingPayload = {
     entries: [],
     max: DEFAULT_OVERLAY_LIKE_RANKING_MAX,
@@ -274,6 +295,29 @@ export class OverlayServer {
     );
   }
 
+  setBoards(boards: OverlayBoard[]): void {
+    this.lastBoards = boards;
+    this.broadcastBoards();
+  }
+
+  broadcastBoards(): void {
+    this.wss?.clients.forEach((client) => {
+      if (client.readyState !== WebSocket.OPEN) {
+        return;
+      }
+      if (this.clientRoles.get(client) !== 'board') {
+        return;
+      }
+      const boardId = this.clientBoardIds.get(client) ?? '';
+      const board = this.lastBoards.find((item) => item.id === boardId) ?? null;
+      try {
+        client.send(JSON.stringify({ kind: 'board', board }));
+      } catch (error) {
+        logger.warning(`配置の送信に失敗しました: ${getErrorMessage(error)}`);
+      }
+    });
+  }
+
   broadcastRanking(payload: OverlayRankingPayload): void {
     const entries = Array.isArray(payload.entries)
       ? payload.entries.map((entry) => {
@@ -286,15 +330,22 @@ export class OverlayServer {
             typeof raw.count === 'number' && Number.isFinite(raw.count)
               ? Math.max(0, Math.trunc(raw.count))
               : legacyCount;
-          return {
+          const next: RankEntry = {
             uniqueId: typeof raw.uniqueId === 'string' ? raw.uniqueId : '',
             nickname: typeof raw.nickname === 'string' ? raw.nickname : '',
             count,
             avatarUrl: typeof raw.avatarUrl === 'string' ? raw.avatarUrl : '',
           };
+          if (typeof raw.likes === 'number' && Number.isFinite(raw.likes)) {
+            next.likes = Math.max(0, Math.trunc(raw.likes));
+          }
+          if (typeof raw.diamonds === 'number' && Number.isFinite(raw.diamonds)) {
+            next.diamonds = Math.max(0, Math.trunc(raw.diamonds));
+          }
+          return next;
         })
       : [];
-    this.lastRanking = {
+    const nextRanking: OverlayRankingPayload = {
       entries,
       max:
         typeof payload.max === 'number' && Number.isFinite(payload.max)
@@ -303,6 +354,16 @@ export class OverlayServer {
       enabled: payload.enabled !== false,
       mode: normalizeOverlayRankingMode(payload.mode),
     };
+    if (payload.likeSyncMode === 'live' || payload.likeSyncMode === 'poll') {
+      nextRanking.likeSyncMode = payload.likeSyncMode;
+    }
+    if (typeof payload.likePollSec === 'number' && Number.isFinite(payload.likePollSec)) {
+      nextRanking.likePollSec = Math.trunc(payload.likePollSec);
+    }
+    if (payload.previewMotion === true) {
+      nextRanking.previewMotion = true;
+    }
+    this.lastRanking = nextRanking;
     this.sendAll(
       {
         kind: 'ranking',
@@ -342,35 +403,42 @@ export class OverlayServer {
     if (roles.length === 0) {
       return;
     }
+    for (const role of roles) {
+      if (role === 'chat' || role === 'alerts') {
+        this.latchedSamples.delete(role);
+      }
+    }
     // 見た目プレビューのサンプル周回は消さない
     this.sendAll({ kind: 'clear' }, { excludePreview: true, roles });
+  }
+
+  hasLatchedSample(role: 'chat' | 'alerts'): boolean {
+    return this.latchedSamples.has(role);
   }
 
   showSampleDisplay(plan: OverlaySamplePlan): void {
     this.warnIfNoClients();
     const { kind: _kind, ...settings } = this.settingsPayload();
-    this.sendAll(
-      {
-        kind: 'sample-display',
-        ...settings,
-        chatSamples: plan.chatSamples,
-        pinSamples: plan.pinSamples,
-      },
-      { excludePreview: true, roles: ['chat'] },
-    );
+    const message = {
+      kind: 'sample-display',
+      ...settings,
+      chatSamples: plan.chatSamples,
+      pinSamples: plan.pinSamples,
+    };
+    this.latchedSamples.set('chat', message);
+    this.sendAll(message, { excludePreview: true, roles: ['chat'] });
   }
 
   /** アラート配信ソースだけを、プレビューと同じサンプルで周回させる */
   showAlertSampleDisplay(samples: OverlaySamplePlan['alertSamples']): void {
     const { kind: _kind, ...settings } = this.settingsPayload();
-    this.sendAll(
-      {
-        kind: 'sample-display',
-        ...settings,
-        alertSamples: samples,
-      },
-      { excludePreview: true, roles: ['alerts'] },
-    );
+    const message = {
+      kind: 'sample-display',
+      ...settings,
+      alertSamples: samples,
+    };
+    this.latchedSamples.set('alerts', message);
+    this.sendAll(message, { excludePreview: true, roles: ['alerts'] });
   }
 
   clearPin(): void {
@@ -429,7 +497,12 @@ export class OverlayServer {
   }
 
   private broadcastSettings(): void {
-    this.sendAll(this.settingsPayload());
+    const settings = this.settingsPayload();
+    this.sendAll(settings);
+    const { kind: _kind, ...rest } = settings;
+    for (const latched of this.latchedSamples.values()) {
+      Object.assign(latched, rest);
+    }
   }
 
   private settingsPayload(): Record<string, unknown> {
@@ -510,6 +583,11 @@ export class OverlayServer {
     }
     try {
       socket.send(JSON.stringify(this.settingsPayload()));
+      if (this.clientRoles.get(socket) === 'board') {
+        const boardId = this.clientBoardIds.get(socket) ?? '';
+        const board = this.lastBoards.find((item) => item.id === boardId) ?? null;
+        socket.send(JSON.stringify({ kind: 'board', board }));
+      }
       if (this.clientRoles.get(socket) === 'ranking') {
         socket.send(
           JSON.stringify({
@@ -517,6 +595,11 @@ export class OverlayServer {
             payload: this.lastRanking,
           }),
         );
+      }
+      const role = this.clientRoles.get(socket);
+      const latched = role === 'chat' || role === 'alerts' ? this.latchedSamples.get(role) : undefined;
+      if (latched && !this.previewClients.has(socket)) {
+        socket.send(JSON.stringify(latched));
       }
     } catch (error) {
       logger.warning(`オーバーレイ初期通知に失敗しました: ${getErrorMessage(error)}`);
@@ -534,6 +617,10 @@ export class OverlayServer {
     const wss = new WebSocketServer({ server, path: '/overlay/ws' });
     wss.on('connection', (socket, req) => {
       this.clientRoles.set(socket, overlayClientRoleFromUrl(req.url));
+      const boardId = overlayBoardIdFromUrl(req.url);
+      if (boardId) {
+        this.clientBoardIds.set(socket, boardId);
+      }
       if (isPreviewOverlayRequest(req.url)) {
         this.previewClients.add(socket);
       }
@@ -644,6 +731,17 @@ export class OverlayServer {
       if (url.pathname === '/overlay/likes' || url.pathname === '/overlay/likes/') {
         res.writeHead(302, { Location: `/overlay/ranking/${url.search}` });
         res.end();
+        return;
+      }
+
+      const boardMatch = /^\/overlay\/board\/([a-zA-Z0-9_-]+)\/?$/.exec(url.pathname);
+      if (boardMatch) {
+        if (!url.pathname.endsWith('/')) {
+          res.writeHead(302, { Location: `/overlay/board/${boardMatch[1]}/${url.search}` });
+          res.end();
+          return;
+        }
+        this.serveFile(path.join(this.overlayDir, 'board.html'), res);
         return;
       }
 

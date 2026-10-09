@@ -7,13 +7,16 @@
     <script>
       (() => {
         const params = new URLSearchParams(location.search);
+        if (params.get('embed') === '1') {
+          document.documentElement.dataset.embed = '1';
+        }
         if (params.has('preview')) {
           document.documentElement.dataset.preview = '1';
           document.documentElement.dataset.backdrop = params.get('backdrop') || 'checker';
         }
       })();
     </script>
-    <link rel="stylesheet" href="/overlay/overlay.css?v=row9" />
+    <link rel="stylesheet" href="/overlay/overlay.css?v=row10" />
     <style id="custom-css"></style>
   </head>
   <body>
@@ -22,6 +25,6 @@
       <ol id="chat" class="chat" aria-live="polite"></ol>
     </div>
     <script src="/overlay/name-colors.js?v=nc3"></script>
-    <script src="/overlay/overlay.js?v=row7"></script>
+    <script src="/overlay/overlay.js?v=row11"></script>
   </body>
 </html>

@@ -2,6 +2,21 @@
   const listEl = document.getElementById('likes-list');
   const rootEl = document.getElementById('likes-root');
   const isPreview = new URLSearchParams(location.search).has('preview');
+  const isEmbed = new URLSearchParams(location.search).get('embed') === '1';
+  if (isEmbed) {
+    document.documentElement.dataset.embed = '1';
+  }
+  let embedRankingMode = '';
+  let embedRankingMax = 0;
+  let embedRankingEnabled = true;
+  let embedLikeSyncMode = 'live';
+  let embedLikePollSec = 30;
+  let streamLikeSyncMode = 'live';
+  let streamLikePollSec = 30;
+  let pollHoldPayload = null;
+  let pollTimer = 0;
+  let pollAppliedAt = 0;
+  let lastRankingPayload = null;
   const DEFAULT_NAME_COLORS = window.OverlayNameColors?.DEFAULT_NAME_COLORS || [
     '#5eead4',
     '#93c5fd',
@@ -757,12 +772,87 @@
     reconcileRows(entries, { animate: false });
   }
 
+  function clearRankingPollWait() {
+    if (pollTimer) {
+      window.clearTimeout(pollTimer);
+      pollTimer = 0;
+    }
+    pollHoldPayload = null;
+  }
+
+  function rankingPollMs() {
+    const sec = isEmbed ? embedLikePollSec : streamLikePollSec;
+    const clamped = Number.isFinite(sec) ? Math.min(300, Math.max(1, Math.trunc(sec))) : 30;
+    return clamped * 1000;
+  }
+
+  function rankingUsesPoll() {
+    if (isPreview) {
+      return false;
+    }
+    if (isEmbed) {
+      return embedRankingMode !== 'diamonds' && embedLikeSyncMode === 'poll';
+    }
+    return rankingMode !== 'diamonds' && streamLikeSyncMode === 'poll';
+  }
+
+  function noteRankingSchedule(payload) {
+    if (isEmbed || !payload) {
+      return;
+    }
+    if (payload.mode === 'diamonds' || payload.mode === 'likes') {
+      rankingMode = payload.mode;
+    }
+    if (payload.likeSyncMode === 'poll' || payload.likeSyncMode === 'live') {
+      streamLikeSyncMode = payload.likeSyncMode;
+    }
+    const sec = Number(payload.likePollSec);
+    if (Number.isFinite(sec)) {
+      streamLikePollSec = Math.min(300, Math.max(1, Math.trunc(sec)));
+    }
+  }
+
+  function flushRankingPoll() {
+    pollTimer = 0;
+    if (!pollHoldPayload) {
+      return;
+    }
+    const payload = pollHoldPayload;
+    pollHoldPayload = null;
+    pollAppliedAt = Date.now();
+    applyRanking(payload);
+  }
+
+  function deliverRanking(payload) {
+    if (!payload || payload.previewMotion === true || !rankingUsesPoll()) {
+      clearRankingPollWait();
+      pollAppliedAt = Date.now();
+      applyRanking(payload);
+      return;
+    }
+    pollHoldPayload = payload;
+    const wait = pollAppliedAt === 0 ? 0 : rankingPollMs() - (Date.now() - pollAppliedAt);
+    if (wait <= 0) {
+      flushRankingPoll();
+      return;
+    }
+    if (!pollTimer) {
+      pollTimer = window.setTimeout(flushRankingPoll, wait);
+    }
+  }
+
   function applyRanking(payload) {
     if (!payload || typeof payload !== 'object') {
       return;
     }
-    enabled = payload.enabled !== false;
-    rankingMode = payload.mode === 'diamonds' ? 'diamonds' : 'likes';
+    lastRankingPayload = payload;
+    const useEmbed = isEmbed && (embedRankingMode === 'likes' || embedRankingMode === 'diamonds');
+    enabled = useEmbed ? embedRankingEnabled : payload.enabled !== false;
+    rankingMode = useEmbed
+      ? embedRankingMode
+      : payload.mode === 'diamonds'
+        ? 'diamonds'
+        : 'likes';
     const raw = Array.isArray(payload.entries) ? payload.entries : [];
     entries = raw
       .map((item) => {
@@ -774,14 +864,36 @@
           typeof item?.likeCount === 'number' && Number.isFinite(item.likeCount)
             ? Math.max(0, Math.trunc(item.likeCount))
             : 0;
+        const likes =
+          typeof item?.likes === 'number' && Number.isFinite(item.likes)
+            ? Math.max(0, Math.trunc(item.likes))
+            : null;
+        const diamonds =
+          typeof item?.diamonds === 'number' && Number.isFinite(item.diamonds)
+            ? Math.max(0, Math.trunc(item.diamonds))
+            : null;
+        const count = useEmbed
+          ? (rankingMode === 'diamonds' ? diamonds : likes) ?? fromCount ?? fromLegacy
+          : fromCount ?? fromLegacy;
         return {
           uniqueId: typeof item?.uniqueId === 'string' ? item.uniqueId : '',
           nickname: typeof item?.nickname === 'string' ? item.nickname : '',
-          count: fromCount ?? fromLegacy,
+          count,
           avatarUrl: typeof item?.avatarUrl === 'string' ? item.avatarUrl.trim() : '',
         };
       })
       .filter((item) => item.count > 0 && (item.uniqueId || item.nickname));
+    if (useEmbed) {
+      entries.sort(
+        (left, right) => right.count - left.count || left.uniqueId.localeCompare(right.uniqueId),
+      );
+    }
+    const capSource = useEmbed && embedRankingMax > 0 ? embedRankingMax : payload.max;
+    const cap =
+      typeof capSource === 'number' && Number.isFinite(capSource)
+        ? Math.min(10, Math.max(1, Math.trunc(capSource)))
+        : entries.length;
+    entries = entries.slice(0, cap);
     reconcileRows(entries, { animate: true });
   }
 
@@ -796,6 +908,9 @@
       return;
     }
     if (message.kind === 'hello') {
+      if (isEmbed) {
+        return;
+      }
       let lookChanged = applyNameColorSettings(message);
       if (message.likesLook && applyLikesLook(message.likesLook)) {
         lookChanged = true;
@@ -820,7 +935,8 @@
       if (isPreview) {
         return;
       }
-      applyRanking(message.payload);
+      noteRankingSchedule(message.payload);
+      deliverRanking(message.payload);
     }
   }
 
@@ -923,7 +1039,7 @@
   }
 
   window.addEventListener('message', (event) => {
-    if (!isPreview) {
+    if (!isPreview && !isEmbed) {
       return;
     }
     const message = event.data;
@@ -931,6 +1047,25 @@
       return;
     }
     try {
+      if (isEmbed) {
+        if (message.look) {
+          applyLikesLook(message.look);
+        }
+        applyRankingMotionSettings(message);
+        applyNameColorSettings(message);
+        embedRankingMode = message.mode === 'diamonds' ? 'diamonds' : 'likes';
+        const nextMax = Number(message.max);
+        embedRankingMax = Number.isFinite(nextMax) ? Math.min(10, Math.max(1, Math.trunc(nextMax))) : 5;
+        embedRankingEnabled = message.enabled !== false;
+        embedLikeSyncMode = message.likeSyncMode === 'poll' ? 'poll' : 'live';
+        const nextPoll = Number(message.likePollSec);
+        embedLikePollSec = Number.isFinite(nextPoll) ? Math.min(300, Math.max(1, Math.trunc(nextPoll))) : 30;
+        paintLook();
+        if (lastRankingPayload) {
+          deliverRanking(lastRankingPayload);
+        }
+        return;
+      }
       applyPreviewLook(message);
     } catch (error) {
       const detail = error instanceof Error ? error.message : String(error);

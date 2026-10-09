@@ -82,7 +82,7 @@ function activateEventSection(name) {
 
 function activateLookSection(name) {
   clearOkToast();
-  const allowed = ['comment', 'ranking', 'alerts'];
+  const allowed = ['comment', 'ranking', 'alerts', 'board'];
   const current = allowed.includes(name) ? name : 'comment';
   for (const button of document.querySelectorAll('[data-look-section-btn]')) {
     const on = button.dataset.lookSectionBtn === current;
@@ -93,11 +93,16 @@ function activateLookSection(name) {
   for (const panel of document.querySelectorAll('[data-look-section]')) {
     panel.hidden = panel.dataset.lookSection !== current;
   }
-  const kind = current === 'ranking' ? 'ranking' : current === 'alerts' ? 'alerts' : 'chat';
-  if (typeof setOverlayUrlKind === 'function') {
-    setOverlayUrlKind(kind);
+  document.getElementById('panel-look')?.classList.toggle('is-board-mode', current === 'board');
+  if (current !== 'board') {
+    const kind = current === 'ranking' ? 'ranking' : current === 'alerts' ? 'alerts' : 'chat';
+    if (typeof setOverlayUrlKind === 'function') {
+      setOverlayUrlKind(kind);
+    }
   }
-  if (typeof refreshPreviewFrame === 'function') {
+  if (typeof syncSettingsPreview === 'function') {
+    syncSettingsPreview();
+  } else if (typeof refreshPreviewFrame === 'function') {
     refreshPreviewFrame();
   }
 }
