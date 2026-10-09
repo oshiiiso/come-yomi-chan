@@ -460,7 +460,10 @@
         }
         await showOne(next, generation);
       }
-    } finally {
+    }     finally {
+      if (sampleLoopActive() && isCurrentGeneration(generation) && queue.length === 0) {
+        enqueueNextLoopedSample();
+      }
       busy = false;
       if (queue.length > 0) {
         void pump();
@@ -504,13 +507,155 @@
       return;
     }
     if (message.kind === 'clear') {
+      // 配信ソースの周回だけ止める。プレビューの繰り返しは残す
+      if (!isPreview) {
+        streamSampleActive = false;
+        loopSamples = [];
+      }
       clearAll();
+      if (isPreview) {
+        enqueueNextLoopedSample();
+        void pump();
+      }
+      return;
+    }
+    if (message.kind === 'sample-display') {
+      if (isPreview) {
+        return;
+      }
+      applyStreamSamples(message);
       return;
     }
     if (message.kind === 'alert' && message.payload) {
+      if (isPreview || streamSampleActive) {
+        return;
+      }
       pushAlert(message.payload);
     }
   }
+
+  const FALLBACK_ALERT_SAMPLES = [
+    {
+      type: 'gift',
+      displayText: 'テストユーザーさんがバラを贈りました',
+      displayParts: [],
+      imageUrl: '/overlay/alert-templates/gift.gif',
+      displayMs: DEFAULT_DISPLAY_MS,
+      user: { nickname: 'テストユーザー', uniqueId: 'preview_gift' },
+      nameColor: null,
+    },
+    {
+      type: 'follow',
+      displayText: 'あさんがフォローしました',
+      displayParts: [],
+      imageUrl: '/overlay/alert-templates/follow.gif',
+      displayMs: DEFAULT_DISPLAY_MS,
+      user: { nickname: 'あ', uniqueId: 'preview_follow' },
+      nameColor: null,
+    },
+  ];
+  let streamSampleActive = false;
+  let loopSamples = isPreview ? FALLBACK_ALERT_SAMPLES.map((sample) => ({ ...sample })) : [];
+  let loopIndex = 0;
+
+  function sampleLoopActive() {
+    return isPreview || streamSampleActive;
+  }
+
+  function usableAlertSamples(list) {
+    if (!Array.isArray(list)) {
+      return [];
+    }
+    return list.filter(
+      (sample) =>
+        sample &&
+        typeof sample === 'object' &&
+        typeof sample.imageUrl === 'string' &&
+        sample.imageUrl &&
+        typeof sample.displayText === 'string' &&
+        sample.displayText.trim(),
+    );
+  }
+
+  function previewSampleKey(list) {
+    return JSON.stringify(
+      list.map((sample) => [
+        sample.type,
+        sample.displayText,
+        sample.imageUrl,
+        sample.displayMs,
+        sample.displayParts,
+      ]),
+    );
+  }
+
+  function enqueueNextLoopedSample() {
+    if (!sampleLoopActive() || loopSamples.length === 0) {
+      return;
+    }
+    const sample = loopSamples[loopIndex % loopSamples.length];
+    loopIndex += 1;
+    pushAlert(sample);
+  }
+
+  function restartSampleLoop(samples) {
+    loopSamples = samples;
+    loopIndex = 0;
+    clearAll();
+    enqueueNextLoopedSample();
+    void pump();
+  }
+
+  function applyStreamSamples(message) {
+    applyHello(message);
+    const next = usableAlertSamples(message.alertSamples);
+    if (next.length === 0) {
+      streamSampleActive = false;
+      loopSamples = [];
+      clearAll();
+      return;
+    }
+    streamSampleActive = true;
+    restartSampleLoop(next);
+  }
+
+  function applyAlertPreview(message) {
+    if (typeof message.backdrop === 'string' && message.backdrop) {
+      document.documentElement.dataset.backdrop = message.backdrop;
+    }
+    const nameChanged = applyNameColorSettings(message);
+    const accentChanged = applyTemplateAccentSettings(message);
+    if (nameChanged) {
+      refreshColoredNames();
+    }
+    if (accentChanged) {
+      refreshAccentColors();
+    }
+    if (!Array.isArray(message.samples)) {
+      return;
+    }
+    const next = usableAlertSamples(message.samples);
+    if (next.length === 0 || previewSampleKey(next) === previewSampleKey(loopSamples)) {
+      return;
+    }
+    restartSampleLoop(next);
+  }
+
+  window.addEventListener('message', (event) => {
+    if (!isPreview) {
+      return;
+    }
+    const message = event.data;
+    if (!message || typeof message !== 'object' || message.kind !== 'alert-preview') {
+      return;
+    }
+    try {
+      applyAlertPreview(message);
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error);
+      console.warn(`アラートプレビューの更新に失敗しました: ${detail}`);
+    }
+  });
 
   function connect() {
     if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
@@ -535,4 +680,8 @@
 
   hideStage();
   connect();
+  if (isPreview) {
+    enqueueNextLoopedSample();
+    void pump();
+  }
 })();

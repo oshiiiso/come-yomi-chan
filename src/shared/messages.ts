@@ -145,9 +145,9 @@ export const MSG = {
     lookSectionsLabel: 'オーバーレイの区分',
     lookCommentSectionsLabel: 'コメントの区分',
     lookAlertsHint:
-      '画像・文言・表示秒はイベントタブです。ここは配信用の URL です。右のプレビューはアラート用の画面で、中身は「サンプルを出す」で確認します。',
+      '画像・文言・表示秒はイベントタブです。右のプレビューはサンプルを繰り返します。「サンプルを出す」で配信ソースも同じ繰り返しになり、「表示を消す」で配信ソースだけ止まります。',
     likesLookShowAvatarLabel: 'アイコン（アバター）を出す',
-    likesLookShowUnitLabel: '単位（likes／ダイヤ）を付ける',
+    likesLookShowUnitLabel: 'アイコン（ハート／ダイヤ）を付ける',
     likesLookPresetStandard: '標準',
     likesLookPresetLuxury: '豪華',
     likesLookPresetCompact: 'コンパクト',

@@ -193,7 +193,7 @@ html[data-preview="1"] .likes-root {
 
 .likes-count-wrap {
   display: inline-flex;
-  align-items: baseline;
+  align-items: center;
   gap: 0.28em;
   min-width: 0;
 }
@@ -204,11 +204,28 @@ html[data-preview="1"] .likes-root {
 }
 
 .likes-unit {
-  font-size: 0.55em;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  opacity: 0.72;
-  text-transform: lowercase;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 0.9em;
+  height: 0.9em;
+  flex: none;
+  opacity: 0.9;
+}
+
+.likes-unit svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+
+.likes-unit[data-mode='likes'] {
+  color: #ff4d6a;
+}
+
+.likes-unit[data-mode='diamonds'] {
+  color: #7ad7ff;
 }
 
 .likes-list--hide-unit .likes-unit {
@@ -235,11 +252,6 @@ html[data-preview="1"] .likes-root {
 .likes-row--1 .likes-count {
   color: #ffe7a8;
   opacity: 1;
-}
-
-.likes-row--1 .likes-unit {
-  color: #f6d98a;
-  opacity: 0.85;
 }
 
 .likes-row--2 {
@@ -345,8 +357,7 @@ html[data-preview="1"] .likes-root {
     0 0 18px hsl(var(--likes-neon-hue) 90% 55% / 0.35);
 }
 
-.likes-list--neon .likes-row--1 .likes-count,
-.likes-list--neon .likes-row--1 .likes-unit {
+.likes-list--neon .likes-row--1 .likes-count {
   color: hsl(var(--likes-neon-hue) 90% 80%);
 }
 
@@ -382,6 +393,36 @@ html[data-preview="1"] .likes-root {
 
 .likes-list--minimal .likes-row--1 .likes-count {
   color: #ffe08a;
+}
+
+/* 1〜3位の単位アイコンだけ、順位に応じて少し豪華にする */
+.likes-row--3 .likes-unit {
+  width: 1em;
+  height: 1em;
+  opacity: 1;
+  filter: drop-shadow(0 0 2px currentColor);
+}
+
+.likes-row--2 .likes-unit {
+  width: 1.08em;
+  height: 1.08em;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px currentColor);
+}
+
+.likes-row--1 .likes-unit {
+  width: 1.2em;
+  height: 1.2em;
+  opacity: 1;
+  filter: drop-shadow(0 0 3px currentColor) drop-shadow(0 0 8px currentColor);
+}
+
+.likes-row--1 .likes-unit[data-mode='likes'] {
+  color: #ff6d84;
+}
+
+.likes-row--1 .likes-unit[data-mode='diamonds'] {
+  color: #9ae6ff;
 }
 
 /* 入れ替わりアニメ */

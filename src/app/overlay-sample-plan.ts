@@ -33,6 +33,7 @@ import { EMPTY_USER_LIVE_BADGES } from '../tiktok/user-badges';
 export interface OverlaySamplePlan {
   chatSamples: OverlayPayload[];
   pinSamples: OverlayPayload[];
+  alertSamples: OverlayAlertSample[];
 }
 
 export interface OverlayAlertSample {
@@ -320,7 +321,11 @@ export function buildOverlaySamplePlan(
     }
   }
 
-  return { chatSamples, pinSamples };
+  return {
+    chatSamples,
+    pinSamples,
+    alertSamples: buildAlertSamplePlan(config, catalogGift),
+  };
 }
 
 /** イベントアラート用サンプル（同梱テンプレ画像で必ず出す） */

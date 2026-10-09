@@ -98,6 +98,14 @@ test('アラートサンプルは同梱テンプレ画像付きで数件返す',
   const gift = samples.find((row) => row.type === 'gift');
   assert.equal(gift?.imageUrl, '/overlay/gift-rose.svg');
   assert.ok(samples.some((row) => row.type === 'follow' && row.imageUrl.includes('follow.gif')));
+  const plan = buildOverlaySamplePlan(DEFAULT_CONFIG, {
+    id: 'rose',
+    name: 'バラ',
+    imageUrl: '/overlay/gift-rose.svg',
+    diamondCount: 1,
+  });
+  assert.ok(plan.alertSamples.length >= 2);
+  assert.equal(plan.alertSamples.find((row) => row.type === 'gift')?.imageUrl, '/overlay/gift-rose.svg');
   const names = samples.map((row) => row.user.nickname);
   assert.ok(names.some((name) => name.length === 1));
   assert.ok(names.some((name) => name.length >= 20));

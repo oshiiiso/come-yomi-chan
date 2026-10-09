@@ -774,32 +774,9 @@ export class SessionManager extends EventEmitter {
     this.syncOverlayOptions(config);
     const safeKind = normalizeOverlayUrlKind(kind);
     if (safeKind === 'alerts') {
-      this.overlay.clearRoles(['alerts']);
-      for (const sample of buildAlertSamplePlan(config, this.pickTestGift(undefined))) {
-        const displayParts: AlertDisplayPart[] = (sample.displayParts || []).map((part) => {
-          if (part.kind === 'accent') {
-            return {
-              kind: 'accent',
-              value: part.value,
-              color: part.color || '',
-              ...(typeof part.token === 'string' && part.token ? { token: part.token } : {}),
-            };
-          }
-          if (part.kind === 'name') {
-            return { kind: 'name', value: part.value, color: part.color || '' };
-          }
-          return { kind: 'text', value: part.value };
-        });
-        this.overlay.broadcastAlert({
-          type: sample.type,
-          displayText: sample.displayText,
-          displayParts,
-          imageUrl: sample.imageUrl,
-          displayMs: sample.displayMs,
-          user: sample.user,
-          nameColor: sample.nameColor,
-        });
-      }
+      this.overlay.showAlertSampleDisplay(
+        buildAlertSamplePlan(config, this.pickTestGift(undefined)),
+      );
       return;
     }
     if (safeKind === 'ranking') {

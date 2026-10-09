@@ -360,6 +360,19 @@ export class OverlayServer {
     );
   }
 
+  /** アラート配信ソースだけを、プレビューと同じサンプルで周回させる */
+  showAlertSampleDisplay(samples: OverlaySamplePlan['alertSamples']): void {
+    const { kind: _kind, ...settings } = this.settingsPayload();
+    this.sendAll(
+      {
+        kind: 'sample-display',
+        ...settings,
+        alertSamples: samples,
+      },
+      { excludePreview: true, roles: ['alerts'] },
+    );
+  }
+
   clearPin(): void {
     this.sendAll(
       { kind: 'pin-control', action: 'clear' },

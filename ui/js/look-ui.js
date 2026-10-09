@@ -502,6 +502,40 @@ async function pushLookPreview() {
     return;
   }
   if (section === 'alerts') {
+    const nameSettings = currentNameColorSettings();
+    const postAlertPreview = (samples) => {
+      if (!frame.contentWindow) {
+        return;
+      }
+      frame.contentWindow.postMessage(
+        {
+          kind: 'alert-preview',
+          backdrop: $('look-backdrop')?.value || 'checker',
+          nameColorEnabled: nameSettings.overlayNameColorEnabled,
+          nameColors: nameSettings.overlayNameColors,
+          templateAccentColors:
+            typeof collectTemplateAccentColors === 'function'
+              ? collectTemplateAccentColors()
+              : undefined,
+          ...(Array.isArray(samples) ? { samples } : {}),
+        },
+        '*',
+      );
+    };
+    postAlertPreview();
+    if (typeof window.liveTts?.getOverlaySamplePlan !== 'function' || typeof collectConfig !== 'function') {
+      return;
+    }
+    const gen = ++lookPreviewSampleGen;
+    try {
+      const result = await window.liveTts.getOverlaySamplePlan(collectConfig());
+      if (gen !== lookPreviewSampleGen || !result?.ok || !result.plan) {
+        return;
+      }
+      postAlertPreview(result.plan.alertSamples || []);
+    } catch (_error) {
+      // サンプル文言が取れなくても、プレビュー側の繰り返しは続ける
+    }
     return;
   }
   const nameSettings = currentNameColorSettings();

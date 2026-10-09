@@ -51,8 +51,30 @@
     }
   }
 
-  function unitLabelForMode(mode) {
-    return mode === 'diamonds' ? 'ダイヤ' : 'likes';
+  const RANKING_HEART_PATH =
+    'M12 20.6s-6.8-4.3-9.2-8.2C1.1 9.6 2.2 6.2 5.5 5.5c2-.4 3.7.4 4.8 2L12 9.4l1.7-1.9c1.1-1.6 2.8-2.4 4.8-2 3.3.7 4.4 4.1 2.7 6.9-2.4 3.9-9.2 8.2-9.2 8.2z';
+  const RANKING_DIAMOND_PATH = 'M12 2.2 21.2 12 12 21.8 2.8 12 12 2.2z';
+
+  function rankingUnitSvg(mode) {
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.setAttribute('viewBox', '0 0 24 24');
+    svg.setAttribute('aria-hidden', 'true');
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', mode === 'diamonds' ? RANKING_DIAMOND_PATH : RANKING_HEART_PATH);
+    svg.append(path);
+    return svg;
+  }
+
+  function paintRankingUnit(unit, mode) {
+    const next = mode === 'diamonds' ? 'diamonds' : 'likes';
+    unit.className = 'likes-unit';
+    unit.setAttribute('role', 'img');
+    unit.setAttribute('aria-label', next === 'diamonds' ? 'ダイヤ' : 'いいね');
+    if (unit.dataset.mode === next && unit.querySelector('svg')) {
+      return;
+    }
+    unit.dataset.mode = next;
+    unit.replaceChildren(rankingUnitSvg(next));
   }
 
   // src/shared/like-ranking.ts の formatLikeCount と同じ
@@ -432,8 +454,7 @@
     countWrap.append(count);
     if (likesLook.showUnit) {
       const unit = document.createElement('span');
-      unit.className = 'likes-unit';
-      unit.textContent = unitLabelForMode(rankingMode);
+      paintRankingUnit(unit, rankingMode);
       countWrap.append(unit);
     }
 
@@ -492,10 +513,9 @@
     if (likesLook.showUnit) {
       if (!(unit instanceof HTMLElement)) {
         unit = document.createElement('span');
-        unit.className = 'likes-unit';
         count.parentElement?.append(unit);
       }
-      unit.textContent = unitLabelForMode(rankingMode);
+      paintRankingUnit(unit, rankingMode);
     } else if (unit) {
       unit.remove();
     }

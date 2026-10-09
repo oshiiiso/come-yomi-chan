@@ -443,7 +443,7 @@ test('配信ソースサンプルは WebSocket で sample-display を送る', as
   });
 
   await new Promise((resolve) => setTimeout(resolve, 50));
-  server.showSampleDisplay({ chatSamples: [], pinSamples: [] });
+  server.showSampleDisplay({ chatSamples: [], pinSamples: [], alertSamples: [] });
   await new Promise((resolve) => setTimeout(resolve, 50));
   socket.close();
 
@@ -458,6 +458,80 @@ test('配信ソースサンプルは WebSocket で sample-display を送る', as
   assert.equal(sample.hideUserName, false);
   assert.ok(Array.isArray(sample.chatSamples));
   assert.ok(Array.isArray(sample.pinSamples));
+});
+
+test('アラートの配信ソースサンプルはプレビューへ送らない', async () => {
+  const live = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws?role=alerts`);
+  const preview = new WebSocket(
+    `ws://127.0.0.1:${server.getPort()}/overlay/ws?role=alerts&preview=1`,
+  );
+  const chat = new WebSocket(`ws://127.0.0.1:${server.getPort()}/overlay/ws`);
+  const liveMessages: unknown[] = [];
+  const previewMessages: unknown[] = [];
+  const chatMessages: unknown[] = [];
+
+  await Promise.all(
+    [live, preview, chat].map(
+      (socket) =>
+        new Promise<void>((resolve, reject) => {
+          socket.once('open', () => resolve());
+          socket.once('error', reject);
+        }),
+    ),
+  );
+  live.on('message', (raw) => {
+    liveMessages.push(JSON.parse(String(raw)));
+  });
+  preview.on('message', (raw) => {
+    previewMessages.push(JSON.parse(String(raw)));
+  });
+  chat.on('message', (raw) => {
+    chatMessages.push(JSON.parse(String(raw)));
+  });
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  liveMessages.length = 0;
+  previewMessages.length = 0;
+  chatMessages.length = 0;
+
+  server.showAlertSampleDisplay([
+    {
+      type: 'gift',
+      displayText: 'テストユーザーさんがバラを贈りました',
+      displayParts: [{ kind: 'text', value: 'テストユーザーさんがバラを贈りました' }],
+      imageUrl: '/overlay/gift-rose.svg',
+      displayMs: 4000,
+      user: samplePayload('テスト').user,
+      nameColor: null,
+    },
+  ]);
+  await new Promise((resolve) => setTimeout(resolve, 50));
+  live.close();
+  preview.close();
+  chat.close();
+
+  const sample = liveMessages.find(
+    (item) =>
+      typeof item === 'object' &&
+      item !== null &&
+      'kind' in item &&
+      item.kind === 'sample-display',
+  ) as { alertSamples?: Array<{ displayText?: string }> } | undefined;
+  assert.ok(sample);
+  assert.equal(sample.alertSamples?.[0]?.displayText, 'テストユーザーさんがバラを贈りました');
+  assert.equal(
+    previewMessages.some(
+      (item) =>
+        typeof item === 'object' && item !== null && 'kind' in item && item.kind === 'sample-display',
+    ),
+    false,
+  );
+  assert.equal(
+    chatMessages.some(
+      (item) =>
+        typeof item === 'object' && item !== null && 'kind' in item && item.kind === 'sample-display',
+    ),
+    false,
+  );
 });
 
 test('固定枠クリアは WebSocket で合図を送る', async () => {
