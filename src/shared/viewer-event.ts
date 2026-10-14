@@ -1,5 +1,5 @@
 import type { CommentEmote } from './comment-emotes';
-import { OverlayEventType, OverlayUser } from './types';
+import { OverlayDisplayPart, OverlayEventType, OverlayUser } from './types';
 
 export type ViewerStatusKind = 'connected' | 'disconnected';
 
@@ -51,6 +51,8 @@ export interface ViewerEvent {
   type: OverlayEventType;
   user: OverlayUser;
   displayText: string;
+  /** ギフト名やイベント名。コメント画面ではここだけ太字にする */
+  displayParts?: OverlayDisplayPart[];
   comment: string;
   commentEmotes: CommentEmote[];
   giftImageUrl: string;

@@ -46,7 +46,6 @@ import { finalizeCatalogGifts, dedupeAndSortCatalogGifts } from '../shared/perma
 import { japaneseNameForGift } from '../shared/permanent-gift-names';
 import {
   clipText,
-  renderDisplayTemplate,
   renderOverlayDisplay,
   renderSpeechParts,
   varsFromEvent,
@@ -76,7 +75,9 @@ import {
   normalizeGiftChimeVolume,
   resolveGiftChimeVolume,
   resolveGiftChimeBandSound,
+  enableIncomingGiftSpeak,
   resolveGiftChimeSound,
+  shouldAcceptGiftChime,
   shouldPlayGiftChime,
   shouldSpeakGiftById,
 } from '../shared/gift-notify';
@@ -118,12 +119,12 @@ import {
   normalizeOverlayRankingLikePollSec,
   normalizeOverlayRankingLikeSyncMode,
   normalizeOverlayRankingMode,
+  overlayRankingBroadcastPlan,
   sameRanking,
   type OverlayRankingLikeSyncMode,
   type OverlayRankingMode,
   type RankEntry,
 } from '../shared/like-ranking';
-import { overlayRankingBroadcastPlan } from '../shared/overlay-board';
 import { overlayRankingMotionMs } from '../shared/overlay-ranking-motion';
 import { RepeatSpeechGuard, speechUserKey } from '../shared/speech-filters';
 import { SuperFanJoinDedupe, isSuperFanBoxEvent } from '../shared/super-fan-event';
@@ -181,6 +182,7 @@ export class SessionManager extends EventEmitter {
   private commentSoundAt = 0;
   private eventSoundAt: Partial<Record<string, number>> = {};
   private giftChimeAt = 0;
+  private giftChimeKey = '';
 
   constructor(
     private readonly configStore: ConfigStore,
@@ -736,7 +738,7 @@ export class SessionManager extends EventEmitter {
     return visible;
   }
 
-  private persistTestGifts(gifts: CatalogGift[]): void {
+  private persistTestGifts(gifts: CatalogGift[]): CatalogGift[] {
     const config = this.configStore.get();
     const preferIds = [
       ...Object.keys(config.giftSpeakByGiftId ?? {}),
@@ -747,9 +749,10 @@ export class SessionManager extends EventEmitter {
       dedupeAndSortCatalogGifts(gifts, { preferIds }),
     );
     if (next.length === 0) {
-      return;
+      return [];
     }
     this.configStore.save({ cachedTestGifts: next });
+    return next;
   }
 
   private pickTestGift(giftId?: string): CatalogGift | null {
@@ -817,7 +820,6 @@ export class SessionManager extends EventEmitter {
       config.overlayRankingMotion,
       config.overlayRankingMotionSpeed,
     );
-    this.overlay.setBoards(config.overlayBoards);
   }
 
   private clearRankingSampleLoopTimer(): void {
@@ -1285,9 +1287,6 @@ export class SessionManager extends EventEmitter {
     const mode = normalizeOverlayRankingMode(config.overlayRankingMode);
     const likeSync = normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode);
     const likePollSec = normalizeOverlayRankingLikePollSec(config.overlayRankingLikePollSec);
-    const boardNeedsRanking = config.overlayBoards.some((board) =>
-      board.widgets.some((widget) => widget.kind === 'ranking' && widget.visible),
-    );
     const likeRows = this.likeTracker.top(10);
     const diamondRows = this.diamondTracker.top(10);
     const merged = new Map<
@@ -1326,7 +1325,7 @@ export class SessionManager extends EventEmitter {
       }))
       .filter((row) => row.likes > 0 || row.diamonds > 0)
       .sort((left, right) => right.count - left.count || left.uniqueId.localeCompare(right.uniqueId));
-    const next = enabled || boardNeedsRanking ? ranked.slice(0, 10) : [];
+    const next = enabled ? ranked.slice(0, 10) : [];
     if (
       !force &&
       this.rankingEnabled === enabled &&
@@ -1508,6 +1507,8 @@ export class SessionManager extends EventEmitter {
       current.giftName &&
       !options.skipFilters
     ) {
+      const incomingId = current.giftId.trim();
+      const alreadyListed = this.watcher.listGifts().some((gift) => gift.id === incomingId);
       if (
         this.watcher.rememberGift({
           id: current.giftId,
@@ -1516,7 +1517,18 @@ export class SessionManager extends EventEmitter {
           diamondCount: Math.max(0, current.diamondCount || 0),
         })
       ) {
-        this.persistTestGifts(this.watcher.listGifts());
+        const saved = this.persistTestGifts(this.watcher.listGifts());
+        const speakByGiftId = enableIncomingGiftSpeak({
+          alreadyListed,
+          keptInCatalog: saved.some((gift) => gift.id === incomingId),
+          giftId: incomingId,
+          speakByGiftId: config.giftSpeakByGiftId,
+        });
+        if (speakByGiftId) {
+          this.configStore.save({ giftSpeakByGiftId: speakByGiftId });
+          config.giftSpeakByGiftId = speakByGiftId;
+        }
+        this.emit('config');
       }
     }
     if (
@@ -1699,8 +1711,17 @@ export class SessionManager extends EventEmitter {
           });
           if (chime.playApp || chime.playOverlay) {
             const now = Date.now();
-            if (now - this.giftChimeAt >= 300) {
+            const chimeKey = `${current.giftId}\n${current.user.uniqueId}\n${current.giftCount}`;
+            if (
+              shouldAcceptGiftChime({
+                now,
+                previousAt: this.giftChimeAt,
+                previousKey: this.giftChimeKey,
+                key: chimeKey,
+              })
+            ) {
               this.giftChimeAt = now;
+              this.giftChimeKey = chimeKey;
               const soundPath = this.soundFileHttpPath(sound);
               const soundUrl = soundPath ? await this.resolvePlayableSoundUrl(sound) : null;
               if (chime.playOverlay) {
@@ -1793,13 +1814,15 @@ export class SessionManager extends EventEmitter {
       !options.overlayOnly &&
       (options.viewerOnly || shouldShowInViewer(current.type, config.viewerDisplay))
     ) {
+      const viewerDisplay = renderOverlayDisplay(templates.display, vars, {
+        hideUserName: false,
+        maxChars: VIEWER_MAX_CHARS,
+      });
       const viewerEvent: ViewerEvent = {
         type: current.type,
         user,
-        displayText: renderDisplayTemplate(templates.display, vars, {
-          hideUserName: false,
-          maxChars: VIEWER_MAX_CHARS,
-        }),
+        displayText: viewerDisplay.displayText,
+        displayParts: current.type === 'comment' ? undefined : viewerDisplay.displayParts,
         comment: current.comment,
         commentEmotes,
         giftImageUrl,

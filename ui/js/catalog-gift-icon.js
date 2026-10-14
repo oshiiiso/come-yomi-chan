@@ -42,3 +42,30 @@ function createGiftImage(src, className) {
   img.src = url;
   return img;
 }
+
+/** コメント画面用。読めないときは同梱の gift.gif。No は出さない。 */
+const GIFT_ICON_FALLBACK_SRC = 'overlay/alert-templates/gift.gif';
+
+function createGiftImageWithFallback(src, className) {
+  const url = String(src || '').trim();
+  const classes = String(className || '').trim();
+  const img = document.createElement('img');
+  img.className = classes;
+  img.alt = '';
+  img.referrerPolicy = 'no-referrer';
+  img.decoding = 'async';
+  const useFallback = !url || url === GIFT_ICON_FALLBACK_SRC;
+  if (useFallback) {
+    img.dataset.giftFallback = '1';
+  }
+  img.addEventListener('error', () => {
+    if (img.dataset.giftFallback === '1') {
+      img.remove();
+      return;
+    }
+    img.dataset.giftFallback = '1';
+    img.src = GIFT_ICON_FALLBACK_SRC;
+  });
+  img.src = useFallback ? GIFT_ICON_FALLBACK_SRC : url;
+  return img;
+}

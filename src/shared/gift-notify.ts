@@ -144,6 +144,28 @@ export function shouldSpeakGiftById(
   return map[id] === true;
 }
 
+/**
+ * 配信で初めて一覧に残ったギフトだけチェックをオンにする。
+ * 個別の音ファイルは付けない（テンプレ音のまま）。
+ * 既に一覧にあるギフトのオン／オフは変えない。
+ */
+export function enableIncomingGiftSpeak(params: {
+  alreadyListed: boolean;
+  keptInCatalog: boolean;
+  giftId: string | undefined;
+  speakByGiftId: Record<string, boolean> | undefined;
+}): Record<string, boolean> | null {
+  const id = String(params.giftId || '').trim();
+  if (!id || params.alreadyListed || !params.keptInCatalog) {
+    return null;
+  }
+  const current = params.speakByGiftId ?? {};
+  if (current[id] === true) {
+    return null;
+  }
+  return { ...current, [id]: true };
+}
+
 export function resolveGiftChimeSound(
   giftId: string | undefined,
   byGiftId: Record<string, SoundRef> | undefined,
@@ -290,6 +312,28 @@ export function resolveGiftChimeBandSound(
     return normalizeGiftSoundRef(band.sound);
   }
   return { ...DEFAULT_GIFT_SOUND_REF };
+}
+
+/**
+ * 同じギフトの重複パケットだけ短時間で捨てる。
+ * 別ギフトは間隔が短くても鳴らす。
+ */
+export function shouldAcceptGiftChime(params: {
+  now: number;
+  previousAt: number;
+  previousKey: string;
+  key: string;
+  minGapMs?: number;
+}): boolean {
+  const gap = params.minGapMs ?? 300;
+  if (
+    params.key &&
+    params.key === params.previousKey &&
+    params.now - params.previousAt < gap
+  ) {
+    return false;
+  }
+  return true;
 }
 
 export function shouldPlayGiftChime(params: {

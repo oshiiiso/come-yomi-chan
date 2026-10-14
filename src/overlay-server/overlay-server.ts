@@ -6,7 +6,6 @@ import { APP_CONFIG } from '../shared/app-config';
 import { getErrorMessage } from '../shared/error-utils';
 import { getLogger } from '../shared/logging-config';
 import type { OverlaySamplePlan } from '../app/overlay-sample-plan';
-import type { OverlayBoard } from '../shared/overlay-board';
 import { OverlayLook, DEFAULT_OVERLAY_LOOK, overlayFontCss } from '../shared/overlay-look';
 import { DEFAULT_OVERLAY_PIN, OverlayPinOptions } from '../shared/overlay-pin';
 import { OverlayPayload } from '../shared/types';
@@ -49,7 +48,7 @@ import {
 
 const logger = getLogger('overlay-server');
 
-export type OverlayClientRole = 'chat' | 'alerts' | 'ranking' | 'board';
+export type OverlayClientRole = 'chat' | 'alerts' | 'ranking';
 
 export function isPreviewOverlayRequest(rawUrl: string | undefined): boolean {
   if (!rawUrl) {
@@ -60,19 +59,6 @@ export function isPreviewOverlayRequest(rawUrl: string | undefined): boolean {
     return url.searchParams.get('preview') === '1';
   } catch {
     return false;
-  }
-}
-
-export function overlayBoardIdFromUrl(rawUrl: string | undefined): string {
-  if (!rawUrl) {
-    return '';
-  }
-  try {
-    const url = new URL(rawUrl, 'http://overlay.local');
-    const id = url.searchParams.get('board') ?? '';
-    return /^[a-zA-Z0-9_-]{1,40}$/.test(id) ? id : '';
-  } catch {
-    return '';
   }
 }
 
@@ -89,9 +75,6 @@ export function overlayClientRoleFromUrl(rawUrl: string | undefined): OverlayCli
     // 旧 likes ロールもランキングとして扱う
     if (role === 'ranking' || role === 'likes') {
       return 'ranking';
-    }
-    if (role === 'board') {
-      return 'board';
     }
     return 'chat';
   } catch {
@@ -141,8 +124,6 @@ export class OverlayServer {
   private readonly giftImages = new GiftImageCache();
   private readonly previewClients = new WeakSet<WebSocket>();
   private readonly clientRoles = new WeakMap<WebSocket, OverlayClientRole>();
-  private readonly clientBoardIds = new WeakMap<WebSocket, string>();
-  private lastBoards: OverlayBoard[] = [];
   private readonly maxAudioEntries = 40;
   private clientChangeHandler: (() => void) | null = null;
   /** 表示を消すまで、新しく繋がった配信ソースへ出し直すサンプル */
@@ -293,29 +274,6 @@ export class OverlayServer {
       },
       { roles: ['alerts'] },
     );
-  }
-
-  setBoards(boards: OverlayBoard[]): void {
-    this.lastBoards = boards;
-    this.broadcastBoards();
-  }
-
-  broadcastBoards(): void {
-    this.wss?.clients.forEach((client) => {
-      if (client.readyState !== WebSocket.OPEN) {
-        return;
-      }
-      if (this.clientRoles.get(client) !== 'board') {
-        return;
-      }
-      const boardId = this.clientBoardIds.get(client) ?? '';
-      const board = this.lastBoards.find((item) => item.id === boardId) ?? null;
-      try {
-        client.send(JSON.stringify({ kind: 'board', board }));
-      } catch (error) {
-        logger.warning(`配置の送信に失敗しました: ${getErrorMessage(error)}`);
-      }
-    });
   }
 
   broadcastRanking(payload: OverlayRankingPayload): void {
@@ -583,11 +541,6 @@ export class OverlayServer {
     }
     try {
       socket.send(JSON.stringify(this.settingsPayload()));
-      if (this.clientRoles.get(socket) === 'board') {
-        const boardId = this.clientBoardIds.get(socket) ?? '';
-        const board = this.lastBoards.find((item) => item.id === boardId) ?? null;
-        socket.send(JSON.stringify({ kind: 'board', board }));
-      }
       if (this.clientRoles.get(socket) === 'ranking') {
         socket.send(
           JSON.stringify({
@@ -617,10 +570,6 @@ export class OverlayServer {
     const wss = new WebSocketServer({ server, path: '/overlay/ws' });
     wss.on('connection', (socket, req) => {
       this.clientRoles.set(socket, overlayClientRoleFromUrl(req.url));
-      const boardId = overlayBoardIdFromUrl(req.url);
-      if (boardId) {
-        this.clientBoardIds.set(socket, boardId);
-      }
       if (isPreviewOverlayRequest(req.url)) {
         this.previewClients.add(socket);
       }
@@ -731,17 +680,6 @@ export class OverlayServer {
       if (url.pathname === '/overlay/likes' || url.pathname === '/overlay/likes/') {
         res.writeHead(302, { Location: `/overlay/ranking/${url.search}` });
         res.end();
-        return;
-      }
-
-      const boardMatch = /^\/overlay\/board\/([a-zA-Z0-9_-]+)\/?$/.exec(url.pathname);
-      if (boardMatch) {
-        if (!url.pathname.endsWith('/')) {
-          res.writeHead(302, { Location: `/overlay/board/${boardMatch[1]}/${url.search}` });
-          res.end();
-          return;
-        }
-        this.serveFile(path.join(this.overlayDir, 'board.html'), res);
         return;
       }
 

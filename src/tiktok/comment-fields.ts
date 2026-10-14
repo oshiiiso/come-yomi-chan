@@ -52,18 +52,30 @@ function hasEmotes(raw: Record<string, unknown>): boolean {
   return emoteListsFromRaw(raw).length > 0;
 }
 
+/** urlList が空のとき、uri だけ届く絵文字画像を CDN の URL にする。 */
+function webcastImageFromUri(uri: string): string {
+  const trimmed = uri.trim().replace(/^\/+/, '');
+  if (!trimmed || trimmed.includes('..') || !/^[A-Za-z0-9_./~-]+$/.test(trimmed)) {
+    return '';
+  }
+  return `https://p16-webcast.tiktokcdn.com/obj/${trimmed}`;
+}
+
 function imageUrlFromEmoteItem(item: Record<string, unknown>): string {
   const nested = asRecord(item.emote);
   const image = asRecord(nested.image ?? item.image);
-  return (
+  const direct =
     firstImageUrl(item.emoteImageUrl) ||
     firstImageUrl(nested.emoteImageUrl) ||
     firstImageUrl(image) ||
     firstImageUrl(image.imageUrl) ||
     firstImageUrl(nested.imageUrl) ||
     firstImageUrl(item.imageUrl) ||
-    ''
-  );
+    '';
+  if (direct) {
+    return direct;
+  }
+  return webcastImageFromUri(asText(image.uri) || asText(nested.uri) || asText(item.uri));
 }
 
 export function commentFromEvent(raw: Record<string, unknown>): string {

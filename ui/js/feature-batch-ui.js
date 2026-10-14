@@ -1316,36 +1316,53 @@ function playUrlWithGain(url, gain, onFail, onEnded) {
   };
 }
 
-let currentAppChimeStop = null;
+const APP_CHIME_QUEUE_MAX = 50;
+const appChimeQueue = [];
+let appChimeActive = false;
+let appChimeGeneration = 0;
+// 返却した停止関数を持たないと Audio が回収され、終了通知が来ず次の音も鳴らない
+let appChimeStop = null;
 
-function stopCurrentAppChime() {
-  if (typeof currentAppChimeStop === 'function') {
-    const stop = currentAppChimeStop;
-    currentAppChimeStop = null;
-    stop();
+function finishAppChime() {
+  if (!appChimeActive) {
+    return;
   }
+  appChimeStop = null;
+  appChimeActive = false;
+  pumpAppChime();
 }
 
-function playAppSound(payload) {
-  stopCurrentAppChime();
+function pumpAppChime() {
+  if (appChimeActive) {
+    return;
+  }
+  const payload = appChimeQueue.shift();
+  if (!payload) {
+    return;
+  }
+  appChimeActive = true;
+  const generation = ++appChimeGeneration;
   const url = typeof payload?.soundUrl === 'string' ? payload.soundUrl.trim() : '';
   const volumeRaw =
     typeof payload?.volume === 'number' && Number.isFinite(payload.volume)
       ? payload.volume
       : 100;
   const gain = Math.max(0, Math.min(5, volumeRaw / 100));
-  let stop = () => undefined;
-  const clear = () => {
-    if (currentAppChimeStop === stop) {
-      currentAppChimeStop = null;
-    }
-  };
-  if (url) {
-    stop = playUrlWithGain(url, gain, () => undefined, clear);
-  } else {
-    stop = playBuiltinAppChime(gain, clear, resolveBuiltinTemplateId(payload));
+  const stop = url
+    ? playUrlWithGain(url, gain, () => undefined, finishAppChime)
+    : playBuiltinAppChime(gain, finishAppChime, resolveBuiltinTemplateId(payload));
+  // 再生開始の途中で終わったときは、次の音の参照を上書きしない
+  if (generation === appChimeGeneration && appChimeActive) {
+    appChimeStop = stop;
   }
-  currentAppChimeStop = stop;
+}
+
+function playAppSound(payload) {
+  appChimeQueue.push(payload);
+  while (appChimeQueue.length > APP_CHIME_QUEUE_MAX) {
+    appChimeQueue.shift();
+  }
+  pumpAppChime();
 }
 
 /** 読み上げは効果音と別に順番再生する（飛ばす／待ち捨て対応）。 */

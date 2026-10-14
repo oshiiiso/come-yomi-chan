@@ -139,6 +139,8 @@ export function registerIpcHandlers(
       diamondCount: event.diamondCount ?? 0,
       avatarUrl: event.user?.avatarUrl || undefined,
       giftImageUrl: event.giftImageUrl || undefined,
+      commentEmotes: event.commentEmotes?.length ? event.commentEmotes : undefined,
+      displayParts: event.displayParts?.length ? event.displayParts : undefined,
       badges: (() => {
         const u = event.user;
         if (!u) return undefined;

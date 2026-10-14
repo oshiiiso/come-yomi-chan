@@ -855,6 +855,30 @@ function setGiftCatalogForSpeakList(gifts) {
   renderGiftSpeakList();
 }
 
+/** 配信で足したギフトだけチェックをオンにする。編集中の他の行は触らない。 */
+function mergeIncomingGiftCatalog(config) {
+  const gifts = Array.isArray(config?.cachedTestGifts) ? config.cachedTestGifts : null;
+  if (!gifts || typeof fillTestGifts !== 'function') {
+    return;
+  }
+  const previousIds = new Set(
+    (Array.isArray(cachedGiftCatalog) ? cachedGiftCatalog : [])
+      .map((gift) => String(gift?.id || '').trim())
+      .filter(Boolean),
+  );
+  const speak = config.giftSpeakByGiftId || {};
+  for (const gift of gifts) {
+    const id = String(gift?.id || '').trim();
+    if (!id || previousIds.has(id)) {
+      continue;
+    }
+    if (speak[id] === true) {
+      giftSpeakByGiftId[id] = true;
+    }
+  }
+  fillTestGifts(gifts);
+}
+
 function addNicknameMapFromInputs() {
   const id = $('nickname-map-id')?.value;
   const name = $('nickname-map-name')?.value;

@@ -20,9 +20,9 @@ export interface RankEntry {
   uniqueId: string;
   nickname: string;
   count: number;
-  /** いいね累計。配置ごとの集計切替用。無いときは count */
+  /** いいね累計。表示モード切替用。無いときは count */
   likes?: number;
-  /** ダイヤ累計。配置ごとの集計切替用。無いときは count */
+  /** ダイヤ累計。表示モード切替用。無いときは count */
   diamonds?: number;
   /** アイコンURL。無いときは空文字 */
   avatarUrl: string;
@@ -36,7 +36,7 @@ export interface OverlayRankingPayload {
   max: number;
   enabled: boolean;
   mode: OverlayRankingMode;
-  /** 単独ランキングソースのいいね更新。配置側は枠ごとの設定を使う */
+  /** ランキングソースのいいね更新 */
   likeSyncMode?: OverlayRankingLikeSyncMode;
   likePollSec?: number;
   /** 入れ替わり確認。ポーリング間隔を待たずに出す */
@@ -135,4 +135,36 @@ export function giftDiamondDelta(diamondCount: unknown, giftCount: unknown): num
       ? Math.max(1, Math.trunc(giftCount))
       : 1;
   return diamonds * count;
+}
+
+export interface OverlayRankingBroadcastPlan {
+  /** いいねを届いた直後に配信する */
+  likesImmediate: boolean;
+  /** ダイヤをギフトの直後に配信する */
+  diamondsImmediate: boolean;
+  /** いいねのポーリング秒。不要なら null */
+  likePollSec: number | null;
+}
+
+/** ランキング配信ソースの更新タイミング。オフのときはどちらも配信しない */
+export function overlayRankingBroadcastPlan(config: {
+  overlayLikeRankingEnabled?: unknown;
+  overlayRankingMode?: unknown;
+  overlayRankingLikeSyncMode?: unknown;
+  overlayRankingLikePollSec?: unknown;
+}): OverlayRankingBroadcastPlan {
+  if (!normalizeOverlayLikeRankingEnabled(config.overlayLikeRankingEnabled)) {
+    return { likesImmediate: false, diamondsImmediate: false, likePollSec: null };
+  }
+  if (normalizeOverlayRankingMode(config.overlayRankingMode) === 'diamonds') {
+    return { likesImmediate: false, diamondsImmediate: true, likePollSec: null };
+  }
+  if (normalizeOverlayRankingLikeSyncMode(config.overlayRankingLikeSyncMode) === 'poll') {
+    return {
+      likesImmediate: false,
+      diamondsImmediate: false,
+      likePollSec: normalizeOverlayRankingLikePollSec(config.overlayRankingLikePollSec),
+    };
+  }
+  return { likesImmediate: true, diamondsImmediate: false, likePollSec: null };
 }

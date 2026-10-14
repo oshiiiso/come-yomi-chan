@@ -346,9 +346,6 @@ function fillConfig(config) {
   if (typeof fillOverlayUrlUi === 'function') {
     fillOverlayUrlUi(config, { force: true });
   }
-  if (typeof setOverlayBoards === 'function') {
-    setOverlayBoards(config.overlayBoards);
-  }
   $('chat-max-rows').value = String(config.chatMaxRows ?? 8);
   fillDisplayTime(config.chatDisplayMs);
   $('overlay-css').value = config.overlayCustomCss ?? '';
@@ -359,7 +356,7 @@ function fillConfig(config) {
   }
   $('hide-user-name').checked = Boolean(config.hideUserName);
   $('max-speech-chars').value = String(config.maxSpeechChars ?? 80);
-  $('max-queue').value = String(config.maxQueue ?? 20);
+  $('max-queue').value = String(config.maxQueue ?? 100);
   fillSpeechHotkeys(config);
   $('comment-display').value = config.commentDisplayTemplate ?? '';
   $('comment-speech').value = config.commentSpeechTemplate ?? '';
@@ -721,9 +718,6 @@ function collectConfig() {
     viewerDisplay: collectViewerDisplay(),
     fanLevelLook: collectFanLevelLook(),
     events,
-    ...(typeof getOverlayBoards === 'function' && Array.isArray(getOverlayBoards())
-      ? { overlayBoards: getOverlayBoards() }
-      : {}),
   };
 }
 
@@ -816,7 +810,7 @@ function validateForm() {
   }
 
   const maxQueue = Number($('max-queue').value);
-  if (!Number.isInteger(maxQueue) || maxQueue < 1 || maxQueue > 100) {
+  if (!Number.isInteger(maxQueue) || maxQueue < 1 || maxQueue > 300) {
     return uiCopy.invalidMaxQueue;
   }
 

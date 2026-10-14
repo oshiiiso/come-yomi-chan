@@ -15,6 +15,7 @@ import {
   normalizeOverlayRankingLikePollSec,
   normalizeOverlayRankingLikeSyncMode,
   normalizeOverlayRankingMode,
+  overlayRankingBroadcastPlan,
   sameRanking,
 } from '../../shared/like-ranking';
 
@@ -84,6 +85,49 @@ test('ランキング数は千の位ごとにシングルクォート区切り',
   assert.equal(formatLikeCount(1_234_567), "1'234'567");
   assert.equal(formatLikeCount(-9), '9');
   assert.equal(formatLikeCount(Number.NaN), '0');
+});
+
+test('ランキング配信は表示オンのときだけ更新する', () => {
+  const off = {
+    overlayLikeRankingEnabled: false,
+    overlayRankingMode: 'likes',
+    overlayRankingLikeSyncMode: 'live',
+    overlayRankingLikePollSec: 30,
+  };
+  assert.deepEqual(overlayRankingBroadcastPlan(off), {
+    likesImmediate: false,
+    diamondsImmediate: false,
+    likePollSec: null,
+  });
+  assert.equal(
+    overlayRankingBroadcastPlan({ ...off, overlayLikeRankingEnabled: true }).likesImmediate,
+    true,
+  );
+  assert.equal(
+    overlayRankingBroadcastPlan({
+      ...off,
+      overlayLikeRankingEnabled: true,
+      overlayRankingMode: 'diamonds',
+    }).diamondsImmediate,
+    true,
+  );
+  assert.equal(
+    overlayRankingBroadcastPlan({
+      ...off,
+      overlayLikeRankingEnabled: true,
+      overlayRankingLikeSyncMode: 'poll',
+      overlayRankingLikePollSec: 12,
+    }).likePollSec,
+    12,
+  );
+  assert.equal(
+    overlayRankingBroadcastPlan({
+      overlayLikeRankingEnabled: true,
+      overlayRankingLikeSyncMode: 'poll',
+      overlayRankingLikePollSec: 0,
+    }).likePollSec,
+    1,
+  );
 });
 
 test('ギフトダイヤ加算は個数×ダイヤ', () => {

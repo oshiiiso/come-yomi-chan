@@ -403,22 +403,6 @@ html[data-preview="1"][data-backdrop="dark"] body {
   align-self: center;
 }
 
-.chat__gift.gift-icon--missing {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  border: 1px solid rgb(255 255 255 / 28%);
-  border-radius: 0.2em;
-  background: rgb(0 0 0 / 35%);
-  color: rgb(255 255 255 / 72%);
-  font-size: calc(var(--gift-size) * 0.28);
-  font-weight: 700;
-  line-height: 1;
-  letter-spacing: 0.02em;
-  user-select: none;
-}
-
 /* 種類ごとの本文色は付けない。平文は --bubble-text、差し込みは設定色。
    --gift-color / --event-color / --like-color はカスタムCSS用に変数だけ残す。 */
 

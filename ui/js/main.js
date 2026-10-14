@@ -70,6 +70,9 @@ async function init() {
   }
   window.liveTts.onStatusChanged(applyStatus);
   window.liveTts.onConfigChanged((next) => {
+    if (typeof mergeIncomingGiftCatalog === 'function') {
+      mergeIncomingGiftCatalog(next);
+    }
     if (configEchoWait > 0) {
       configEchoWait -= 1;
       savedConfig = next;
@@ -127,6 +130,8 @@ async function init() {
               giftCount: row.giftCount || 0,
               diamondCount: row.diamondCount || 0,
               giftImageUrl: row.giftImageUrl || '',
+              commentEmotes: Array.isArray(row.commentEmotes) ? row.commentEmotes : [],
+              displayParts: Array.isArray(row.displayParts) ? row.displayParts : [],
               user: {
                 uniqueId: row.uniqueId || '',
                 nickname: row.nickname || '',

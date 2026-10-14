@@ -273,6 +273,41 @@ test('入れ子の日本語名は英語の正式名より優先し、再取得�
   assert.equal(merged.find((gift) => gift.id === '9')?.name, '星まつり');
 });
 
+test('説明文の Sent は日本語名に残さない', () => {
+  assert.equal(
+    giftNameFromEvent({
+      gift: {
+        name: 'Seesaw Cat Cup',
+        describe: { defaultPattern: 'Sent シーソ猫カップ' },
+      },
+    }),
+    'シーソ猫カップ',
+  );
+  assert.equal(
+    giftNameFromEvent({
+      gift: {
+        name: 'Seesaw Cat Cup',
+        describe: {
+          defaultPattern: 'Sent シーソ猫カップ',
+          pieces: [{ stringValue: 'シーソ猫カップ' }],
+        },
+      },
+    }),
+    'シーソ猫カップ',
+  );
+  const gifts = catalogGiftsFromList({
+    gifts: [
+      {
+        id: 12,
+        name: 'Seesaw Cat Cup',
+        describe: 'Sent シーソ猫カップ',
+        diamond_count: 1,
+      },
+    ],
+  });
+  assert.equal(gifts[0].name, 'シーソ猫カップ');
+});
+
 test('地域の表示名は英語の正式名より優先する', () => {
   assert.equal(
     giftNameFromEvent({

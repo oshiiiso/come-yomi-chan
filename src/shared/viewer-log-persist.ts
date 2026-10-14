@@ -1,4 +1,5 @@
-import { canonicalOverlayType, type OverlayEventType } from './types';
+import { normalizeCommentEmotes, type CommentEmote } from './comment-emotes';
+import { canonicalOverlayType, type OverlayDisplayPart, type OverlayEventType } from './types';
 
 export interface ViewerPersistBadges {
   isFanClub?: boolean;
@@ -21,6 +22,8 @@ export interface ViewerPersistRow {
   diamondCount: number;
   avatarUrl?: string;
   giftImageUrl?: string;
+  commentEmotes?: CommentEmote[];
+  displayParts?: OverlayDisplayPart[];
   badges?: ViewerPersistBadges;
 }
 
@@ -82,6 +85,37 @@ function normalizeBadges(raw: unknown): ViewerPersistBadges | undefined {
   return Object.keys(badges).length ? badges : undefined;
 }
 
+const MAX_VIEWER_DISPLAY_PARTS = 40;
+
+function normalizeViewerDisplayParts(raw: unknown): OverlayDisplayPart[] | undefined {
+  if (!Array.isArray(raw)) {
+    return undefined;
+  }
+  const parts: OverlayDisplayPart[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      continue;
+    }
+    const record = item as Record<string, unknown>;
+    const value = asText(record.value).slice(0, 200);
+    if (!value) {
+      continue;
+    }
+    if (record.kind === 'accent') {
+      const token = asText(record.token).slice(0, 32);
+      parts.push(token ? { kind: 'accent', value, token } : { kind: 'accent', value });
+    } else if (record.kind === 'name') {
+      parts.push({ kind: 'name', value });
+    } else if (record.kind === 'text') {
+      parts.push({ kind: 'text', value });
+    }
+    if (parts.length >= MAX_VIEWER_DISPLAY_PARTS) {
+      break;
+    }
+  }
+  return parts.length > 0 ? parts : undefined;
+}
+
 function normalizePersistRow(raw: unknown): ViewerPersistRow | null {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     return null;
@@ -113,6 +147,16 @@ function normalizePersistRow(raw: unknown): ViewerPersistRow | null {
   const giftImageUrl = asText(record.giftImageUrl);
   if (giftImageUrl) {
     row.giftImageUrl = giftImageUrl;
+  }
+  const commentEmotes = normalizeCommentEmotes(
+    Array.isArray(record.commentEmotes) ? (record.commentEmotes as CommentEmote[]) : [],
+  );
+  if (commentEmotes.length > 0) {
+    row.commentEmotes = commentEmotes;
+  }
+  const displayParts = normalizeViewerDisplayParts(record.displayParts);
+  if (displayParts) {
+    row.displayParts = displayParts;
   }
   const badges = normalizeBadges(record.badges);
   if (badges) {

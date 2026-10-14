@@ -1,4 +1,5 @@
 import { HELP_HEADING_ID } from './help-topics';
+import { SPEECH_QUEUE_MAX, SPEECH_QUEUE_MIN } from './speech-queue';
 
 export const MSG = {
   app: {
@@ -69,7 +70,7 @@ export const MSG = {
     invalidDisplaySec: '表示時間は 1〜120 秒で指定してください',
     invalidDisplayChars: '表示の文字数上限は 10〜400 にしてください',
     invalidSpeechChars: '読み上げの文字数上限は 10〜400 にしてください',
-    invalidMaxQueue: '待ちの上限は 1〜100 にしてください',
+    invalidMaxQueue: `待ちの上限は ${SPEECH_QUEUE_MIN}〜${SPEECH_QUEUE_MAX} にしてください`,
     invalidHotkeySame:
       '飛ばす・読み上げ待ち捨て・固定枠待ち捨て・一時停止・サウンドミュートのキーは別にしてください',
     invalidPinSec: '固定枠の表示時間は 1〜120 秒で指定してください',
@@ -169,8 +170,8 @@ export const MSG = {
     overlayConnectSample: 'サンプルを出す',
     overlayConnectClear: '表示を消す',
     overlayConnectSampleHint:
-      'コメント・ランキング・アラートの配信ソースと、配置に載せた同じ種類にサンプルを出します。表示を消すまで繰り返します。',
-    overlayConnectClearHint: '配信ソースと配置のサンプルを消します。コメント画面は変わりません。',
+      'コメント・ランキング・アラートの配信ソースにサンプルを出します。表示を消すまで繰り返します。',
+    overlayConnectClearHint: '配信ソースのサンプルを消します。コメント画面は変わりません。',
     pickAlertMediaTitle: 'アラート用の画像・GIFを選ぶ',
     pickAlertMediaFilter: '画像',
     pickAlertMediaFailed: 'アラート画像の取り込みに失敗しました',
@@ -261,7 +262,7 @@ export const MSG = {
       comment: 'コメントの表示・読み上げ・サウンド・メンレベの色を最初の状態に戻します。',
       gift: 'ギフトの表示・読み上げ・サウンド・アラートを最初の状態に戻します。',
       events: 'フォローから入室までの表示・読み上げ・サウンド・アラートを最初の状態に戻します。',
-      look: '配信ソースの見た目と動きを最初の状態に戻します。配置は横1枚と縦1枚に戻します。ポートは残します。',
+      look: '配信ソースの見た目と動きを最初の状態に戻します。ポートは残します。',
       tts: '読み上げエンジンと速度などを最初の状態に戻します。',
       app: '手前表示、明るさ、ショートカット、ログの最大行数を最初の状態に戻します。プロファイルは残します。',
     },

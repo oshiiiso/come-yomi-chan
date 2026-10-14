@@ -26,7 +26,6 @@ import {
 } from './overlay-likes-look';
 import { DEFAULT_OVERLAY_LOOK, overlayLookFromConfig, OVERLAY_FONTS, OVERLAY_LOOK_PRESETS } from './overlay-look';
 import { normalizeChatDisplayMs } from './chat-display';
-import { defaultOverlayBoards, normalizeOverlayBoards } from './overlay-board';
 import { MSG } from './messages';
 import { resetSettingsTab, type SettingsTabId } from './settings-tab-reset';
 import { normalizeVoicevoxHost } from '../tts/voicevox-url';
@@ -84,6 +83,7 @@ import {
   normalizeSoundRef,
 } from './sound-ref';
 import { normalizeNicknameMap } from './nickname-map';
+import { DEFAULT_SPEECH_QUEUE, normalizeSpeechQueue } from './speech-queue';
 import {
   DEFAULT_GIFT_CHIME_VOLUME,
   normalizeGiftChimeDestinations,
@@ -209,7 +209,7 @@ export const DEFAULT_CONFIG: AppConfig = {
   beatMs: APP_CONFIG.beatMs,
   maxSpeechChars: 80,
   maxDisplayChars: 80,
-  maxQueue: 20,
+  maxQueue: DEFAULT_SPEECH_QUEUE,
   skipSpeechHotkey: DEFAULT_SKIP_SPEECH_HOTKEY,
   clearSpeechHotkey: DEFAULT_CLEAR_SPEECH_HOTKEY,
   clearPinHotkey: DEFAULT_CLEAR_PIN_HOTKEY,
@@ -332,11 +332,8 @@ export const DEFAULT_CONFIG: AppConfig = {
   memberDisplayTemplate: MSG.template.memberDisplayDefault,
   memberSpeechTemplate: MSG.template.memberSpeechDefault,
   events: DEFAULT_EVENT_TOGGLES,
-  overlayBoards: [],
   cachedTestGifts: [],
 };
-
-DEFAULT_CONFIG.overlayBoards = defaultOverlayBoards(DEFAULT_CONFIG);
 
 export function resetConfigKeepingIdentity(
   current: Pick<
@@ -435,7 +432,7 @@ export class ConfigStore {
       beatMs: clampInt(merged.beatMs, DEFAULT_CONFIG.beatMs, 50, 2000),
       maxSpeechChars: clampInt(merged.maxSpeechChars, 80, 10, 400),
       maxDisplayChars: clampInt(merged.maxDisplayChars, 80, 10, 400),
-      maxQueue: clampInt(merged.maxQueue, 20, 1, 100),
+      maxQueue: normalizeSpeechQueue(merged.maxQueue),
       skipSpeechHotkey: normalizeHotkey(merged.skipSpeechHotkey, DEFAULT_SKIP_SPEECH_HOTKEY),
       clearSpeechHotkey: normalizeHotkey(merged.clearSpeechHotkey, DEFAULT_CLEAR_SPEECH_HOTKEY),
       clearPinHotkey: normalizeHotkey(merged.clearPinHotkey, DEFAULT_CLEAR_PIN_HOTKEY),
@@ -662,12 +659,6 @@ export class ConfigStore {
         DEFAULT_CONFIG.memberSpeechTemplate,
       ),
       events,
-      overlayBoards: normalizeOverlayBoards(
-        raw && Object.prototype.hasOwnProperty.call(raw, 'overlayBoards')
-          ? raw.overlayBoards
-          : undefined,
-        merged as AppConfig,
-      ),
       cachedTestGifts: resolveCachedTestGifts(merged.cachedTestGifts),
     };
   }

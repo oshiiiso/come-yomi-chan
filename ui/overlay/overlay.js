@@ -1514,30 +1514,29 @@
     return buildOverlayByIndexWithPlaceholders(base, list).segments;
   }
 
-  function createGiftImagePlaceholder(className) {
-    const el = document.createElement('span');
-    const base = String(className || '').trim();
-    el.className = base ? `${base} gift-icon--missing` : 'gift-icon--missing';
-    el.setAttribute('aria-hidden', 'true');
-    el.textContent = 'No';
-    return el;
-  }
+  const GIFT_ICON_FALLBACK_SRC = '/overlay/alert-templates/gift.gif';
 
   function createGiftImage(src, className) {
     const url = String(src || '').trim();
     const classes = String(className || '').trim();
-    if (!url) {
-      return createGiftImagePlaceholder(classes);
-    }
     const img = document.createElement('img');
     img.className = classes;
     img.alt = '';
     img.referrerPolicy = 'no-referrer';
     img.decoding = 'async';
+    const useFallback = !url || url === GIFT_ICON_FALLBACK_SRC;
+    if (useFallback) {
+      img.dataset.giftFallback = '1';
+    }
     img.addEventListener('error', () => {
-      img.replaceWith(createGiftImagePlaceholder(classes));
+      if (img.dataset.giftFallback === '1') {
+        img.remove();
+        return;
+      }
+      img.dataset.giftFallback = '1';
+      img.src = GIFT_ICON_FALLBACK_SRC;
     });
-    img.src = url;
+    img.src = useFallback ? GIFT_ICON_FALLBACK_SRC : url;
     return img;
   }
 

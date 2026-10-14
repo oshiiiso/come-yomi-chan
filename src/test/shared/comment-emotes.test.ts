@@ -118,4 +118,21 @@ test('読み上げ用に [heart] を落とす', () => {
     '歌いますね。 ありがとう',
   );
   assert.equal(stripCommentEmotePlaceholders('[heart][hi]'), '');
+  assert.equal(
+    stripCommentEmotePlaceholders('みてるよ[jolliespeechless]ガン見'),
+    'みてるよ ガン見',
+  );
+});
+
+test('[jolliespeechless] は画像に差し替える', () => {
+  assert.deepEqual(
+    buildCommentSegments('みてるよ[jolliespeechless]ガン見', [
+      { index: 4, imageUrl: 'https://cdn.example/jollie.png' },
+    ]),
+    [
+      { kind: 'text', text: 'みてるよ' },
+      { kind: 'emote', imageUrl: 'https://cdn.example/jollie.png' },
+      { kind: 'text', text: 'ガン見' },
+    ],
+  );
 });

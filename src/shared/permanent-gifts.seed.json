@@ -11,18 +11,6 @@
   },
   "gifts": [
     {
-      "id": "5333",
-      "name": "コーヒー",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/02492214b9bd50fee2d69fd0d089c025~tplv-obj.png",
-      "diamondCount": 1
-    },
-    {
-      "id": "7036",
-      "name": "スター",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/16a55cac42880dc55be5d8ea716f0a61~tplv-obj.png",
-      "diamondCount": 1
-    },
-    {
       "id": "5827",
       "name": "ソフトクリーム",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/968820bc85e274713c795a6aef3f7c67~tplv-obj.png",
@@ -53,26 +41,8 @@
       "diamondCount": 1
     },
     {
-      "id": "134531",
-      "name": "花火",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/2b36de0ed2fc89c41fcc2d48309b1808~tplv-obj.png",
-      "diamondCount": 1
-    },
-    {
-      "id": "1272044",
-      "name": "栗",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/b779c2b7789c902d8645f68ab186d78f~tplv-obj.png",
-      "diamondCount": 1
-    },
-    {
-      "id": "12877",
-      "name": "秋のハート",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/aee13e26caa49cc8ae33e89b0e32962f~tplv-obj.png",
-      "diamondCount": 1
-    },
-    {
       "id": "6890",
-      "name": "大好き",
+      "name": "Love you",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/ab0a7b44bfc140923bb74164f6f880ab~tplv-obj.png",
       "diamondCount": 1
     },
@@ -485,36 +455,6 @@
       "diamondCount": 10
     },
     {
-      "id": "15318",
-      "name": "かき氷",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/6342a753f5ba495239a9f87d8d937c39~tplv-obj.png",
-      "diamondCount": 10
-    },
-    {
-      "id": "1189599",
-      "name": "コーヒー",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/0636d91615f7417ddd5f29438bf5debe~tplv-obj.png",
-      "diamondCount": 10
-    },
-    {
-      "id": "158501",
-      "name": "ジャーニーパス",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/1ccd48b90767daa45d9b9ebf3a04521a~tplv-obj.png",
-      "diamondCount": 10
-    },
-    {
-      "id": "62837",
-      "name": "スター",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/53debf14625c7c5ec943819af914e4a3~tplv-obj.png",
-      "diamondCount": 10
-    },
-    {
-      "id": "5282",
-      "name": "ハート",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/98bea1b189fba75bf0ca766b4dc1976e~tplv-obj.png",
-      "diamondCount": 10
-    },
-    {
       "id": "8913",
       "name": "ローザ",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/eb77ead5c3abb6da6034d3cf6cfeb438~tplv-obj.png",
@@ -635,12 +575,6 @@
       "diamondCount": 15
     },
     {
-      "id": "5740",
-      "name": "ヘッドフォン",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/b2a253d6fbb2271df567b7838452e54e~tplv-obj.png",
-      "diamondCount": 20
-    },
-    {
       "id": "5658",
       "name": "香水",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/20b8f61246c7b6032777bb81bf4ee055~tplv-obj.png",
@@ -689,18 +623,6 @@
       "diamondCount": 199
     },
     {
-      "id": "5738",
-      "name": "ハート",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/16f6adfae88db463811560da9f9438f8~tplv-obj.png",
-      "diamondCount": 200
-    },
-    {
-      "id": "756924",
-      "name": "ラブレター",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/ab1304ce1e8f78bc40183f4d093b0f7e~tplv-obj.png",
-      "diamondCount": 200
-    },
-    {
       "id": "5731",
       "name": "サンゴ",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/d4faa402c32bf4f92bee654b2663d9f1~tplv-obj.png",
@@ -719,34 +641,16 @@
       "diamondCount": 1000
     },
     {
-      "id": "7963",
-      "name": "ダイヤモンドツリー",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/b2aafe2ca2e529b10194d143ef86a31b~tplv-obj.png",
-      "diamondCount": 1088
-    },
-    {
       "id": "6090",
       "name": "花火",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/9494c8a0bc5c03521ef65368e59cc2b8~tplv-obj.png",
       "diamondCount": 1088
     },
     {
-      "id": "16069",
-      "name": "飛行船",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/15184dde38cfe83fdecbbaf578169dcb~tplv-obj.png",
-      "diamondCount": 1999
-    },
-    {
       "id": "6820",
       "name": "クジラのダイビング",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/46fa70966d8e931497f5289060f9a794~tplv-obj.png",
       "diamondCount": 2150
-    },
-    {
-      "id": "170600",
-      "name": "コンサート",
-      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/eda5406ec3af22676a3378551338b89d~tplv-obj.png",
-      "diamondCount": 2888
     },
     {
       "id": "6563",
@@ -777,6 +681,48 @@
       "name": "TikTok Universe",
       "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/8f471afbcebfda3841a6cc515e381f58~tplv-obj.png",
       "diamondCount": 44999
+    },
+    {
+      "id": "15564",
+      "name": "びっくりした魚",
+      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/3eac97ff3c4603f6c5500cd0ca1aa9e1~tplv-obj.png",
+      "diamondCount": 1
+    },
+    {
+      "id": "12898",
+      "name": "うどん脳",
+      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/e977b5fcdf5470a62f99389b943400ac~tplv-obj.png",
+      "diamondCount": 10
+    },
+    {
+      "id": "13651",
+      "name": "人気アップ",
+      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/b342e28d73dac6547e0b3e2ad57f6597~tplv-obj.png",
+      "diamondCount": 1
+    },
+    {
+      "id": "13521",
+      "name": "本気",
+      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/5fe26445c0f3c9eebd63222b3022a052~tplv-obj.png",
+      "diamondCount": 5
+    },
+    {
+      "id": "13864",
+      "name": "ふっかちゃん",
+      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/4704f86ec58e9ae315445e031e769b54~tplv-obj.png",
+      "diamondCount": 10
+    },
+    {
+      "id": "14463",
+      "name": "ねば〜る君",
+      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/336be93724947fb4f03104dcd901070a~tplv-obj.png",
+      "diamondCount": 10
+    },
+    {
+      "id": "5659",
+      "name": "折り鶴",
+      "imageUrl": "https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/0f158a08f7886189cdabf496e8a07c21~tplv-obj.png",
+      "diamondCount": 99
     }
   ]
 }

@@ -98,6 +98,9 @@ async function setupApp(): Promise<void> {
   session.on('sound', (payload) => {
     windowManager.broadcast(IpcChannels.PLAY_SOUND, payload);
   });
+  session.on('config', () => {
+    windowManager.broadcast(IpcChannels.CONFIG_CHANGED, configStore.toView());
+  });
   session.on('speech-audio-control', (payload) => {
     windowManager.broadcast(IpcChannels.SPEECH_AUDIO_CONTROL, payload);
   });

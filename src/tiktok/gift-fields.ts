@@ -3,6 +3,7 @@ import { MSG } from '../shared/messages';
 import {
   compareCatalogGiftOrder,
   japaneseNameForGift,
+  stripLeadingSentGiftName,
 } from '../shared/permanent-gift-names';
 
 /** @deprecated 名前互換。compareCatalogGiftOrder と同じ。 */
@@ -48,15 +49,24 @@ export function firstImageUrl(value: unknown): string {
   }
 
   const record = asRecord(value);
-  const list = record.urlList ?? record.url_list;
-  if (Array.isArray(list)) {
-    return firstImageUrl(list);
+  for (const key of ['urlList', 'url_list', 'urlListList', 'urls'] as const) {
+    const list = record[key];
+    if (!Array.isArray(list) || list.length === 0) {
+      continue;
+    }
+    const found = firstImageUrl(list);
+    if (found) {
+      return found;
+    }
   }
-  if (record.url !== undefined) {
-    return firstImageUrl(record.url);
-  }
-  if (record.uri !== undefined) {
-    return firstImageUrl(record.uri);
+  for (const key of ['imageUrl', 'image_url', 'url', 'uri'] as const) {
+    if (record[key] === undefined) {
+      continue;
+    }
+    const found = firstImageUrl(record[key]);
+    if (found) {
+      return found;
+    }
   }
   return '';
 }
@@ -114,7 +124,7 @@ export function giftIdFromEvent(raw: Record<string, unknown>): string {
 
 /** 日本語・ハングルなど、視聴者向けの短い表示名。英語の正式名よりこちらを使う。 */
 function regionalGiftLabel(value: unknown): string {
-  const text = asString(value).trim();
+  const text = stripLeadingSentGiftName(asString(value));
   if (!text || text.length > 48) {
     return '';
   }

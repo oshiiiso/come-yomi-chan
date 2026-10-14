@@ -19,11 +19,73 @@ import {
   resolveGiftChimeBandSound,
   resolveGiftChimeSound,
   resolveGiftChimeVolume,
+  shouldAcceptGiftChime,
   shouldPlayGiftChime,
+  enableIncomingGiftSpeak,
   shouldSpeakGiftById,
   validateGiftChimeDiamondBands,
 } from '../../shared/gift-notify';
 import { DEFAULT_GIFT_SOUND_REF } from '../../shared/sound-ref';
+
+test('一覧に無かったギフトだけチェックをオンにする', () => {
+  assert.deepEqual(
+    enableIncomingGiftSpeak({
+      alreadyListed: false,
+      keptInCatalog: true,
+      giftId: '99',
+      speakByGiftId: { '1': true },
+    }),
+    { '1': true, '99': true },
+  );
+  assert.equal(
+    enableIncomingGiftSpeak({
+      alreadyListed: true,
+      keptInCatalog: true,
+      giftId: '1',
+      speakByGiftId: {},
+    }),
+    null,
+  );
+  assert.equal(
+    enableIncomingGiftSpeak({
+      alreadyListed: false,
+      keptInCatalog: false,
+      giftId: '99',
+      speakByGiftId: {},
+    }),
+    null,
+  );
+});
+
+test('同じギフトの直後だけ捨て、別ギフトは鳴らす', () => {
+  assert.equal(
+    shouldAcceptGiftChime({
+      now: 500,
+      previousAt: 400,
+      previousKey: '1\na\n1',
+      key: '1\na\n1',
+    }),
+    false,
+  );
+  assert.equal(
+    shouldAcceptGiftChime({
+      now: 500,
+      previousAt: 400,
+      previousKey: '1\na\n1',
+      key: '2\na\n1',
+    }),
+    true,
+  );
+  assert.equal(
+    shouldAcceptGiftChime({
+      now: 800,
+      previousAt: 400,
+      previousKey: '1\na\n1',
+      key: '1\na\n1',
+    }),
+    true,
+  );
+});
 
 test('通知モードは speak / chime 以外を speak に戻す', () => {
   assert.equal(normalizeGiftNotifyMode('chime'), 'chime');

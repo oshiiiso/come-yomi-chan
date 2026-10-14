@@ -465,7 +465,7 @@ let lookPreviewSampleGen = 0;
 
 function activeLookSection() {
   const name = document.querySelector('[data-look-section-btn].is-active')?.dataset.lookSectionBtn;
-  if (name === 'ranking' || name === 'alerts' || name === 'board') {
+  if (name === 'ranking' || name === 'alerts') {
     return name;
   }
   return 'comment';
@@ -480,9 +480,6 @@ async function pushLookPreview() {
     }
   }
   const section = activeLookSection();
-  if (section === 'board') {
-    return;
-  }
   const frame = $('overlay-preview');
   if (!frame?.contentWindow) {
     return;
@@ -623,11 +620,8 @@ function unloadPreviewFrame() {
 
 function syncSettingsPreview() {
   const workspace = document.querySelector('.view-settings .workspace');
-  const onLook = appMode === 'settings' && activeTabName() === 'look';
-  const board = onLook && activeLookSection() === 'board';
-  const show = onLook && !board;
+  const show = appMode === 'settings' && activeTabName() === 'look';
   workspace?.classList.toggle('is-preview-hidden', !show);
-  workspace?.classList.toggle('is-board-editor', board);
   if (show) {
     refreshPreviewFrame();
     applyPreviewZoom();

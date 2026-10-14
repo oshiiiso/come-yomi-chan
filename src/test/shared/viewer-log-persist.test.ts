@@ -62,4 +62,51 @@ test('任意項目と badges を残す', () => {
   );
   assert.equal(rows[0].avatarUrl, 'https://example.com/a.png');
   assert.equal(rows[0].badges?.fanClubLevel, 3);
+  assert.equal(rows[0].commentEmotes, undefined);
+});
+
+test('ギフト名などの表示パーツは復元用に残す', () => {
+  const rows = normalizeViewerPersistRows(
+    [
+      {
+        receivedAt: '2026-01-01T00:00:00.000Z',
+        type: 'gift',
+        uniqueId: 'a',
+        nickname: 'A',
+        displayText: 'Aさんからバラ',
+        displayParts: [
+          { kind: 'text', value: 'Aさんから' },
+          { kind: 'accent', value: 'バラ', token: 'gift', color: '#ff0000' },
+          { kind: 'nope', value: 'x' },
+        ],
+      },
+    ],
+    1000,
+  );
+  assert.deepEqual(rows[0].displayParts, [
+    { kind: 'text', value: 'Aさんから' },
+    { kind: 'accent', value: 'バラ', token: 'gift' },
+  ]);
+});
+
+test('コメントの絵文字画像は復元用に残す', () => {
+  const rows = normalizeViewerPersistRows(
+    [
+      {
+        receivedAt: '2026-01-01T00:00:00.000Z',
+        type: 'comment',
+        uniqueId: 'a',
+        nickname: 'A',
+        comment: 'みてるよ[jolliespeechless]ガン見',
+        commentEmotes: [
+          { index: 4, imageUrl: 'https://p16-webcast.tiktokcdn.com/img/a.png' },
+          { index: 0, imageUrl: '' },
+        ],
+      },
+    ],
+    1000,
+  );
+  assert.deepEqual(rows[0].commentEmotes, [
+    { index: 4, imageUrl: 'https://p16-webcast.tiktokcdn.com/img/a.png' },
+  ]);
 });

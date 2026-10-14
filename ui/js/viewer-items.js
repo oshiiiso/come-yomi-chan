@@ -363,6 +363,32 @@ function appendViewerStatusLine(notice) {
   syncViewerLatestButton();
 }
 
+function appendViewerMarkedText(host, bodyText, parts) {
+  const list = Array.isArray(parts) ? parts : [];
+  if (!list.length) {
+    host.textContent = bodyText;
+    return;
+  }
+  host.textContent = '';
+  for (const part of list) {
+    const value = String(part?.value || '');
+    if (!value) {
+      continue;
+    }
+    if (part.kind === 'accent') {
+      const mark = document.createElement('strong');
+      mark.className = 'viewer__mark';
+      mark.textContent = value;
+      host.appendChild(mark);
+      continue;
+    }
+    host.appendChild(document.createTextNode(value));
+  }
+  if (!host.childNodes.length) {
+    host.textContent = bodyText;
+  }
+}
+
 function appendViewerEvent(payload) {
   if (!payload || typeof payload !== 'object') {
     return;
@@ -404,8 +430,8 @@ function appendViewerEvent(payload) {
 
   if (type === 'gift' || type === 'portal') {
     const giftSrc = giftIconSrc(payload.giftImageUrl || '');
-    if (typeof createGiftImage === 'function') {
-      item.appendChild(createGiftImage(giftSrc, 'viewer__gift'));
+    if (typeof createGiftImageWithFallback === 'function') {
+      item.appendChild(createGiftImageWithFallback(giftSrc, 'viewer__gift'));
     } else if (giftSrc) {
       const gift = document.createElement('img');
       gift.className = 'viewer__gift';
@@ -458,7 +484,7 @@ function appendViewerEvent(payload) {
       text.textContent = bodyText;
     }
   } else {
-    text.textContent = bodyText;
+    appendViewerMarkedText(text, bodyText, payload.displayParts);
   }
   body.appendChild(text);
   item.appendChild(body);

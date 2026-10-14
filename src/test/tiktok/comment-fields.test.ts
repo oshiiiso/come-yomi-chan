@@ -100,6 +100,48 @@ test('raw の emote.image.urlList からも画像 URL を取る', () => {
   );
 });
 
+test('空の urlList でも uri と imageUrl から絵文字画像を取る', () => {
+  assert.deepEqual(
+    commentEmotesFromEvent({
+      content: 'みてるよ[jolliespeechless]ガン見',
+      emotes: [
+        {
+          index: 4,
+          emote: {
+            emoteId: '1',
+            image: {
+              urlList: [],
+              uri: 'webcast-va/emote/jolliespeechless',
+            },
+          },
+        },
+      ],
+    }),
+    [
+      {
+        index: 4,
+        imageUrl: 'https://p16-webcast.tiktokcdn.com/obj/webcast-va/emote/jolliespeechless',
+      },
+    ],
+  );
+  assert.deepEqual(
+    commentEmotesFromEvent({
+      emotes: [
+        {
+          index: 0,
+          emote: {
+            image: {
+              urlList: [],
+              imageUrl: 'https://p16-webcast.tiktokcdn.com/img/b.png',
+            },
+          },
+        },
+      ],
+    }),
+    [{ index: 0, imageUrl: 'https://p16-webcast.tiktokcdn.com/img/b.png' }],
+  );
+});
+
 test('画像 URL が無い emote は落とす', () => {
   assert.deepEqual(
     commentEmotesFromEvent({
