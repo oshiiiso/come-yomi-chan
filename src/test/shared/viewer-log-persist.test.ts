@@ -55,12 +55,14 @@ test('任意項目と badges を残す', () => {
         nickname: 'G',
         avatarUrl: 'https://example.com/a.png',
         giftImageUrl: 'https://example.com/g.png',
+        giftId: '5655',
         badges: { isFanClub: true, fanClubLevel: 3, fanClubName: '団' },
       },
     ],
     1000,
   );
   assert.equal(rows[0].avatarUrl, 'https://example.com/a.png');
+  assert.equal(rows[0].giftId, '5655');
   assert.equal(rows[0].badges?.fanClubLevel, 3);
   assert.equal(rows[0].commentEmotes, undefined);
 });

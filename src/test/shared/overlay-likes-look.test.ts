@@ -27,7 +27,7 @@ test('いいねランキング見た目プリセットは5種類', () => {
   assert.equal(DEFAULT_OVERLAY_LIKES_LOOK.showAvatar, true);
   assert.equal(DEFAULT_OVERLAY_LIKES_LOOK.showUnit, true);
   assert.equal(OVERLAY_LIKES_LOOK_PRESETS.luxury.fontSize, 26);
-  assert.equal(OVERLAY_LIKES_LOOK_PRESETS.minimal.bgOpacity, 0);
+  assert.equal(OVERLAY_LIKES_LOOK_PRESETS.minimal.bgOpacity, 48);
 });
 
 test('壊れたいいねランキング見た目は初期値に戻す', () => {

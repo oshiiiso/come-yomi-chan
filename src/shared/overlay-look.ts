@@ -7,7 +7,7 @@ import {
   type OverlayMotionSpeed,
 } from './overlay-motion';
 
-export const OVERLAY_THEMES = ['dark', 'light', 'minimal', 'neon'] as const;
+export const OVERLAY_THEMES = ['dark', 'light', 'minimal', 'live', 'neon'] as const;
 export type OverlayTheme = (typeof OVERLAY_THEMES)[number];
 
 export const OVERLAY_ALIGNS = ['full', 'left', 'right'] as const;
@@ -77,6 +77,15 @@ export const OVERLAY_LOOK_PRESETS: Record<string, OverlayLook> = {
   minimal: {
     ...DEFAULT_OVERLAY_LOOK,
     theme: 'minimal',
+    bgOpacity: 20,
+    showAvatar: false,
+    giftIconSize: 36,
+    itemRadius: 10,
+    align: 'left',
+  },
+  live: {
+    ...DEFAULT_OVERLAY_LOOK,
+    theme: 'live',
     bgOpacity: 0,
     showAvatar: false,
     giftIconSize: 36,

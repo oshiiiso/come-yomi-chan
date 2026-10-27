@@ -35,11 +35,15 @@ import {
 } from '../shared/types';
 import { DiamondTracker } from './diamond-tracker';
 import { LikeTracker } from './like-tracker';
+import { UserAvatarCache } from './user-avatar-cache';
 import { OverlayServer } from '../overlay-server/overlay-server';
 import { TikTokLiveWatcher } from '../tiktok/tiktok-client';
 import {
+  applyCatalogGiftUserNames,
   catalogGiftImageById,
+  catalogGiftSourceName,
   catalogGiftsWithIcons,
+  mergeCatalogGift,
   normalizeCatalogGifts,
 } from '../tiktok/gift-fields';
 import { finalizeCatalogGifts, dedupeAndSortCatalogGifts } from '../shared/permanent-gifts';
@@ -156,6 +160,7 @@ export class SessionManager extends EventEmitter {
   }> | null = null;
   private readonly likeTracker = new LikeTracker();
   private readonly diamondTracker = new DiamondTracker();
+  private readonly userAvatars = new UserAvatarCache();
   private readonly repeatSpeech = new RepeatSpeechGuard();
   private readonly superFanJoinDedupe = new SuperFanJoinDedupe();
   private readonly memberJoinDedupe = new SuperFanJoinDedupe();
@@ -263,6 +268,7 @@ export class SessionManager extends EventEmitter {
     this.lastConnectError = '';
     this.likeTracker.reset();
     this.diamondTracker.reset();
+    this.userAvatars.reset();
     this.rankingEntries = [];
     this.publishRankingIfChanged(true);
     this.syncRankingLikePollTimer();
@@ -290,6 +296,7 @@ export class SessionManager extends EventEmitter {
     await this.watcher.stop();
     this.likeTracker.reset();
     this.diamondTracker.reset();
+    this.userAvatars.reset();
     this.rankingEntries = [];
     this.publishRankingIfChanged(true);
     this.syncRankingLikePollTimer();
@@ -726,9 +733,13 @@ export class SessionManager extends EventEmitter {
       this.status.state === 'live'
         ? await this.watcher.refreshGifts()
         : await this.watcher.fetchGiftsForUser(id);
-    const gifts = finalizeCatalogGifts(fetched);
-    this.watcher.primeGifts(gifts);
-    this.persistTestGifts(gifts);
+    const gifts = applyCatalogGiftUserNames(
+      finalizeCatalogGifts(fetched),
+      this.watcher.listGifts(),
+    );
+    const saved = this.persistTestGifts(gifts);
+    const next = saved.length > 0 ? saved : gifts;
+    this.watcher.primeGifts(next);
     const visible = this.listTestGifts();
     if (visible.length === 0) {
       throw new Error(
@@ -753,6 +764,61 @@ export class SessionManager extends EventEmitter {
     }
     this.configStore.save({ cachedTestGifts: next });
     return next;
+  }
+
+  renameCatalogGift(id: string, name: string): { ok: boolean; gifts: CatalogGift[]; message: string } {
+    const giftId = String(id || '').trim();
+    const nextName = String(name || '').trim();
+    if (!giftId || !nextName) {
+      return { ok: false, gifts: this.listTestGifts(), message: MSG.ui.giftCatalogRenameEmpty };
+    }
+    const list = this.watcher.listGifts();
+    const prev = list.find((gift) => gift.id === giftId);
+    if (!prev) {
+      return { ok: false, gifts: this.listTestGifts(), message: MSG.ui.giftCatalogRenameMissing };
+    }
+    const original = catalogGiftSourceName(prev) || prev.name;
+    if (nextName === original) {
+      return catalogGiftSourceName(prev)
+        ? this.resetCatalogGift(giftId)
+        : { ok: true, gifts: this.listTestGifts(), message: MSG.ui.giftCatalogRenameOk };
+    }
+    const merged = mergeCatalogGift(
+      list,
+      { ...prev, name: nextName },
+      { preferIncomingName: true, sourceName: original },
+    );
+    return this.commitCatalogGifts(merged, MSG.ui.giftCatalogRenameOk);
+  }
+
+  resetCatalogGift(id: string): { ok: boolean; gifts: CatalogGift[]; message: string } {
+    const giftId = String(id || '').trim();
+    const list = this.watcher.listGifts();
+    const prev = list.find((gift) => gift.id === giftId);
+    if (!giftId || !prev) {
+      return { ok: false, gifts: this.listTestGifts(), message: MSG.ui.giftCatalogRenameMissing };
+    }
+    const original = catalogGiftSourceName(prev);
+    if (!original) {
+      return { ok: false, gifts: this.listTestGifts(), message: MSG.ui.giftCatalogRenameClearMissing };
+    }
+    const merged = mergeCatalogGift(
+      list,
+      { ...prev, name: original },
+      { preferIncomingName: true, sourceName: null },
+    );
+    return this.commitCatalogGifts(merged, MSG.ui.giftCatalogRenameClearOk);
+  }
+
+  private commitCatalogGifts(
+    merged: CatalogGift[],
+    okMessage: string,
+  ): { ok: true; gifts: CatalogGift[]; message: string } {
+    const saved = this.persistTestGifts(merged);
+    const next = saved.length > 0 ? saved : merged;
+    this.watcher.primeGifts(next);
+    this.emit('config');
+    return { ok: true, gifts: next, message: okMessage };
   }
 
   private pickTestGift(giftId?: string): CatalogGift | null {
@@ -1235,6 +1301,7 @@ export class SessionManager extends EventEmitter {
         this.lastConnectError = '';
         this.likeTracker.reset();
         this.diamondTracker.reset();
+        this.userAvatars.reset();
         this.rankingEntries = [];
         this.publishRankingIfChanged(true);
         this.syncRankingLikePollTimer();
@@ -1546,11 +1613,11 @@ export class SessionManager extends EventEmitter {
     );
     current = {
       ...current,
-      user: {
+      user: this.userAvatars.fill({
         ...sourceUser,
         nickname: displayNickname,
         sourceNickname: sourceUser.nickname || sourceUser.sourceNickname || '',
-      },
+      }),
     };
     if (current.type === 'gift') {
       // ランキング用にダイヤ累計は常に更新（表示オフ・テスト送信でも集計する）
@@ -1826,6 +1893,7 @@ export class SessionManager extends EventEmitter {
         comment: current.comment,
         commentEmotes,
         giftImageUrl,
+        giftId: current.giftId,
         giftName: current.giftName,
         giftCount: current.giftCount,
         diamondCount: current.diamondCount,

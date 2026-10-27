@@ -185,6 +185,8 @@ export const MSG = {
     giftSpeakSearchLabel: '検索',
     giftSpeakSearchPlaceholder: '名前・ダイヤ',
     giftSpeakSearchEmpty: '一致するギフトがありません',
+    giftSpeakLatinOnly: '英語名だけ',
+    giftSpeakLatinOnlyEmpty: '英語名のギフトはありません',
     giftSpeakEnableAll: '全選択',
     giftSpeakEnableNone: '全外し',
     giftSpeakBulkGroupLabel: '有効の一括操作',
@@ -193,6 +195,18 @@ export const MSG = {
     giftCatalogReloadHint:
       '普段は押さなくて大丈夫です。最初からよくあるギフトが入っていて、配信中に来た分は自動で足されます。まとめて取り直したいときだけ使ってください。',
     giftCatalogReloadButton: '一覧を再取得',
+    giftCatalogRename: '名前を変える',
+    giftCatalogRenamePrompt: 'コメント画面と配信ソースに出すギフト名',
+    giftCatalogRenameEmpty: '名前を空にはできません',
+    giftCatalogRenameMissing: 'そのギフトは一覧にありません',
+    giftCatalogRenameOk: 'ギフト名を変えました',
+    giftCatalogRenameFailed: 'ギフト名を変えられませんでした',
+    giftCatalogRenameClear: '名前を戻す',
+    giftCatalogRenameClearOk: 'ギフト名を戻しました',
+    giftCatalogRenameClearMissing: '変えた名前がありません',
+    giftCatalogRenameDblclickHint: 'ダブルクリックで名前を変える',
+    namePromptOk: '変える',
+    namePromptCancel: 'やめる',
     giftChimeColEnable: '有効',
     giftChimeColGift: 'ギフト',
     giftChimeColSound: 'サウンド',
@@ -368,7 +382,7 @@ export const MSG = {
     eventSpeakLabel: '音を出す',
     previewZoomLabel: 'プレビューの拡大',
     giftSpeakListHint:
-      '初期一覧にないギフトは、配信中に投げられると自動で足されます。\n\n鳴らしたいギフトだけ有効にしてください。読み上げモードの TTS には効きません。',
+      '初期一覧にないギフトは、配信中に投げられると自動で足されます。\n\n鳴らしたいギフトだけ有効にしてください。行をダブルクリック、または右クリックすると表示名を変えたり戻せます。英語名だけ、にすると直したい行を探しやすいです。読み上げモードの TTS には効きません。',
     viewerFontSizeLabel: 'コメント画面の文字サイズ',
     overlayMotionLabel: '動き',
     overlayMotionHint:
@@ -497,6 +511,8 @@ export const MSG = {
     overlayPreviewSamples: '配信ソースにサンプル',
     overlayClearChat: '配信ソースを消す',
     viewerSaveLog: 'ログを保存',
+    viewerSaveLogHint:
+      'コメント画面に出ている行（起動時に復元した分も含む）をテキストに書き出せます。中身はタブ区切りです。',
     viewerClearLog: 'ログを消す',
     viewerSaveLogTitle: 'コメントログの保存',
     viewerLogSaved: 'コメントログを保存しました',
@@ -581,14 +597,17 @@ export const MSG = {
     viewerCopyComment: 'コメントをコピー',
     viewerCopyId: 'IDをコピー',
     viewerCopyNickname: 'ニックネームをコピー',
+    viewerCopyGift: 'ギフト名をコピー',
     viewerUserMissing: 'この行からユーザーを特定できません',
     viewerCommentCopied: 'コメントをコピーしました',
     viewerIdCopied: 'IDをコピーしました',
     viewerNicknameCopied: 'ニックネームをコピーしました',
+    viewerGiftCopied: 'ギフト名をコピーしました',
     viewerCommentCopyFailed: 'コピーできませんでした',
     viewerCommentEmpty: 'コピーする文言がありません',
     viewerIdEmpty: 'IDがありません',
     viewerNicknameEmpty: 'ニックネームがありません',
+    viewerGiftEmpty: 'ギフト名がありません',
     viewerUserMuted: '{user} をミュートしました。読み上げしません',
     viewerUserUnmuted: '{user} のミュートを解除しました',
     viewerUserBlocked: '{user} をブロックしました。表示も読み上げもしません',
@@ -771,12 +790,26 @@ export function getRendererCopy(): {
     giftSpeakSearchLabel: string;
     giftSpeakSearchPlaceholder: string;
     giftSpeakSearchEmpty: string;
+    giftSpeakLatinOnly: string;
+    giftSpeakLatinOnlyEmpty: string;
     giftSpeakEnableAll: string;
     giftSpeakEnableNone: string;
     giftSpeakBulkGroupLabel: string;
     giftTestHint: string;
     giftCatalogReloadHint: string;
     giftCatalogReloadButton: string;
+    giftCatalogRename: string;
+    giftCatalogRenamePrompt: string;
+    giftCatalogRenameEmpty: string;
+    giftCatalogRenameMissing: string;
+    giftCatalogRenameOk: string;
+    giftCatalogRenameFailed: string;
+    giftCatalogRenameClear: string;
+    giftCatalogRenameClearOk: string;
+    giftCatalogRenameClearMissing: string;
+    giftCatalogRenameDblclickHint: string;
+    namePromptOk: string;
+    namePromptCancel: string;
     giftChimeColEnable: string;
     giftChimeColGift: string;
     giftChimeColSound: string;
@@ -939,6 +972,7 @@ export function getRendererCopy(): {
   overlayClientsWaiting: string;
   overlayClientsConnected: string;
   viewerSaveLog: string;
+  viewerSaveLogHint: string;
   viewerClearLog: string;
   viewerLogSaved: string;
   viewerLogEmpty: string;
@@ -1022,14 +1056,17 @@ export function getRendererCopy(): {
   viewerCopyComment: string;
   viewerCopyId: string;
   viewerCopyNickname: string;
+  viewerCopyGift: string;
   viewerUserMissing: string;
   viewerCommentCopied: string;
   viewerIdCopied: string;
   viewerNicknameCopied: string;
+  viewerGiftCopied: string;
   viewerCommentCopyFailed: string;
   viewerCommentEmpty: string;
   viewerIdEmpty: string;
   viewerNicknameEmpty: string;
+  viewerGiftEmpty: string;
   viewerUserMuted: string;
   viewerUserUnmuted: string;
   viewerUserBlocked: string;
@@ -1149,12 +1186,26 @@ export function getRendererCopy(): {
     giftSpeakSearchLabel: MSG.ui.giftSpeakSearchLabel,
     giftSpeakSearchPlaceholder: MSG.ui.giftSpeakSearchPlaceholder,
     giftSpeakSearchEmpty: MSG.ui.giftSpeakSearchEmpty,
+    giftSpeakLatinOnly: MSG.ui.giftSpeakLatinOnly,
+    giftSpeakLatinOnlyEmpty: MSG.ui.giftSpeakLatinOnlyEmpty,
     giftSpeakEnableAll: MSG.ui.giftSpeakEnableAll,
     giftSpeakEnableNone: MSG.ui.giftSpeakEnableNone,
     giftSpeakBulkGroupLabel: MSG.ui.giftSpeakBulkGroupLabel,
     giftTestHint: MSG.ui.giftTestHint,
     giftCatalogReloadHint: MSG.ui.giftCatalogReloadHint,
     giftCatalogReloadButton: MSG.ui.giftCatalogReloadButton,
+    giftCatalogRename: MSG.ui.giftCatalogRename,
+    giftCatalogRenamePrompt: MSG.ui.giftCatalogRenamePrompt,
+    giftCatalogRenameEmpty: MSG.ui.giftCatalogRenameEmpty,
+    giftCatalogRenameMissing: MSG.ui.giftCatalogRenameMissing,
+    giftCatalogRenameOk: MSG.ui.giftCatalogRenameOk,
+    giftCatalogRenameFailed: MSG.ui.giftCatalogRenameFailed,
+    giftCatalogRenameClear: MSG.ui.giftCatalogRenameClear,
+    giftCatalogRenameClearOk: MSG.ui.giftCatalogRenameClearOk,
+    giftCatalogRenameClearMissing: MSG.ui.giftCatalogRenameClearMissing,
+    giftCatalogRenameDblclickHint: MSG.ui.giftCatalogRenameDblclickHint,
+    namePromptOk: MSG.ui.namePromptOk,
+    namePromptCancel: MSG.ui.namePromptCancel,
     giftChimeColEnable: MSG.ui.giftChimeColEnable,
     giftChimeColGift: MSG.ui.giftChimeColGift,
     giftChimeColSound: MSG.ui.giftChimeColSound,
@@ -1317,6 +1368,7 @@ export function getRendererCopy(): {
     overlayClientsWaiting: MSG.ui.overlayClientsWaiting,
     overlayClientsConnected: MSG.ui.overlayClientsConnected,
     viewerSaveLog: MSG.ui.viewerSaveLog,
+    viewerSaveLogHint: MSG.ui.viewerSaveLogHint,
     viewerClearLog: MSG.ui.viewerClearLog,
     viewerLogSaved: MSG.ui.viewerLogSaved,
     viewerLogEmpty: MSG.ui.viewerLogEmpty,
@@ -1391,14 +1443,17 @@ export function getRendererCopy(): {
     viewerCopyComment: MSG.ui.viewerCopyComment,
     viewerCopyId: MSG.ui.viewerCopyId,
     viewerCopyNickname: MSG.ui.viewerCopyNickname,
+    viewerCopyGift: MSG.ui.viewerCopyGift,
     viewerUserMissing: MSG.ui.viewerUserMissing,
     viewerCommentCopied: MSG.ui.viewerCommentCopied,
     viewerIdCopied: MSG.ui.viewerIdCopied,
     viewerNicknameCopied: MSG.ui.viewerNicknameCopied,
+    viewerGiftCopied: MSG.ui.viewerGiftCopied,
     viewerCommentCopyFailed: MSG.ui.viewerCommentCopyFailed,
     viewerCommentEmpty: MSG.ui.viewerCommentEmpty,
     viewerIdEmpty: MSG.ui.viewerIdEmpty,
     viewerNicknameEmpty: MSG.ui.viewerNicknameEmpty,
+    viewerGiftEmpty: MSG.ui.viewerGiftEmpty,
     viewerUserMuted: MSG.ui.viewerUserMuted,
     viewerUserUnmuted: MSG.ui.viewerUserUnmuted,
     viewerUserBlocked: MSG.ui.viewerUserBlocked,

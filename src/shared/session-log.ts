@@ -37,6 +37,23 @@ function formatLogTime(value: string): string {
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
 }
 
+/** コメント画面の保存行を書き出し用の形にする。 */
+export function sessionLogRowsFromViewer(
+  rows: Array<Partial<SessionLogRow> & { type?: OverlayEventType }>,
+): SessionLogRow[] {
+  return rows.map((row) => ({
+    receivedAt: String(row.receivedAt || ''),
+    type: row.type || 'comment',
+    uniqueId: String(row.uniqueId || ''),
+    nickname: String(row.nickname || ''),
+    comment: String(row.comment || ''),
+    displayText: String(row.displayText || ''),
+    giftName: String(row.giftName || ''),
+    giftCount: Number(row.giftCount) || 0,
+    diamondCount: Number(row.diamondCount) || 0,
+  }));
+}
+
 export function sessionLogTsv(
   rows: SessionLogRow[],
   typeLabels: Record<string, string>,

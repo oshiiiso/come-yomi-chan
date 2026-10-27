@@ -33,6 +33,8 @@ export const IpcChannels = {
   SEND_TEST_EVENT: 'tester:send',
   GET_TEST_GIFTS: 'tester:gifts',
   REFRESH_TEST_GIFTS: 'tester:gifts-refresh',
+  RENAME_CATALOG_GIFT: 'tester:gift-rename',
+  RESET_CATALOG_GIFT: 'tester:gift-reset',
   PREVIEW_OVERLAY: 'overlay:preview',
   PUSH_OVERLAY_RANKING_MOTION: 'overlay:push-ranking-motion',
   PUSH_OVERLAY_LOOK: 'overlay:push-look',

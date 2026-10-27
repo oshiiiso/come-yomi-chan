@@ -59,7 +59,14 @@ export function firstImageUrl(value: unknown): string {
       return found;
     }
   }
-  for (const key of ['imageUrl', 'image_url', 'url', 'uri'] as const) {
+  for (const key of [
+    'imageUrl',
+    'image_url',
+    'url',
+    'uri',
+    'openWebUrl',
+    'open_web_url',
+  ] as const) {
     if (record[key] === undefined) {
       continue;
     }
@@ -349,7 +356,30 @@ export function catalogGiftsFromList(
 }
 
 export function looksJapaneseGiftName(name: string): boolean {
-  return /[\u3040-\u30ff\u3400-\u9fff]/.test(name);
+  return /[\u3040-\u30ff\u3400-\u9fff]/.test(String(name || ''));
+}
+
+export function looksLatinGiftName(name: string): boolean {
+  const trimmed = String(name || '').trim();
+  return Boolean(trimmed) && !looksJapaneseGiftName(trimmed);
+}
+
+export function catalogGiftSourceName(gift: { sourceName?: string } | null | undefined): string {
+  return String(gift?.sourceName ?? '').trim();
+}
+
+function catalogGiftRecord(gift: CatalogGift, sourceName?: string): CatalogGift {
+  const next: CatalogGift = {
+    id: String(gift.id ?? '').trim(),
+    name: String(gift.name ?? '').trim(),
+    imageUrl: firstImageUrl(gift.imageUrl),
+    diamondCount: Math.max(0, Number(gift.diamondCount) || 0),
+  };
+  const kept = String(sourceName ?? '').trim();
+  if (kept) {
+    next.sourceName = kept;
+  }
+  return next;
 }
 
 /** 共有の catalogGiftHasIcon と同じ判定（ui/js/catalog-gift-icon.js と揃える）。 */
@@ -400,11 +430,25 @@ export function pickCatalogGiftName(
   return left;
 }
 
+function resolveMergedSourceName(
+  gift: CatalogGift,
+  prev: CatalogGift | undefined,
+  options: { sourceName?: string | null },
+): string {
+  if (options.sourceName === null) {
+    return '';
+  }
+  if (typeof options.sourceName === 'string') {
+    return options.sourceName.trim();
+  }
+  return catalogGiftSourceName(gift) || catalogGiftSourceName(prev);
+}
+
 /** 配信中に届いたギフトを一覧へ足す。新規なら true。 */
 export function mergeCatalogGift(
   list: CatalogGift[],
   gift: CatalogGift,
-  options: { preferIncomingName?: boolean } = {},
+  options: { preferIncomingName?: boolean; sourceName?: string | null } = {},
 ): CatalogGift[] {
   const id = String(gift.id ?? '').trim();
   const name = String(gift.name ?? '').trim();
@@ -412,28 +456,28 @@ export function mergeCatalogGift(
     return list;
   }
 
-  const next: CatalogGift = {
-    id,
-    name,
-    imageUrl: firstImageUrl(gift.imageUrl),
-    diamondCount: Math.max(0, Number(gift.diamondCount) || 0),
-  };
   const index = list.findIndex((item) => item.id === id);
+  const prev = index >= 0 ? list[index] : undefined;
+  const sourceName = resolveMergedSourceName(gift, prev, options);
+  const incoming = catalogGiftRecord(gift, sourceName);
   let merged: CatalogGift[];
-  if (index < 0) {
-    merged = [...list, next];
+  if (!prev) {
+    merged = [...list, incoming];
   } else {
-    const prev = list[index];
-    const updated: CatalogGift = {
-      id,
-      name: pickCatalogGiftName(prev.name, next.name, options.preferIncomingName === true),
-      imageUrl: next.imageUrl || prev.imageUrl,
-      diamondCount: next.diamondCount || prev.diamondCount,
-    };
+    const updated = catalogGiftRecord(
+      {
+        id,
+        name: pickCatalogGiftName(prev.name, incoming.name, options.preferIncomingName === true),
+        imageUrl: incoming.imageUrl || prev.imageUrl,
+        diamondCount: incoming.diamondCount || prev.diamondCount,
+      },
+      sourceName,
+    );
     if (
       updated.name === prev.name &&
       updated.imageUrl === prev.imageUrl &&
-      updated.diamondCount === prev.diamondCount
+      updated.diamondCount === prev.diamondCount &&
+      catalogGiftSourceName(updated) === catalogGiftSourceName(prev)
     ) {
       return list;
     }
@@ -452,10 +496,24 @@ export function mergeCatalogGiftsFromFetch(
   let merged = list;
   for (const gift of fetched) {
     merged = mergeCatalogGift(merged, gift, {
-      preferIncomingName: looksJapaneseGiftName(String(gift.name ?? '')),
+      preferIncomingName:
+        looksJapaneseGiftName(String(gift.name ?? '')) || Boolean(catalogGiftSourceName(gift)),
     });
   }
   return merged;
+}
+
+/** ユーザーが変えた表示名だけ、再取得後の一覧へ戻す。 */
+export function applyCatalogGiftUserNames(list: CatalogGift[], named: CatalogGift[]): CatalogGift[] {
+  let next = list;
+  for (const gift of named) {
+    const sourceName = catalogGiftSourceName(gift);
+    if (!sourceName) {
+      continue;
+    }
+    next = mergeCatalogGift(next, gift, { preferIncomingName: true, sourceName });
+  }
+  return next;
 }
 
 export function normalizeCatalogGifts(
@@ -480,11 +538,13 @@ export function normalizeCatalogGifts(
       continue;
     }
     seen.add(id);
+    const sourceName = asString(record.sourceName).trim();
     gifts.push({
       id,
       name,
       imageUrl: firstImageUrl(record.imageUrl),
       diamondCount: Math.max(0, asNumber(record.diamondCount)),
+      ...(sourceName ? { sourceName } : {}),
     });
   }
   return limit > 0 ? gifts.slice(0, limit) : gifts;

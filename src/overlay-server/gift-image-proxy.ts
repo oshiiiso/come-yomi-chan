@@ -44,20 +44,44 @@ export interface CachedGiftImage {
   expiresAt: number;
 }
 
+function isAllowedHost(host: string): boolean {
+  const normalized = host.toLowerCase();
+  if (ALLOWED_HOSTS.has(normalized)) {
+    return true;
+  }
+  return ALLOWED_HOST_SUFFIXES.some((suffix) => normalized.endsWith(suffix));
+}
+
 export function isAllowedGiftImageUrl(value: string): boolean {
   try {
     const parsed = new URL(value);
     if (parsed.protocol !== 'https:') {
       return false;
     }
-    const host = parsed.hostname.toLowerCase();
-    if (ALLOWED_HOSTS.has(host)) {
-      return true;
-    }
-    return ALLOWED_HOST_SUFFIXES.some((suffix) => host.endsWith(suffix));
+    return isAllowedHost(parsed.hostname);
   } catch (error) {
     logger.debug(`ギフト画像URLを解釈できません: ${getErrorMessage(error)}`);
     return false;
+  }
+}
+
+function httpsImageUrl(value: string): string {
+  try {
+    const parsed = new URL(value);
+    if (!isAllowedHost(parsed.hostname)) {
+      return '';
+    }
+    if (parsed.protocol === 'https:') {
+      return value;
+    }
+    if (parsed.protocol === 'http:') {
+      const prefix = value.match(/^http:\/\//i);
+      return prefix ? `https://${value.slice(prefix[0].length)}` : '';
+    }
+    return '';
+  } catch (error) {
+    logger.debug(`ギフト画像URLを解釈できません: ${getErrorMessage(error)}`);
+    return '';
   }
 }
 
@@ -69,8 +93,9 @@ export function overlayGiftImagePath(imageUrl: string): string {
   if (trimmed.startsWith('/overlay/') || trimmed.startsWith('/media/')) {
     return trimmed;
   }
-  if (isAllowedGiftImageUrl(trimmed)) {
-    return `/media/gift?u=${encodeURIComponent(trimmed)}`;
+  const allowed = httpsImageUrl(trimmed);
+  if (allowed) {
+    return `/media/gift?u=${encodeURIComponent(allowed)}`;
   }
   return '';
 }
@@ -127,37 +152,83 @@ export class GiftImageCache {
   }
 }
 
+function sniffImageContentType(bytes: Buffer): string {
+  if (bytes.length >= 3 && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) {
+    return 'image/jpeg';
+  }
+  if (
+    bytes.length >= 8 &&
+    bytes[0] === 0x89 &&
+    bytes[1] === 0x50 &&
+    bytes[2] === 0x4e &&
+    bytes[3] === 0x47
+  ) {
+    return 'image/png';
+  }
+  if (bytes.length >= 6 && bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) {
+    return 'image/gif';
+  }
+  if (
+    bytes.length >= 12 &&
+    bytes.toString('ascii', 0, 4) === 'RIFF' &&
+    bytes.toString('ascii', 8, 12) === 'WEBP'
+  ) {
+    return 'image/webp';
+  }
+  const head = bytes.subarray(0, 256).toString('utf8').replace(/^\uFEFF/, '').trimStart();
+  if (/^<svg[\s>]/i.test(head) || /^<\?xml\b[^>]*>\s*<svg[\s>]/i.test(head)) {
+    return 'image/svg+xml';
+  }
+  return '';
+}
+
+function resolveImageContentType(headerValue: string, bytes: Buffer): string {
+  const sniffed = sniffImageContentType(bytes);
+  if (sniffed) {
+    return sniffed;
+  }
+  const headerType = headerValue.split(';')[0].trim().toLowerCase();
+  if (headerType === 'image/jpg') {
+    return ALLOWED_TYPES.has('image/jpeg') ? 'image/jpeg' : '';
+  }
+  if (headerType === 'image/svg+xml' && ALLOWED_TYPES.has(headerType)) {
+    return headerType;
+  }
+  return '';
+}
+
 export async function fetchAllowedGiftImage(
   imageUrl: string,
   fetcher: typeof fetch = fetch,
 ): Promise<CachedGiftImage | null> {
-  if (!isAllowedGiftImageUrl(imageUrl)) {
+  const allowedUrl = httpsImageUrl(imageUrl);
+  if (!allowedUrl) {
     return null;
   }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
-    const response = await fetcher(imageUrl, {
+    const response = await fetcher(allowedUrl, {
       method: 'GET',
       redirect: 'follow',
       signal: controller.signal,
       headers: { Accept: 'image/*' },
     });
-    if (!response.ok || !isAllowedGiftImageUrl(response.url)) {
-      return null;
-    }
-
-    const contentType = (response.headers.get('content-type') ?? '')
-      .split(';')[0]
-      .trim()
-      .toLowerCase();
-    if (!ALLOWED_TYPES.has(contentType)) {
+    const responseUrl = httpsImageUrl(response.url || allowedUrl);
+    if (!response.ok || !responseUrl) {
       return null;
     }
 
     const bytes = Buffer.from(await response.arrayBuffer());
     if (bytes.length === 0 || bytes.length > MAX_IMAGE_BYTES) {
+      return null;
+    }
+    const contentType = resolveImageContentType(
+      response.headers.get('content-type') ?? '',
+      bytes,
+    );
+    if (!contentType) {
       return null;
     }
     return {

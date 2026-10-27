@@ -5,6 +5,7 @@ const OVERLAY_COMMENT_COLOR_BY_LOOK_PRESET = {
   dark: '#f1f3f5',
   light: '#1a1b1e',
   minimal: '#ffffff',
+  live: '#ffffff',
   neon: '#f8fafc',
 };
 

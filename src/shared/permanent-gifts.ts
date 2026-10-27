@@ -1,5 +1,6 @@
 import { CatalogGift } from './types';
 import {
+  catalogGiftSourceName,
   catalogGiftsWithIcons,
   firstImageUrl,
   mergeCatalogGiftsFromFetch,
@@ -71,11 +72,21 @@ function mergeDuplicateCatalogGifts(
   right: CatalogGift,
   preferIds?: ReadonlySet<string>,
 ): CatalogGift {
+  const custom = catalogGiftSourceName(right)
+    ? right
+    : catalogGiftSourceName(left)
+      ? left
+      : null;
+  const sourceName =
+    catalogGiftSourceName(custom) ||
+    catalogGiftSourceName(left) ||
+    catalogGiftSourceName(right);
   return {
     id: preferCatalogGiftId(left.id, right.id, preferIds),
-    name: pickCatalogGiftName(left.name, right.name),
+    name: custom ? custom.name : pickCatalogGiftName(left.name, right.name),
     imageUrl: left.imageUrl || right.imageUrl,
     diamondCount: left.diamondCount || right.diamondCount,
+    ...(sourceName ? { sourceName } : {}),
   };
 }
 
@@ -97,12 +108,16 @@ export function dedupeAndSortCatalogGifts(
     : undefined;
   const prepared = applyKnownJapaneseGiftNames(
     gifts
-      .map((gift) => ({
-        id: String(gift.id ?? '').trim(),
-        name: String(gift.name ?? '').trim(),
-        imageUrl: firstImageUrl(gift.imageUrl),
-        diamondCount: Math.max(0, Number(gift.diamondCount) || 0),
-      }))
+      .map((gift) => {
+        const sourceName = catalogGiftSourceName(gift);
+        return {
+          id: String(gift.id ?? '').trim(),
+          name: String(gift.name ?? '').trim(),
+          imageUrl: firstImageUrl(gift.imageUrl),
+          diamondCount: Math.max(0, Number(gift.diamondCount) || 0),
+          ...(sourceName ? { sourceName } : {}),
+        };
+      })
       .filter((gift) => gift.id && gift.name),
   );
   if (prepared.length <= 1) {

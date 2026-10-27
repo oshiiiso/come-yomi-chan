@@ -63,21 +63,91 @@ function usersFromEventTexts(raw: Record<string, unknown>): Record<string, unkno
   ];
 }
 
-function pickAvatarUrl(user: Record<string, unknown>, raw: Record<string, unknown>): string {
-  const envelope = asRecord(raw.envelopeInfo);
+export function avatarUrlFromUser(user: Record<string, unknown>): string {
   return (
     firstImageUrl(user.avatarThumb) ||
     firstImageUrl(user.avatar_thumb) ||
     firstImageUrl(user.avatarMedium) ||
     firstImageUrl(user.avatar_medium) ||
+    firstImageUrl(user.avatarLarge) ||
+    firstImageUrl(user.avatar_large) ||
     firstImageUrl(user.avatarLarger) ||
     firstImageUrl(user.avatar_larger) ||
+    firstImageUrl(user.avatarJpg) ||
+    firstImageUrl(user.avatar_jpg) ||
     firstImageUrl(user.profilePictureUrl) ||
     firstImageUrl(user.profilePicture) ||
     firstImageUrl(user.avatarUrl) ||
     firstImageUrl(user.avatar) ||
+    ''
+  );
+}
+
+function idSetFromUser(user: Record<string, unknown>, extra = ''): Set<string> {
+  return new Set(
+    [
+      extra,
+      asText(user.uniqueId),
+      asText(user.unique_id),
+      asText(user.displayId),
+      asText(user.display_id),
+      asText(user.id),
+      asText(user.userId),
+    ]
+      .map((value) => value.replace(/^@/, ''))
+      .filter(Boolean),
+  );
+}
+
+function isSameUser(candidate: Record<string, unknown>, wanted: Set<string>): boolean {
+  if (wanted.size === 0) {
+    return false;
+  }
+  for (const id of idSetFromUser(candidate)) {
+    if (wanted.has(id)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function pickAvatarUrl(
+  identity: Record<string, unknown>,
+  raw: Record<string, unknown>,
+  uniqueId: string,
+): string {
+  const fromIdentity = avatarUrlFromUser(identity);
+  if (fromIdentity) {
+    return fromIdentity;
+  }
+
+  const wanted = idSetFromUser(identity, uniqueId);
+  const envelope = asRecord(raw.envelopeInfo);
+  const identityUser = asRecord(raw.userIdentity).user;
+  const commonUser = asRecord(raw.common).user;
+  const candidates = [
+    asRecord(raw.user),
+    asRecord(raw.fromUser),
+    asRecord(raw.sender),
+    asRecord(raw.userInfo),
+    asRecord(identityUser),
+    asRecord(commonUser),
+    ...usersFromEventTexts(raw),
+  ];
+  for (const candidate of candidates) {
+    if (!isSameUser(candidate, wanted)) {
+      continue;
+    }
+    const url = avatarUrlFromUser(candidate);
+    if (url) {
+      return url;
+    }
+  }
+  return (
     firstImageUrl(raw.profilePicture) ||
-    firstImageUrl(envelope.sendUserAvatar)
+    firstImageUrl(envelope.sendUserAvatar) ||
+    firstImageUrl(envelope.send_user_avatar) ||
+    ''
   );
 }
 
@@ -132,7 +202,7 @@ export function userFromEvent(
   return {
     uniqueId: resolvedId,
     nickname,
-    avatarUrl: pickAvatarUrl(user, raw),
+    avatarUrl: pickAvatarUrl(user, raw, resolvedId),
     isFanClub: badges.isFanClub,
     fanClubStatus: badges.fanClubStatus,
     isSuperFan: badges.isSuperFan,

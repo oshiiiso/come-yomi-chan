@@ -1,6 +1,6 @@
 {
   "name": "come-yomi-chan",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "TikTok LIVE のコメント画面と読み上げ（コメ読みちゃん）",
   "main": "dist/main/index.js",
   "author": "oshiiiso",

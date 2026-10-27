@@ -1,5 +1,5 @@
-import { firstImageUrl } from './gift-fields';
 import { fanClubNameFromUser } from './user-badges';
+import { avatarUrlFromUser } from './event-user';
 import { scanFanClubNameDeep } from '../shared/fan-club-name';
 
 export interface TikTokUserPreview {
@@ -47,18 +47,7 @@ function pickOwner(raw: Record<string, unknown>): Record<string, unknown> {
 }
 
 function pickAvatarUrl(owner: Record<string, unknown>): string {
-  return (
-    firstImageUrl(owner.avatarThumb) ||
-    firstImageUrl(owner.avatar_thumb) ||
-    firstImageUrl(owner.avatarMedium) ||
-    firstImageUrl(owner.avatar_medium) ||
-    firstImageUrl(owner.avatarLarger) ||
-    firstImageUrl(owner.avatar_larger) ||
-    firstImageUrl(owner.profilePicture) ||
-    firstImageUrl(owner.profilePictureUrl) ||
-    firstImageUrl(owner.avatarUrl) ||
-    firstImageUrl(owner.avatar)
-  );
+  return avatarUrlFromUser(owner);
 }
 
 export function fanClubNameFromRoom(raw: unknown): string {

@@ -219,15 +219,24 @@
       </div>
     </section>
 
+    <div class="ctx-menu" id="gift-catalog-menu" hidden role="menu">
+      <p class="ctx-menu__label" id="gift-catalog-menu-label"></p>
+      <button type="button" role="menuitem" id="gift-catalog-menu-rename">名前を変える</button>
+      <button type="button" role="menuitem" id="gift-catalog-menu-clear">名前を戻す</button>
+    </div>
+
     <div class="ctx-menu" id="viewer-user-menu" hidden role="menu">
       <p class="ctx-menu__label" id="viewer-user-menu-label"></p>
       <button type="button" role="menuitem" id="viewer-user-menu-copy">コメントをコピー</button>
       <button type="button" role="menuitem" id="viewer-user-menu-copy-id">IDをコピー</button>
       <button type="button" role="menuitem" id="viewer-user-menu-copy-nickname">ニックネームをコピー</button>
+      <button type="button" role="menuitem" id="viewer-user-menu-copy-gift">ギフト名をコピー</button>
       <button class="ctx-menu__sep" type="button" role="menuitem" id="viewer-user-menu-mute">ミュート（読み上げしない）</button>
       <button type="button" role="menuitem" id="viewer-user-menu-block">ブロック（表示も読み上げもしない）</button>
       <button type="button" role="menuitem" id="viewer-user-menu-nickname">呼び方を変える</button>
       <button type="button" role="menuitem" id="viewer-user-menu-nickname-clear">呼び方を消す</button>
+      <button class="ctx-menu__sep" type="button" role="menuitem" id="viewer-user-menu-gift-rename">名前を変える</button>
+      <button type="button" role="menuitem" id="viewer-user-menu-gift-clear">名前を戻す</button>
     </div>
 
       <div class="view-settings" id="view-settings" aria-labelledby="mode-settings" hidden>
@@ -443,7 +452,7 @@
           </div>
           <div class="card">
             <h2>コメントログ</h2>
-            <p class="hint">アプリを開いてから流れた行をテキストに書き出せます。中身はタブ区切りです。</p>
+            <p class="hint" id="viewer-save-log-hint">コメント画面に出ている行（起動時に復元した分も含む）をテキストに書き出せます。中身はタブ区切りです。</p>
             <label class="field field--num-wide">
               <span id="viewer-log-max-rows-label">コメント画面の最大行数</span>
               <input id="viewer-log-max-rows" type="number" min="100" max="5000" value="1000" />
@@ -758,6 +767,12 @@
                         autocomplete="off"
                         spellcheck="false"
                       />
+                      <button
+                        class="btn btn--ghost"
+                        id="gift-speak-latin-only"
+                        type="button"
+                        aria-pressed="false"
+                      >英語名だけ</button>
                       <div class="gift-speak-bulk" role="group" aria-label="有効の一括操作">
                         <button class="btn btn--ghost" id="gift-speak-enable-all" type="button">全選択</button>
                         <button class="btn btn--ghost" id="gift-speak-enable-none" type="button">全外し</button>
@@ -1624,6 +1639,7 @@
                 <button class="preset-btn" type="button" data-look-preset="dark">標準</button>
                 <button class="preset-btn" type="button" data-look-preset="light">明るい</button>
                 <button class="preset-btn" type="button" data-look-preset="minimal">文字だけ</button>
+                <button class="preset-btn" type="button" data-look-preset="live">配信風</button>
                 <button class="preset-btn" type="button" data-look-preset="neon">ネオン</button>
               </div>
               <div class="field-grid">
@@ -2121,6 +2137,24 @@
         <p class="toast" id="toast" role="status" aria-live="polite" aria-atomic="true"></p>
       </footer>
     </div>
+    <div class="modal" id="name-prompt" hidden>
+      <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="name-prompt-title">
+        <h2 id="name-prompt-title">名前を変える</h2>
+        <label class="field">
+          <input
+            id="name-prompt-input"
+            type="text"
+            autocomplete="off"
+            spellcheck="false"
+            aria-labelledby="name-prompt-title"
+          />
+        </label>
+        <div class="row">
+          <button class="btn" id="name-prompt-ok" type="button">変える</button>
+          <button class="btn btn--ghost" id="name-prompt-cancel" type="button">やめる</button>
+        </div>
+      </div>
+    </div>
     <div class="modal" id="connect-confirm" hidden>
       <div class="modal__card" role="dialog" aria-modal="true" aria-labelledby="connect-confirm-title">
         <h2 id="connect-confirm-title">このアカウントに接続しますか？</h2>
@@ -2154,6 +2188,7 @@
     <script src="js/dom.js"></script>
     <script src="js/speech-hotkey-ui.js"></script>
     <script src="js/user-lists.js"></script>
+    <script src="js/name-prompt.js"></script>
     <script src="js/list-editor.js"></script>
     <script src="js/event-alert-ui.js"></script>
     <script src="js/overlay-name-colors.js"></script>

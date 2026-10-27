@@ -4,6 +4,7 @@ import {
   pushSessionLog,
   SESSION_LOG_MAX_ROWS,
   sessionLogFileName,
+  sessionLogRowsFromViewer,
   sessionLogTsv,
   SessionLogRow,
 } from '../../shared/session-log';
@@ -39,6 +40,26 @@ test('ログはタブ区切りで保存でき、改行は潰す', () => {
   assert.ok(tsv.includes('ギフト'));
   assert.ok(tsv.includes('こんにちは 改行 なし'));
   assert.ok(!tsv.includes('\t改行'));
+});
+
+test('コメント画面の保存行を書き出し用に揃える', () => {
+  const rows = sessionLogRowsFromViewer([
+    {
+      receivedAt: '2026-09-06T01:24:00.000+09:00',
+      type: 'gift',
+      uniqueId: 'viewer_a',
+      nickname: '視聴者',
+      comment: '',
+      displayText: '視聴者さんがバラを投げたよ',
+      giftName: 'バラ',
+      giftCount: 2,
+      diamondCount: 2,
+    },
+  ]);
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].type, 'gift');
+  assert.equal(rows[0].giftName, 'バラ');
+  assert.equal(rows[0].giftCount, 2);
 });
 
 test('古い行は上限を超えたら捨てる', () => {

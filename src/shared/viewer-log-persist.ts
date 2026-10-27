@@ -17,6 +17,7 @@ export interface ViewerPersistRow {
   nickname: string;
   comment: string;
   displayText: string;
+  giftId?: string;
   giftName: string;
   giftCount: number;
   diamondCount: number;
@@ -140,6 +141,10 @@ function normalizePersistRow(raw: unknown): ViewerPersistRow | null {
     giftCount: asNonNegativeInt(record.giftCount),
     diamondCount: asNonNegativeInt(record.diamondCount),
   };
+  const giftId = asText(record.giftId);
+  if (giftId) {
+    row.giftId = giftId;
+  }
   const avatarUrl = asText(record.avatarUrl);
   if (avatarUrl) {
     row.avatarUrl = avatarUrl;

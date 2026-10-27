@@ -85,6 +85,81 @@ test('宝箱は displayText のユーザー名を優先し、sendUserName（ID�
   assert.equal(user.avatarUrl, 'https://p16.tiktokcdn.com/face.png');
 });
 
+test('宝箱で user にアイコンが無くても displayText 側のアイコンを取る', () => {
+  const user = userFromEvent({
+    user: {
+      uniqueId: 'box_user',
+      nickname: '宝箱の人',
+    },
+    envelopeInfo: {
+      sendUserId: '123',
+      sendUserName: 'box_user',
+    },
+    common: {
+      displayText: {
+        pieces: [
+          {
+            userValue: {
+              user: {
+                displayId: 'box_user',
+                nickname: '宝箱の人',
+                avatarThumb: { urlList: ['https://p16.tiktokcdn.com/from-text.png'] },
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(user.uniqueId, 'box_user');
+  assert.equal(user.avatarUrl, 'https://p16.tiktokcdn.com/from-text.png');
+});
+
+test('表示テキストに別人がいても送り主以外のアイコンは使わない', () => {
+  const user = userFromEvent({
+    user: {
+      uniqueId: 'sender',
+      nickname: '送り主',
+    },
+    common: {
+      displayText: {
+        pieces: [
+          {
+            userValue: {
+              user: {
+                uniqueId: 'host',
+                nickname: '配信者',
+                avatarThumb: { urlList: ['https://p16.tiktokcdn.com/host.png'] },
+              },
+            },
+          },
+          {
+            userValue: {
+              user: {
+                uniqueId: 'sender',
+                nickname: '送り主',
+              },
+            },
+          },
+        ],
+      },
+    },
+  });
+  assert.equal(user.uniqueId, 'sender');
+  assert.equal(user.avatarUrl, '');
+});
+
+test('avatarThumb が無くても avatarLarge からアイコンを取る', () => {
+  const user = userFromEvent({
+    user: {
+      uniqueId: 'large_only',
+      nickname: '大きい画像',
+      avatarLarge: { urlList: ['https://p16.tiktokcdn.com/large.png'] },
+    },
+  });
+  assert.equal(user.avatarUrl, 'https://p16.tiktokcdn.com/large.png');
+});
+
 test('宝箱で displayText が無いときは sendUserName を名前にし、数字の sendUserId は出さない', () => {
   const user = userFromEvent({
     envelopeInfo: {

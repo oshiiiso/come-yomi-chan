@@ -7,6 +7,8 @@ let giftChimeByGiftId = {};
 let giftChimeVolumeByGiftId = {};
 let cachedGiftCatalog = [];
 let giftSpeakSearchQuery = '';
+let giftSpeakLatinOnly = false;
+let giftCatalogRenameSeq = 0;
 
 function normalizeNicknameKeyUi(uniqueId) {
   return String(uniqueId || '')
@@ -501,8 +503,9 @@ function soundRefLabel(ref) {
 
 function giftSpeakSearchHaystack(gift) {
   const name = String(gift?.name || gift?.id || '');
+  const sourceName = String(gift?.sourceName || '');
   const diamonds = String(gift?.diamondCount ?? 0);
-  return `${name} ${diamonds}`.toLowerCase();
+  return `${name} ${sourceName} ${diamonds}`.toLowerCase();
 }
 
 function giftMatchesSpeakSearch(gift, query) {
@@ -524,11 +527,19 @@ function giftSpeakListEntryEligible(gift) {
   return Boolean(gift?.imageUrl);
 }
 
+function giftSpeakNameLooksLatin(name) {
+  const trimmed = String(name || '').trim();
+  return Boolean(trimmed) && !giftSpeakNameLooksJapanese(trimmed);
+}
+
 /** 今の検索結果で、有効チェックの対象になるギフトだけ。 */
 function matchedGiftSpeakEntries() {
   const gifts = Array.isArray(cachedGiftCatalog) ? cachedGiftCatalog : [];
   return gifts.filter(
-    (gift) => giftMatchesSpeakSearch(gift, giftSpeakSearchQuery) && giftSpeakListEntryEligible(gift),
+    (gift) =>
+      giftMatchesSpeakSearch(gift, giftSpeakSearchQuery) &&
+      giftSpeakListEntryEligible(gift) &&
+      (!giftSpeakLatinOnly || giftSpeakNameLooksLatin(gift.name)),
   );
 }
 
@@ -550,6 +561,18 @@ function setGiftSpeakEnabledForMatched(enabled) {
   }
   noteFormChanged();
   renderGiftSpeakList();
+}
+
+function syncGiftSpeakLatinOnlyButton() {
+  const button = $('gift-speak-latin-only');
+  if (!button) {
+    return;
+  }
+  button.classList.toggle('is-active', giftSpeakLatinOnly);
+  button.setAttribute('aria-pressed', giftSpeakLatinOnly ? 'true' : 'false');
+  if (uiCopy?.giftSpeakLatinOnly) {
+    button.textContent = uiCopy.giftSpeakLatinOnly;
+  }
 }
 
 function syncGiftSpeakBulkButtons() {
@@ -585,6 +608,7 @@ function syncGiftSpeakSearchCopy() {
   if (enableNone && uiCopy?.giftSpeakEnableNone) {
     enableNone.textContent = uiCopy.giftSpeakEnableNone;
   }
+  syncGiftSpeakLatinOnlyButton();
   const bulk = document.querySelector('.gift-speak-bulk');
   if (bulk && uiCopy?.giftSpeakBulkGroupLabel) {
     bulk.setAttribute('aria-label', uiCopy.giftSpeakBulkGroupLabel);
@@ -653,6 +677,7 @@ function renderGiftSpeakList() {
   if (!list) {
     return;
   }
+  hideGiftCatalogMenu();
   syncGiftSpeakSearchCopy();
   list.replaceChildren();
   const gifts = Array.isArray(cachedGiftCatalog) ? cachedGiftCatalog : [];
@@ -678,6 +703,14 @@ function renderGiftSpeakList() {
   const matched = matchedGiftSpeakEntries().slice().sort(compareGiftSpeakListOrder);
   if (emptyHint) {
     emptyHint.hidden = matched.length > 0;
+    if (matched.length === 0) {
+      emptyHint.textContent =
+        giftSpeakSearchQuery.trim()
+          ? uiCopy.giftSpeakSearchEmpty || '一致するギフトがありません'
+          : giftSpeakLatinOnly
+            ? uiCopy.giftSpeakLatinOnlyEmpty || '英語名のギフトはありません'
+            : uiCopy.giftSpeakSearchEmpty || '一致するギフトがありません';
+    }
   }
   if (matched.length === 0) {
     if (table) {
@@ -698,6 +731,12 @@ function renderGiftSpeakList() {
     const hasCustomSound = Boolean(giftChimeByGiftId[id]?.kind === 'file');
     const row = document.createElement('li');
     row.className = 'gift-chime-row';
+    row.dataset.giftCatalogId = id;
+    row.dataset.giftCatalogName = giftName;
+    const sourceName = String(gift.sourceName || '').trim();
+    if (sourceName) {
+      row.dataset.giftCatalogSourceName = sourceName;
+    }
 
     const testBtn = document.createElement('button');
     testBtn.type = 'button';
@@ -747,6 +786,7 @@ function renderGiftSpeakList() {
     const name = document.createElement('span');
     name.className = 'gift-chime-row__name';
     name.textContent = `${giftName}（${gift.diamondCount ?? 0}）`;
+    giftCell.title = uiCopy.giftCatalogRenameDblclickHint || 'ダブルクリックで名前を変える';
     giftCell.append(name);
 
     const soundCell = document.createElement('div');
@@ -1048,6 +1088,218 @@ function bindGiftChimeColumnResize() {
   });
 }
 
+function hideGiftCatalogMenu() {
+  const menu = $('gift-catalog-menu');
+  if (menu) {
+    menu.hidden = true;
+    delete menu.dataset.giftId;
+    delete menu.dataset.giftName;
+    delete menu.dataset.giftSourceName;
+  }
+}
+
+function focusGiftCatalogRow(giftId) {
+  const id = String(giftId || '').trim();
+  if (!id) {
+    return;
+  }
+  const row = $('gift-speak-list')?.querySelector(`[data-gift-catalog-id="${CSS.escape(id)}"]`);
+  const focusTarget =
+    row?.querySelector('[data-gift-speak-id]') ||
+    row?.querySelector('[data-gift-chime-test]') ||
+    row;
+  if (focusTarget instanceof HTMLElement) {
+    focusTarget.focus();
+  }
+}
+
+function showGiftCatalogMenu(event, row) {
+  const menu = $('gift-catalog-menu');
+  const label = $('gift-catalog-menu-label');
+  const renameBtn = $('gift-catalog-menu-rename');
+  const clearBtn = $('gift-catalog-menu-clear');
+  if (!menu || !renameBtn || !(row instanceof HTMLElement)) {
+    return;
+  }
+  const id = String(row.dataset.giftCatalogId || '').trim();
+  const name = String(row.dataset.giftCatalogName || '').trim();
+  const sourceName = String(row.dataset.giftCatalogSourceName || '').trim();
+  if (!id) {
+    return;
+  }
+  if (typeof hideViewerUserMenu === 'function') {
+    hideViewerUserMenu();
+  }
+  menu.dataset.giftId = id;
+  menu.dataset.giftName = name;
+  if (sourceName) {
+    menu.dataset.giftSourceName = sourceName;
+  } else {
+    delete menu.dataset.giftSourceName;
+  }
+  if (label) {
+    label.textContent = name || id;
+  }
+  renameBtn.textContent = uiCopy.giftCatalogRename || '名前を変える';
+  if (clearBtn) {
+    clearBtn.textContent = uiCopy.giftCatalogRenameClear || '名前を戻す';
+    clearBtn.hidden = !sourceName;
+  }
+  menu.hidden = false;
+  const pad = 8;
+  const left = Math.min(event.clientX, window.innerWidth - menu.offsetWidth - pad);
+  const top = Math.min(event.clientY, window.innerHeight - menu.offsetHeight - pad);
+  menu.style.left = `${Math.max(pad, left)}px`;
+  menu.style.top = `${Math.max(pad, top)}px`;
+  renameBtn.focus();
+}
+
+function catalogGiftById(id) {
+  const needle = String(id || '').trim();
+  if (!needle) {
+    return null;
+  }
+  let found = null;
+  const lists = [cachedGiftCatalog, savedConfig?.cachedTestGifts];
+  for (const list of lists) {
+    if (!Array.isArray(list)) {
+      continue;
+    }
+    const hit = list.find((gift) => String(gift?.id || '').trim() === needle);
+    if (!hit) {
+      continue;
+    }
+    if (String(hit.sourceName || '').trim()) {
+      return hit;
+    }
+    if (!found) {
+      found = hit;
+    }
+  }
+  return found;
+}
+
+function patchSavedCatalogGifts(gifts) {
+  if (Array.isArray(gifts) && savedConfig) {
+    savedConfig.cachedTestGifts = gifts;
+  }
+  if (gifts && typeof fillTestGifts === 'function') {
+    fillTestGifts(gifts);
+  }
+}
+
+function namePromptIsOpen() {
+  return $('name-prompt')?.hidden === false;
+}
+
+function focusGiftCatalogRowIfIdle(giftId, focusRow) {
+  if (focusRow && !namePromptIsOpen()) {
+    focusGiftCatalogRow(giftId);
+  }
+}
+
+async function applyGiftCatalogRenameForId(id, currentName, options) {
+  const giftId = String(id || '').trim();
+  const focusRow = options?.focusRow === true;
+  const seq = (giftCatalogRenameSeq += 1);
+  if (!giftId) {
+    setToast(uiCopy.giftCatalogRenameMissing || 'そのギフトは一覧にありません', true);
+    return;
+  }
+  const catalog = catalogGiftById(giftId);
+  const current = String(catalog?.name || currentName || '').trim();
+  const sourceName = String(catalog?.sourceName || '').trim();
+  const nextName =
+    typeof openNamePrompt === 'function'
+      ? await openNamePrompt({
+          title: uiCopy.giftCatalogRenamePrompt || 'コメント画面と配信ソースに出すギフト名',
+          value: current,
+        })
+      : null;
+  if (seq !== giftCatalogRenameSeq) {
+    return;
+  }
+  if (nextName == null) {
+    focusGiftCatalogRowIfIdle(giftId, focusRow);
+    return;
+  }
+  const trimmed = String(nextName).trim();
+  if (!trimmed) {
+    setToast(uiCopy.giftCatalogRenameEmpty || '名前を空にはできません', true);
+    focusGiftCatalogRowIfIdle(giftId, focusRow);
+    return;
+  }
+  if (trimmed === current) {
+    focusGiftCatalogRowIfIdle(giftId, focusRow);
+    return;
+  }
+  if (sourceName && trimmed === sourceName) {
+    await applyGiftCatalogResetForId(giftId, { focusRow, seq });
+    return;
+  }
+  if (typeof window.liveTts.renameCatalogGift !== 'function') {
+    setToast(uiCopy.giftCatalogRenameFailed || uiCopy.saveFailed || '保存に失敗しました', true);
+    focusGiftCatalogRowIfIdle(giftId, focusRow);
+    return;
+  }
+  const result = await window.liveTts.renameCatalogGift(giftId, trimmed);
+  if (seq !== giftCatalogRenameSeq) {
+    return;
+  }
+  patchSavedCatalogGifts(result?.gifts);
+  setToast(
+    result?.message ||
+      (result?.ok
+        ? uiCopy.giftCatalogRenameOk || 'ギフト名を変えました'
+        : uiCopy.giftCatalogRenameFailed || 'ギフト名を変えられませんでした'),
+    !result?.ok,
+  );
+  focusGiftCatalogRowIfIdle(giftId, focusRow);
+}
+
+async function applyGiftCatalogResetForId(id, options) {
+  const giftId = String(id || '').trim();
+  const focusRow = options?.focusRow === true;
+  const seq = Number(options?.seq) || (giftCatalogRenameSeq += 1);
+  if (!giftId) {
+    setToast(uiCopy.giftCatalogRenameMissing || 'そのギフトは一覧にありません', true);
+    return;
+  }
+  if (typeof window.liveTts.resetCatalogGift !== 'function') {
+    setToast(uiCopy.giftCatalogRenameFailed || uiCopy.saveFailed || '保存に失敗しました', true);
+    focusGiftCatalogRowIfIdle(giftId, focusRow);
+    return;
+  }
+  const result = await window.liveTts.resetCatalogGift(giftId);
+  if (seq !== giftCatalogRenameSeq) {
+    return;
+  }
+  patchSavedCatalogGifts(result?.gifts);
+  setToast(
+    result?.message ||
+      (result?.ok
+        ? uiCopy.giftCatalogRenameClearOk || 'ギフト名を戻しました'
+        : uiCopy.giftCatalogRenameClearMissing || '変えた名前がありません'),
+    !result?.ok,
+  );
+  focusGiftCatalogRowIfIdle(giftId, focusRow);
+}
+
+async function applyGiftCatalogRename() {
+  const menu = $('gift-catalog-menu');
+  const id = String(menu?.dataset.giftId || '').trim();
+  const current = String(menu?.dataset.giftName || '').trim();
+  hideGiftCatalogMenu();
+  await applyGiftCatalogRenameForId(id, current, { focusRow: true });
+}
+
+async function applyGiftCatalogReset() {
+  const menu = $('gift-catalog-menu');
+  const id = String(menu?.dataset.giftId || '').trim();
+  hideGiftCatalogMenu();
+  await applyGiftCatalogResetForId(id, { focusRow: true });
+}
+
 function bindListEditors() {
   bindGiftChimeColumnResize();
   for (const fieldId of ['ng-words', 'blocked-users', 'muted-users']) {
@@ -1079,6 +1331,10 @@ function bindListEditors() {
   });
   $('gift-speak-search')?.addEventListener('input', () => {
     giftSpeakSearchQuery = $('gift-speak-search')?.value || '';
+    renderGiftSpeakList();
+  });
+  $('gift-speak-latin-only')?.addEventListener('click', () => {
+    giftSpeakLatinOnly = !giftSpeakLatinOnly;
     renderGiftSpeakList();
   });
   $('gift-speak-enable-all')?.addEventListener('click', () => {
@@ -1176,23 +1432,69 @@ function bindListEditors() {
     }
   });
 
+  $('gift-catalog-menu-rename')?.addEventListener('click', () => {
+    void applyGiftCatalogRename();
+  });
+  $('gift-catalog-menu-clear')?.addEventListener('click', () => {
+    void applyGiftCatalogReset();
+  });
+  document.addEventListener('click', (event) => {
+    const menu = $('gift-catalog-menu');
+    if (!menu || menu.hidden || menu.contains(event.target)) {
+      return;
+    }
+    hideGiftCatalogMenu();
+  });
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') {
+      hideGiftCatalogMenu();
+    }
+  });
+  $('gift-speak-list')?.addEventListener('scroll', hideGiftCatalogMenu);
+  $('gift-speak-list')?.addEventListener('dblclick', (event) => {
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    if (target.closest('button, input, label, .gift-chime-row__volume')) {
+      return;
+    }
+    const row = target.closest('.gift-chime-row');
+    if (!row || !row.closest('#gift-speak-list')) {
+      return;
+    }
+    event.preventDefault();
+    window.getSelection()?.removeAllRanges();
+    hideGiftCatalogMenu();
+    const id = String(row.dataset.giftCatalogId || '').trim();
+    const name = String(row.dataset.giftCatalogName || '').trim();
+    void applyGiftCatalogRenameForId(id, name, { focusRow: true });
+  });
+
   document.addEventListener('contextmenu', (event) => {
     const target = event.target;
     if (!(target instanceof Element)) {
       return;
     }
     const chimePick = target.closest('[data-gift-chime-pick]');
-    if (!chimePick) {
+    if (chimePick) {
+      const id = String(chimePick.dataset.giftChimePick || '').trim();
+      if (!id || !giftChimeByGiftId[id]) {
+        return;
+      }
+      event.preventDefault();
+      hideGiftCatalogMenu();
+      if (clearGiftChimeCustomSound(id)) {
+        renderGiftSpeakList();
+        noteFormChanged();
+      }
       return;
     }
-    const id = String(chimePick.dataset.giftChimePick || '').trim();
-    if (!id || !giftChimeByGiftId[id]) {
+    const row = target.closest('.gift-chime-row');
+    if (!row || !row.closest('#gift-speak-list')) {
       return;
     }
     event.preventDefault();
-    if (clearGiftChimeCustomSound(id)) {
-      renderGiftSpeakList();
-      noteFormChanged();
-    }
+    showGiftCatalogMenu(event, row);
   });
 }

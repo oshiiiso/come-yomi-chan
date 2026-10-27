@@ -12,7 +12,7 @@ import { getLogger } from '../../shared/logging-config';
 import { getRendererCopy, MSG } from '../../shared/messages';
 import { isSettingsTabId } from '../../shared/settings-tab-reset';
 import { normalizeOverlayCopyKind, normalizeOverlayUrlKind } from '../../shared/overlay-url';
-import { sessionLogFileName, sessionLogTsv } from '../../shared/session-log';
+import { sessionLogFileName, sessionLogRowsFromViewer, sessionLogTsv } from '../../shared/session-log';
 import {
   applyProfileToConfig,
   buildProfileExport,
@@ -137,6 +137,7 @@ export function registerIpcHandlers(
       giftName: event.giftName ?? '',
       giftCount: event.giftCount ?? 0,
       diamondCount: event.diamondCount ?? 0,
+      giftId: event.giftId || undefined,
       avatarUrl: event.user?.avatarUrl || undefined,
       giftImageUrl: event.giftImageUrl || undefined,
       commentEmotes: event.commentEmotes?.length ? event.commentEmotes : undefined,
@@ -702,7 +703,10 @@ export function registerIpcHandlers(
 
   ipcMain.handle(IpcChannels.SAVE_SESSION_LOG, async (event) => {
     try {
-      const rows = session.getSessionLog();
+      const rows =
+        viewerLog.length > 0
+          ? sessionLogRowsFromViewer(viewerLog)
+          : session.getSessionLog();
       if (rows.length === 0) {
         return { ok: false, cancelled: false, message: MSG.ui.viewerLogEmpty };
       }
@@ -742,6 +746,14 @@ export function registerIpcHandlers(
   });
 
   ipcMain.handle(IpcChannels.GET_TEST_GIFTS, () => session.listTestGifts());
+
+  ipcMain.handle(IpcChannels.RENAME_CATALOG_GIFT, (_event, id: unknown, name: unknown) => {
+    return session.renameCatalogGift(typeof id === 'string' ? id : '', typeof name === 'string' ? name : '');
+  });
+
+  ipcMain.handle(IpcChannels.RESET_CATALOG_GIFT, (_event, id: unknown) => {
+    return session.resetCatalogGift(typeof id === 'string' ? id : '');
+  });
 
   ipcMain.handle(IpcChannels.REFRESH_TEST_GIFTS, async (_event, uniqueId: unknown) => {
     const requested = typeof uniqueId === 'string' ? uniqueId : '';

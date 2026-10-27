@@ -5,6 +5,8 @@ function hideViewerUserMenu() {
     delete menu.dataset.uniqueId;
     delete menu.dataset.nickname;
     delete menu.dataset.displayText;
+    delete menu.dataset.giftId;
+    delete menu.dataset.giftName;
   }
 }
 
@@ -31,19 +33,26 @@ function showViewerUserMenu(event, item) {
   const displayName = item.dataset.displayName || nickname;
   const displayText =
     item.dataset.displayText || item.querySelector('.viewer__text')?.textContent || '';
-  if (!listedUserIdFrom({ uniqueId, nickname }) && !displayText) {
+  const giftId = String(item.dataset.giftId || '').trim();
+  if (!listedUserIdFrom({ uniqueId, nickname }) && !displayText && !giftId) {
     setToast(uiCopy.viewerUserMissing, true);
     return;
+  }
+  if (typeof hideGiftCatalogMenu === 'function') {
+    hideGiftCatalogMenu();
   }
   const menu = $('viewer-user-menu');
   const label = $('viewer-user-menu-label');
   const copyBtn = $('viewer-user-menu-copy');
   const copyIdBtn = $('viewer-user-menu-copy-id');
   const copyNicknameBtn = $('viewer-user-menu-copy-nickname');
+  const copyGiftBtn = $('viewer-user-menu-copy-gift');
   const muteBtn = $('viewer-user-menu-mute');
   const blockBtn = $('viewer-user-menu-block');
   const nicknameBtn = $('viewer-user-menu-nickname');
   const nicknameClearBtn = $('viewer-user-menu-nickname-clear');
+  const giftRenameBtn = $('viewer-user-menu-gift-rename');
+  const giftClearBtn = $('viewer-user-menu-gift-clear');
   if (!menu || !copyBtn || !copyIdBtn || !copyNicknameBtn || !muteBtn || !blockBtn) {
     return;
   }
@@ -75,6 +84,17 @@ function showViewerUserMenu(event, item) {
   copyIdBtn.disabled = !idValue;
   copyNicknameBtn.textContent = uiCopy.viewerCopyNickname;
   copyNicknameBtn.disabled = !nickname.trim();
+  const catalogGift =
+    giftId && typeof catalogGiftById === 'function' ? catalogGiftById(giftId) : null;
+  const giftName = String(catalogGift?.name || item.dataset.giftName || '').trim();
+  const giftSourceName = String(catalogGift?.sourceName || '').trim();
+  menu.dataset.giftId = giftId;
+  menu.dataset.giftName = giftName;
+  if (copyGiftBtn) {
+    copyGiftBtn.textContent = uiCopy.viewerCopyGift || 'ギフト名をコピー';
+    copyGiftBtn.hidden = !giftName;
+    copyGiftBtn.disabled = !giftName;
+  }
   muteBtn.textContent = isMuted ? uiCopy.viewerUnmuteUser : uiCopy.viewerMuteUser;
   blockBtn.textContent = isBlocked ? uiCopy.viewerUnblockUser : uiCopy.viewerBlockUser;
   muteBtn.hidden = !hasUser;
@@ -86,6 +106,14 @@ function showViewerUserMenu(event, item) {
   if (nicknameClearBtn) {
     nicknameClearBtn.textContent = uiCopy.nicknameClear || '呼び方を消す';
     nicknameClearBtn.hidden = !hasNickname;
+  }
+  if (giftRenameBtn) {
+    giftRenameBtn.textContent = uiCopy.giftCatalogRename || '名前を変える';
+    giftRenameBtn.hidden = !giftId;
+  }
+  if (giftClearBtn) {
+    giftClearBtn.textContent = uiCopy.giftCatalogRenameClear || '名前を戻す';
+    giftClearBtn.hidden = !giftId || !giftSourceName;
   }
   menu.hidden = false;
   const pad = 8;
@@ -110,6 +138,10 @@ async function copyViewerMenuField(kind) {
     text = String(menu?.dataset.nickname || '').trim();
     empty = uiCopy.viewerNicknameEmpty;
     copied = uiCopy.viewerNicknameCopied;
+  } else if (kind === 'gift') {
+    text = String(menu?.dataset.giftName || '').trim();
+    empty = uiCopy.viewerGiftEmpty || 'ギフト名がありません';
+    copied = uiCopy.viewerGiftCopied || 'ギフト名をコピーしました';
   } else {
     text = menu?.dataset.displayText || '';
   }
@@ -216,7 +248,13 @@ async function applyViewerNicknameAction(kind) {
     const current =
       map.find((entry) => entry.uniqueId.toLowerCase() === uniqueId.toLowerCase())
         ?.displayName || nickname;
-    const nextName = window.prompt(uiCopy.nicknamePrompt || '読み上げと画面に出す名前', current);
+    const nextName =
+      typeof openNamePrompt === 'function'
+        ? await openNamePrompt({
+            title: uiCopy.nicknamePrompt || '読み上げと画面に出す名前',
+            value: current,
+          })
+        : null;
     if (nextName == null) {
       return;
     }
@@ -232,5 +270,25 @@ async function applyViewerNicknameAction(kind) {
   });
   if (!result.ok) {
     setToast(result.message || uiCopy.saveFailed || '保存に失敗しました', true);
+  }
+}
+
+async function applyViewerGiftCatalogAction(kind) {
+  const menu = $('viewer-user-menu');
+  const giftId = String(menu?.dataset.giftId || '').trim();
+  const giftName = String(menu?.dataset.giftName || '').trim();
+  hideViewerUserMenu();
+  if (!giftId) {
+    setToast(uiCopy.giftCatalogRenameMissing || 'そのギフトは一覧にありません', true);
+    return;
+  }
+  if (kind === 'clear') {
+    if (typeof applyGiftCatalogResetForId === 'function') {
+      await applyGiftCatalogResetForId(giftId);
+    }
+    return;
+  }
+  if (typeof applyGiftCatalogRenameForId === 'function') {
+    await applyGiftCatalogRenameForId(giftId, giftName);
   }
 }

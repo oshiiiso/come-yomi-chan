@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { firstImageUrl, giftIdFromEvent, giftImageUrlFromEvent, giftNameFromEvent, catalogGiftsFromList, normalizeCatalogGifts, mergeCatalogGift, mergeCatalogGiftsFromFetch, catalogGiftNameById, catalogGiftImageById, resolveGiftNameWithCatalog } from '../../tiktok/gift-fields';
+import { firstImageUrl, giftIdFromEvent, giftImageUrlFromEvent, giftNameFromEvent, catalogGiftsFromList, normalizeCatalogGifts, mergeCatalogGift, mergeCatalogGiftsFromFetch, applyCatalogGiftUserNames, catalogGiftNameById, catalogGiftImageById, catalogGiftSourceName, looksJapaneseGiftName, looksLatinGiftName, resolveGiftNameWithCatalog } from '../../tiktok/gift-fields';
 
 test('ギフト画像は urlList から取る', () => {
   assert.equal(
@@ -10,6 +10,20 @@ test('ギフト画像は urlList から取る', () => {
   assert.equal(
     firstImageUrl({ url_list: ['https://example.tiktokcdn.com/rose.png'] }),
     'https://example.tiktokcdn.com/rose.png',
+  );
+  assert.equal(
+    firstImageUrl({
+      urlList: [],
+      openWebUrl: 'https://p16-webcast.tiktokcdn.com/open.png',
+    }),
+    'https://p16-webcast.tiktokcdn.com/open.png',
+  );
+  assert.equal(
+    firstImageUrl({
+      url: 'https://p16-webcast.tiktokcdn.com/file.png',
+      openWebUrl: 'https://www.tiktok.com/@someone',
+    }),
+    'https://p16-webcast.tiktokcdn.com/file.png',
   );
 });
 
@@ -148,6 +162,30 @@ test('保存済みのギフト一覧を復元する', () => {
   assert.equal(normalizeCatalogGifts(null).length, 0);
 });
 
+test('変えた名前の元は保存から戻せる', () => {
+  const gifts = normalizeCatalogGifts([
+    {
+      id: '1',
+      name: '初見です',
+      imageUrl: '',
+      diamondCount: 1,
+      sourceName: 'Nice to meet U',
+    },
+  ]);
+  assert.equal(gifts[0].name, '初見です');
+  assert.equal(gifts[0].sourceName, 'Nice to meet U');
+});
+
+test('英語っぽいギフト名の判定', () => {
+  assert.equal(looksJapaneseGiftName('バラ'), true);
+  assert.equal(looksJapaneseGiftName('ソフトクリーム'), true);
+  assert.equal(looksLatinGiftName('Nice to meet U'), true);
+  assert.equal(looksLatinGiftName('GG'), true);
+  assert.equal(looksLatinGiftName('TikTok'), true);
+  assert.equal(looksLatinGiftName('バラ'), false);
+  assert.equal(looksLatinGiftName(''), false);
+});
+
 test('名前が無いお楽しみ袋とボックスは種別名にする', () => {
   assert.equal(giftNameFromEvent({ gift: { isRandomGift: true } }), 'お楽しみ袋');
   assert.equal(giftNameFromEvent({ gift: { isBoxGift: true } }), 'ギフトボックス');
@@ -192,6 +230,41 @@ test('配信で届いたギフトを一覧へ足す', () => {
     { preferIncomingName: true },
   );
   assert.equal(preferIncoming[0].name, 'Rose');
+  const renamed = mergeCatalogGift(
+    [{ id: '1', name: 'Nice to meet U', imageUrl: '', diamondCount: 1 }],
+    { id: '1', name: '初見です', imageUrl: '', diamondCount: 1 },
+    { preferIncomingName: true },
+  );
+  assert.equal(renamed[0].name, '初見です');
+  const afterLive = mergeCatalogGift(renamed, {
+    id: '1',
+    name: 'Nice to meet U',
+    imageUrl: '',
+    diamondCount: 1,
+  });
+  assert.equal(afterLive[0].name, '初見です');
+  const userNamed = mergeCatalogGift(
+    [{ id: '1', name: 'Nice to meet U', imageUrl: '', diamondCount: 1 }],
+    { id: '1', name: '初見です', imageUrl: '', diamondCount: 1 },
+    { preferIncomingName: true, sourceName: 'Nice to meet U' },
+  );
+  assert.equal(userNamed[0].name, '初見です');
+  assert.equal(catalogGiftSourceName(userNamed[0]), 'Nice to meet U');
+  const afterLiveNamed = mergeCatalogGift(userNamed, {
+    id: '1',
+    name: 'Nice to meet U',
+    imageUrl: '',
+    diamondCount: 1,
+  });
+  assert.equal(afterLiveNamed[0].name, '初見です');
+  assert.equal(catalogGiftSourceName(afterLiveNamed[0]), 'Nice to meet U');
+  const reset = mergeCatalogGift(
+    afterLiveNamed,
+    { id: '1', name: 'Nice to meet U', imageUrl: '', diamondCount: 1 },
+    { preferIncomingName: true, sourceName: null },
+  );
+  assert.equal(reset[0].name, 'Nice to meet U');
+  assert.equal(reset[0].sourceName, undefined);
   const two = mergeCatalogGift(richer, {
     id: '2',
     name: 'GG',
@@ -359,4 +432,30 @@ test('再取得分は既存一覧へマージし、日本語名を優先する',
   assert.equal(merged.find((g) => g.id === 'live')?.name, '配信だけ');
   assert.equal(merged.find((g) => g.id === '2')?.name, '宇宙');
   assert.equal(merged.find((g) => g.id === '3')?.name, 'バラ');
+});
+
+test('ユーザーが変えた名前は seed と混ぜても残る', () => {
+  const seed = [{ id: '1', name: 'バラ', imageUrl: '', diamondCount: 1 }];
+  const cached = [
+    { id: '1', name: '薔薇', imageUrl: '', diamondCount: 1, sourceName: 'バラ' },
+  ];
+  const merged = mergeCatalogGiftsFromFetch(seed, cached);
+  assert.equal(merged[0].name, '薔薇');
+  assert.equal(merged[0].sourceName, 'バラ');
+});
+
+test('再取得後もユーザーが変えた名前だけ戻す', () => {
+  const fetched = [
+    { id: '1', name: 'バラ', imageUrl: '', diamondCount: 1 },
+    { id: '2', name: 'GG', imageUrl: '', diamondCount: 1 },
+  ];
+  const current = [
+    { id: '1', name: '薔薇', imageUrl: '', diamondCount: 1, sourceName: 'バラ' },
+    { id: '2', name: 'GG', imageUrl: '', diamondCount: 1 },
+  ];
+  const next = applyCatalogGiftUserNames(fetched, current);
+  assert.equal(next.find((gift) => gift.id === '1')?.name, '薔薇');
+  assert.equal(next.find((gift) => gift.id === '1')?.sourceName, 'バラ');
+  assert.equal(next.find((gift) => gift.id === '2')?.name, 'GG');
+  assert.equal(next.find((gift) => gift.id === '2')?.sourceName, undefined);
 });

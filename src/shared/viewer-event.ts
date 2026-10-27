@@ -56,6 +56,7 @@ export interface ViewerEvent {
   comment: string;
   commentEmotes: CommentEmote[];
   giftImageUrl: string;
+  giftId?: string;
   giftName: string;
   giftCount: number;
   diamondCount: number;

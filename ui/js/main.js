@@ -126,6 +126,7 @@ async function init() {
               receivedAt: row.receivedAt,
               displayText: row.displayText || '',
               comment: row.comment || '',
+              giftId: row.giftId || '',
               giftName: row.giftName || '',
               giftCount: row.giftCount || 0,
               diamondCount: row.diamondCount || 0,
@@ -396,6 +397,9 @@ async function init() {
     applyViewerSearch();
   });
   $('view-viewer')?.addEventListener('click', (event) => {
+    if (event.detail > 1) {
+      return;
+    }
     if (event.target.closest('button, input, a, label, .viewer-toolbar')) {
       return;
     }
@@ -415,6 +419,28 @@ async function init() {
       return;
     }
     toggleViewerFocus(item);
+  });
+  $('view-viewer')?.addEventListener('dblclick', (event) => {
+    if (event.target.closest('button, input, a, label, .viewer-toolbar')) {
+      return;
+    }
+    const item = event.target.closest('.viewer__item');
+    if (!item || item.classList.contains('viewer__item--status')) {
+      return;
+    }
+    const giftId = String(item.dataset.giftId || '').trim();
+    if (!giftId || typeof applyGiftCatalogRenameForId !== 'function') {
+      return;
+    }
+    event.preventDefault();
+    window.getSelection()?.removeAllRanges();
+    if (typeof hideViewerUserMenu === 'function') {
+      hideViewerUserMenu();
+    }
+    const catalogName =
+      typeof catalogGiftById === 'function' ? catalogGiftById(giftId)?.name : '';
+    const giftName = String(catalogName || item.dataset.giftName || '').trim();
+    void applyGiftCatalogRenameForId(giftId, giftName);
   });
   $('btn-viewer-layout-combined')?.addEventListener('click', () => {
     applyViewerLayout('combined', true);
@@ -547,6 +573,9 @@ async function init() {
   $('viewer-user-menu-copy-nickname')?.addEventListener('click', () => {
     void copyViewerMenuField('nickname');
   });
+  $('viewer-user-menu-copy-gift')?.addEventListener('click', () => {
+    void copyViewerMenuField('gift');
+  });
   $('viewer-user-menu-mute')?.addEventListener('click', () => {
     void applyViewerUserAction('mute');
   });
@@ -558,6 +587,12 @@ async function init() {
   });
   $('viewer-user-menu-nickname-clear')?.addEventListener('click', () => {
     void applyViewerNicknameAction('clear');
+  });
+  $('viewer-user-menu-gift-rename')?.addEventListener('click', () => {
+    void applyViewerGiftCatalogAction('rename');
+  });
+  $('viewer-user-menu-gift-clear')?.addEventListener('click', () => {
+    void applyViewerGiftCatalogAction('clear');
   });
   document.addEventListener('click', (event) => {
     const menu = $('viewer-user-menu');

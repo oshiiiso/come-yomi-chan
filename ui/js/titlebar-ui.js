@@ -33,6 +33,9 @@ function toggleTitlebarMenu(button) {
   const open = list.hidden;
   closeTitlebarMenus();
   hideViewerUserMenu();
+  if (typeof hideGiftCatalogMenu === 'function') {
+    hideGiftCatalogMenu();
+  }
   if (open) {
     list.hidden = false;
     button.setAttribute('aria-expanded', 'true');

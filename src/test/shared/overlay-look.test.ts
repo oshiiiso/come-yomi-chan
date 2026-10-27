@@ -5,11 +5,13 @@ import {
   MAX_OVERLAY_FONT_SIZE,
   MIN_OVERLAY_FONT_SIZE,
   OVERLAY_LOOK_PRESETS,
+  OVERLAY_THEMES,
   normalizeOverlayLook,
   overlayLookFromConfig,
 } from '../../shared/overlay-look';
 
 test('見た目プリセットは標準から派生する', () => {
+  assert.deepEqual([...OVERLAY_THEMES], ['dark', 'light', 'minimal', 'live', 'neon']);
   assert.equal(OVERLAY_LOOK_PRESETS.dark.theme, 'dark');
   assert.equal(DEFAULT_OVERLAY_LOOK.fontSize, 20);
   assert.equal(
@@ -17,8 +19,11 @@ test('見た目プリセットは標準から派生する', () => {
     35,
   );
   assert.equal(OVERLAY_LOOK_PRESETS.dark.fontSize, 20);
-  assert.equal(OVERLAY_LOOK_PRESETS.minimal.bgOpacity, 0);
+  assert.equal(OVERLAY_LOOK_PRESETS.minimal.bgOpacity, 20);
   assert.equal(OVERLAY_LOOK_PRESETS.minimal.showAvatar, false);
+  assert.equal(OVERLAY_LOOK_PRESETS.live.theme, 'live');
+  assert.equal(OVERLAY_LOOK_PRESETS.live.bgOpacity, 0);
+  assert.equal(OVERLAY_LOOK_PRESETS.live.showAvatar, false);
   assert.equal(OVERLAY_LOOK_PRESETS.light.theme, 'light');
 });
 

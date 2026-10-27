@@ -615,8 +615,13 @@ export function japaneseNameForGift(englishOrAny: string, diamondCount?: number)
 	return rule.ja;
 }
 
-export function applyKnownJapaneseGiftNames<T extends { name: string; diamondCount?: number }>(gifts: T[]): T[] {
+export function applyKnownJapaneseGiftNames<
+	T extends { name: string; diamondCount?: number; sourceName?: string },
+>(gifts: T[]): T[] {
 	return gifts.map((gift) => {
+		if (String(gift.sourceName || "").trim()) {
+			return gift;
+		}
 		const next = japaneseNameForGift(gift.name, gift.diamondCount);
 		return next === gift.name ? gift : { ...gift, name: next };
 	});

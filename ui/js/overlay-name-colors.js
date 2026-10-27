@@ -15,6 +15,7 @@ const OVERLAY_NAME_COLORS_BY_LOOK_PRESET = {
   dark: [...DEFAULT_OVERLAY_NAME_COLORS],
   light: ['#0f766e', '#1d4ed8', '#a16207', '#be185d', '#15803d'],
   minimal: [...DEFAULT_OVERLAY_NAME_COLORS],
+  live: ['#ff8fb1', '#7ec8ff', '#ffe566', '#d0bfff', '#8ef0c0'],
   neon: ['#67e8f9', '#e879f9', '#f0abfc', '#fde047', '#86efac'],
 };
 

@@ -3,6 +3,12 @@ let formSaveChain = Promise.resolve();
 
 function activateAppMode(mode) {
   hideViewerUserMenu();
+  if (typeof hideGiftCatalogMenu === 'function') {
+    hideGiftCatalogMenu();
+  }
+  if (typeof hideNamePrompt === 'function') {
+    hideNamePrompt(null);
+  }
   clearOkToast();
   appMode = mode === 'settings' ? 'settings' : 'viewer';
   const isViewer = appMode === 'viewer';

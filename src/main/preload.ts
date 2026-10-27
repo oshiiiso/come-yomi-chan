@@ -54,6 +54,9 @@ const api = {
   getTestGifts: () => ipcRenderer.invoke('tester:gifts'),
   refreshTestGifts: (uniqueId?: string) =>
     ipcRenderer.invoke('tester:gifts-refresh', uniqueId),
+  renameCatalogGift: (id: string, name: string) =>
+    ipcRenderer.invoke('tester:gift-rename', id, name),
+  resetCatalogGift: (id: string) => ipcRenderer.invoke('tester:gift-reset', id),
   previewOverlay: (
     target?: string,
     streamSettings?: Record<string, unknown>,

@@ -52,7 +52,7 @@ const OVERLAY_LIKES_LOOK_PRESETS = {
     ...DEFAULT_OVERLAY_LIKES_LOOK,
     theme: 'minimal',
     fontSize: 20,
-    bgOpacity: 0,
+    bgOpacity: 48,
     showAvatar: true,
     avatarSize: 32,
     itemRadius: 0,

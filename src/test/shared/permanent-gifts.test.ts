@@ -148,6 +148,14 @@ test('一覧へ既知の日本語名を当てる', () => {
   assert.equal(gifts[2].name, 'Mystery');
 });
 
+test('ユーザーが変えた名前は辞書で戻さない', () => {
+  const gifts = applyKnownJapaneseGiftNames([
+    { id: '1', name: 'Rose', diamondCount: 1, sourceName: 'バラ' },
+  ]);
+  assert.equal(gifts[0].name, 'Rose');
+  assert.equal(gifts[0].sourceName, 'バラ');
+});
+
 test('常設英名を優先して上限内に残す', () => {
   const gifts = preferPermanentCatalogGifts(
     [
@@ -199,6 +207,18 @@ test('重複時は個別設定がある ID を残す', () => {
   assert.equal(gifts.length, 1);
   assert.equal(gifts[0].id, '200');
   assert.equal(gifts[0].name, 'ダイヤモンドツリー');
+});
+
+test('重複まとめでもユーザーが変えた名前を残す', () => {
+  const icon =
+    'https://p16-webcast.tiktokcdn.com/img/maliva/webcast-va/cccccccccccccccccccccccccccccccc~tplv-obj.png';
+  const gifts = dedupeAndSortCatalogGifts([
+    { id: '100', name: 'バラ', imageUrl: icon, diamondCount: 1 },
+    { id: '200', name: 'Flower', imageUrl: icon, diamondCount: 1, sourceName: 'バラ' },
+  ]);
+  assert.equal(gifts.length, 1);
+  assert.equal(gifts[0].name, 'Flower');
+  assert.equal(gifts[0].sourceName, 'バラ');
 });
 
 test('並びは安いダイヤ、日本語、英語の順', () => {

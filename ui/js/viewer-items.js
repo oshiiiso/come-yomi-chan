@@ -425,6 +425,14 @@ function appendViewerEvent(payload) {
   if (payload.sample === true) {
     item.dataset.sample = '1';
   }
+  const giftId = String(payload.giftId || '').trim();
+  if (giftId) {
+    item.dataset.giftId = giftId;
+  }
+  const giftName = String(payload.giftName || '').trim();
+  if (giftName) {
+    item.dataset.giftName = giftName;
+  }
 
   appendViewerAvatar(item, payload.user);
 

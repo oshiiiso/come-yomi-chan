@@ -72,6 +72,7 @@ export interface CatalogGift {
   name: string;
   imageUrl: string;
   diamondCount: number;
+  sourceName?: string;
 }
 
 export interface AppConfig {
