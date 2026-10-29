@@ -989,7 +989,10 @@ async function init() {
       configEchoWait = Math.max(0, configEchoWait - 1);
     }
     if (result.message) {
-    setToast(result.message, !result.ok);
+      const warn =
+        !result.ok ||
+        (Array.isArray(result.missingSoundFiles) && result.missingSoundFiles.length > 0);
+      setToast(result.message, warn);
     }
   }
 

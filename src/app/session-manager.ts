@@ -66,7 +66,7 @@ import {
   type AlertDisplayPart,
 } from '../shared/event-alert';
 import { pruneUnreferencedAlertMediaFiles } from '../shared/alert-media-files';
-import { pruneUnreferencedSoundFiles } from '../shared/sound-files';
+import { pruneUnreferencedSoundFiles, soundFilePath } from '../shared/sound-files';
 import {
   nameColorForUser,
   normalizeOverlayNameColors,
@@ -90,7 +90,6 @@ import {
   shouldClearSpeechQueueOnConfigChange,
 } from '../shared/live-disconnect';
 import { normalizeGiftSoundRef, normalizeSoundRef, type SoundRef } from '../shared/sound-ref';
-import { soundFilePath } from '../shared/sound-files';
 import fs from 'fs';
 import { FallbackTtsEngine } from '../tts/fallback-tts-engine';
 import { TtsEngine } from '../tts/tts-engine';
@@ -389,7 +388,7 @@ export class SessionManager extends EventEmitter {
   /** 設定から外れたアラート画像・効果音を data から消す。 */
   private pruneUnusedMediaFiles(config: AppConfig): void {
     try {
-      pruneUnreferencedAlertMediaFiles(config.eventAlertMedia);
+      pruneUnreferencedAlertMediaFiles(config);
       pruneUnreferencedSoundFiles(config);
     } catch (error) {
       logger.warning(`未使用メディアの削除に失敗しました: ${getErrorMessage(error)}`);
@@ -2028,6 +2027,10 @@ export class SessionManager extends EventEmitter {
 
   private soundFileHttpPath(sound: SoundRef): string | null {
     if (sound.kind !== 'file') {
+      return null;
+    }
+    const full = soundFilePath(sound.fileName);
+    if (!full || !fs.existsSync(full)) {
       return null;
     }
     return `/sounds/${encodeURIComponent(sound.fileName)}`;

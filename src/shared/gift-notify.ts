@@ -22,7 +22,8 @@ export interface GiftChimeDiamondBand {
 
 export const MAX_GIFT_CHIME_DIAMOND_BANDS = 30;
 export const DEFAULT_GIFT_CHIME_VOLUME = 100;
-export const MAX_GIFT_CHIME_VOLUME = 500;
+export const MAX_GIFT_CHIME_VOLUME = 200;
+export const MAX_GIFT_CHIME_GAIN = MAX_GIFT_CHIME_VOLUME / DEFAULT_GIFT_CHIME_VOLUME;
 
 export function normalizeGiftChimeVolume(raw: unknown): number {
   const parsed =
@@ -89,7 +90,7 @@ export function pruneGiftChimeVolumeById(
   return out;
 }
 
-/** 再生ゲイン。100 が等倍、500 で 5 倍。 */
+/** 再生ゲイン。100 が等倍、200 で 2 倍。 */
 export function giftChimeVolumeToGain(volume: unknown): number {
   return normalizeGiftChimeVolume(volume) / DEFAULT_GIFT_CHIME_VOLUME;
 }

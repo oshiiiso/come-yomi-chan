@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { collectReferencedAlertMediaFiles } from '../../shared/alert-media-files';
+import {
+  collectReferencedAlertMediaFiles,
+  collectReferencedAlertMediaFilesFromApp,
+} from '../../shared/alert-media-files';
 import { defaultEventAlertMediaMap } from '../../shared/event-alert';
 
 test('参照中のアラート画像だけ集める', () => {
@@ -17,4 +20,22 @@ test('参照中のアラート画像だけ集める', () => {
 test('テンプレだけのときは参照なし', () => {
   const keep = collectReferencedAlertMediaFiles(defaultEventAlertMediaMap());
   assert.equal(keep.size, 0);
+});
+
+test('保存済みプロファイルのアラート画像も残す', () => {
+  const keep = collectReferencedAlertMediaFilesFromApp({
+    eventAlertMedia: defaultEventAlertMediaMap(),
+    configProfiles: [
+      {
+        id: 'p1',
+        name: '配信用',
+        config: {
+          eventAlertMedia: {
+            gift: { kind: 'file', fileName: 'profile-gift.gif' },
+          },
+        },
+      },
+    ],
+  });
+  assert.equal(keep.has('profile-gift.gif'), true);
 });

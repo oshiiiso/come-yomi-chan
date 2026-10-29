@@ -206,6 +206,8 @@ let uiCopy = {
   profileApplyButton: '適用',
   profileDeleteButton: '削除',
   pickSoundFailed: '効果音の取り込みに失敗しました',
+  soundFilesMissing:
+    '一部の効果音ファイルが見つかりません。テンプレ音で代用します。ファイルをもう一度選んでください。',
   saveOk: '設定を保存しました',
   saveFailed: '保存に失敗しました',
   voicevoxLaunching: 'VOICEVOXを起動しています…',
@@ -432,7 +434,7 @@ let uiCopy = {
   exportConfigLabel: 'プロファイルを書き出す',
   importConfigLabel: 'プロファイルを読み込む',
   transferConfigHint:
-    'プロファイルをファイルに書き出して戻せます。TikTok ID とポートは含みません。以前の「設定書き出し」ファイルも読み込めます（ID・ポートは今のまま残ります）。VOICEVOXの場所は別のPCだと直してください。',
+    'プロファイルをファイルに書き出して戻せます。TikTok ID とポートは含みません。効果音やアラート画像のファイル自体は含まれません。同じPCなら今のファイルを使います。別のPCでは選び直してください。以前の「設定書き出し」ファイルも読み込めます（ID・ポートは今のまま残ります）。VOICEVOXの場所は別のPCだと直してください。',
   confirmUserTitle: 'このアカウントに接続しますか？',
   confirmUserHint: '違う人ならやめて、TikTok ID を直してください。',
   confirmUserButton: 'この人で接続',

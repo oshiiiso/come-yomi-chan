@@ -1,6 +1,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { allocateSoundFileName, collectReferencedSoundFiles } from '../../shared/sound-files';
+import {
+  allocateSoundFileName,
+  collectReferencedSoundFiles,
+  collectReferencedSoundFilesFromApp,
+} from '../../shared/sound-files';
 
 test('取り込み名は元のファイル名を優先する', () => {
   assert.equal(allocateSoundFileName('Cat Paws.mp3', 'mp3'), 'Cat Paws.mp3');
@@ -42,4 +46,27 @@ test('参照中の効果音だけ集める', () => {
     },
   });
   assert.deepEqual([...keep].sort(), ['band.ogg', 'common.mp3', 'follow.mp3', 'rose.wav']);
+});
+
+test('保存済みプロファイルの効果音も残す', () => {
+  const keep = collectReferencedSoundFilesFromApp({
+    giftChimeSound: { kind: 'template', id: 'gift' },
+    commentSound: { kind: 'template', id: 'default' },
+    configProfiles: [
+      {
+        id: 'p1',
+        name: '配信用',
+        config: {
+          giftChimeByGiftId: {
+            '9': { kind: 'file', fileName: 'profile-only.mp3' },
+          },
+          eventSound: {
+            follow: { kind: 'file', fileName: 'follow-profile.wav' },
+          },
+        },
+      },
+    ],
+  });
+  assert.equal(keep.has('profile-only.mp3'), true);
+  assert.equal(keep.has('follow-profile.wav'), true);
 });

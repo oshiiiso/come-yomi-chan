@@ -40,12 +40,12 @@ test('サウンド対象のイベント種別を判定する', () => {
   assert.equal(isEventSoundType('comment'), false);
 });
 
-test('イベントサウンド音量は 0〜500・欠けは100', () => {
-  const map = normalizeEventSoundVolumeMap({ follow: 250, like: -1, share: 999 });
-  assert.equal(map.follow, 250);
+test('イベントサウンド音量は 0〜200・欠けは100', () => {
+  const map = normalizeEventSoundVolumeMap({ follow: 150, like: -1, share: 999 });
+  assert.equal(map.follow, 150);
   assert.equal(map.like, 0);
-  assert.equal(map.share, 500);
+  assert.equal(map.share, 200);
   assert.equal(map.member, 100);
-  assert.equal(resolveEventSoundVolume('follow', map), 250);
+  assert.equal(resolveEventSoundVolume('follow', map), 150);
   assert.equal(resolveEventSoundVolume('portal', undefined), 100);
 });

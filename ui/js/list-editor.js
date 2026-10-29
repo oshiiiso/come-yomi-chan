@@ -292,12 +292,16 @@ function normalizeGiftChimeMap(raw) {
   return out;
 }
 
+const DEFAULT_GIFT_CHIME_VOLUME = 100;
+const MAX_GIFT_CHIME_VOLUME = 200;
+const MAX_GIFT_CHIME_GAIN = MAX_GIFT_CHIME_VOLUME / DEFAULT_GIFT_CHIME_VOLUME;
+
 function normalizeGiftChimeVolumeValue(raw) {
   const parsed = typeof raw === 'number' ? raw : Number.parseFloat(String(raw ?? '').trim());
   if (!Number.isFinite(parsed)) {
-    return 100;
+    return DEFAULT_GIFT_CHIME_VOLUME;
   }
-  return Math.max(0, Math.min(500, Math.round(parsed)));
+  return Math.max(0, Math.min(MAX_GIFT_CHIME_VOLUME, Math.round(parsed)));
 }
 
 function normalizeGiftChimeVolumeMap(raw) {
@@ -336,10 +340,24 @@ function giftChimeVolumeValueForId(id) {
   return giftChimeCommonVolumeValue();
 }
 
+function paintSoundVolumeMeterPos(wrap) {
+  if (!(wrap instanceof HTMLElement)) {
+    return;
+  }
+  const range = wrap.querySelector('input[type="range"]');
+  const max = Number(range?.max) || MAX_GIFT_CHIME_VOLUME;
+  const value = Number(range?.value);
+  const pos = Number.isFinite(value) && max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
+  wrap.style.setProperty('--volume-pos', String(pos));
+}
+
 function syncGiftChimeVolumeInputs(rangeInput, numberInput) {
   const next = normalizeGiftChimeVolumeValue(rangeInput?.value ?? numberInput?.value);
   if (rangeInput) {
     rangeInput.value = String(next);
+    paintSoundVolumeMeterPos(
+      rangeInput.closest('.gift-chime-row__volume, .gift-chime-band__volume-controls'),
+    );
   }
   if (numberInput) {
     numberInput.value = String(next);
@@ -374,7 +392,8 @@ function bindGiftChimeVolumeControls(wrap, options = {}) {
     if (!Number.isFinite(parsed)) {
       return;
     }
-    range.value = String(Math.max(0, Math.min(500, Math.round(parsed))));
+    range.value = String(Math.max(0, Math.min(MAX_GIFT_CHIME_VOLUME, Math.round(parsed))));
+    paintSoundVolumeMeterPos(wrap);
   });
   number.addEventListener('change', commit);
 }
@@ -396,7 +415,7 @@ function createGiftChimeVolumeControls(options) {
   const number = document.createElement('input');
   number.type = 'number';
   number.min = '0';
-  number.max = '500';
+  number.max = String(MAX_GIFT_CHIME_VOLUME);
   number.step = '1';
   number.value = String(normalizeGiftChimeVolumeValue(initialValue));
   number.setAttribute('aria-label', `${ariaLabel}（数値）`);
@@ -405,7 +424,7 @@ function createGiftChimeVolumeControls(options) {
   const range = document.createElement('input');
   range.type = 'range';
   range.min = '0';
-  range.max = '500';
+  range.max = String(MAX_GIFT_CHIME_VOLUME);
   range.step = '1';
   range.value = number.value;
   range.setAttribute('aria-label', ariaLabel);
@@ -419,12 +438,44 @@ function createGiftChimeVolumeControls(options) {
     range.dataset[key] = value;
     number.dataset[key] = value;
   }
-  wrap.append(number, range);
+  const slider = document.createElement('div');
+  slider.className = 'sound-volume-slider';
+  slider.append(range);
+  wrap.append(number, slider);
+  ensureSoundLevelMeter(wrap);
   bindGiftChimeVolumeControls(wrap, {
     persistId: dataset.giftChimeVolume ? String(dataset.giftChimeVolume) : '',
     disabled,
   });
   return wrap;
+}
+
+function ensureSoundLevelMeter(wrap) {
+  if (!(wrap instanceof HTMLElement) || wrap.querySelector('.sound-level-meter')) {
+    return;
+  }
+  let slider = wrap.querySelector('.sound-volume-slider');
+  const range = wrap.querySelector('input[type="range"]');
+  if (!(slider instanceof HTMLElement)) {
+    slider = document.createElement('div');
+    slider.className = 'sound-volume-slider';
+    if (range instanceof HTMLInputElement) {
+      range.replaceWith(slider);
+      slider.append(range);
+    } else {
+      wrap.append(slider);
+    }
+  }
+  const meter = document.createElement('span');
+  meter.className = 'sound-level-meter';
+  meter.setAttribute('aria-hidden', 'true');
+  const pos = document.createElement('span');
+  pos.className = 'sound-level-meter__pos';
+  const fill = document.createElement('span');
+  fill.className = 'sound-level-meter__fill';
+  meter.append(pos, fill);
+  slider.append(meter);
+  paintSoundVolumeMeterPos(wrap);
 }
 
 function paintTemplateGiftChimeVolumes() {
@@ -442,6 +493,7 @@ function paintTemplateGiftChimeVolumes() {
     if (number instanceof HTMLInputElement) {
       number.value = common;
     }
+    paintSoundVolumeMeterPos(wrap);
   }
 }
 

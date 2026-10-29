@@ -219,6 +219,8 @@ export const MSG = {
     giftChimeTestButton: '再生',
     giftChimeStopButton: '停止',
     giftChimeTestFailed: '効果音のテストに失敗しました',
+    soundFilesMissing:
+      '一部の効果音ファイルが見つかりません。テンプレ音で代用します。ファイルをもう一度選んでください。',
     giftChimeDiamondBandsHint:
       '上限を空にすると、それ以上のダイヤもその帯に含めます。\n\nどの帯にも入らないダイヤは鳴りません。帯が重なると保存できません。',
     giftChimeDiamondMinPlaceholder: '下限',
@@ -283,14 +285,14 @@ export const MSG = {
     exportConfigLabel: 'プロファイルを書き出す',
     importConfigLabel: 'プロファイルを読み込む',
     transferConfigHint:
-      'プロファイルをファイルに書き出して、別の PC や再インストール後に戻せます。TikTok ID とポートは含みません。\n\n以前の「設定書き出し」ファイルも読み込めます。VOICEVOX の場所は別の PC だと直してください。',
+      'プロファイルをファイルに書き出して、別の PC や再インストール後に戻せます。TikTok ID とポートは含みません。効果音やアラート画像のファイル自体は含まれません。同じ PC なら今のファイルを使います。別の PC では選び直してください。\n\n以前の「設定書き出し」ファイルも読み込めます。VOICEVOX の場所は別の PC だと直してください。',
     exportProfileTitle: 'プロファイルの書き出し',
     exportProfileOk: 'プロファイルを書き出しました',
     exportProfileFailed: 'プロファイルの書き出しに失敗しました',
     importProfileTitle: 'プロファイルの読み込み',
     importProfileConfirmTitle: 'プロファイルを読み込みますか？',
     importProfileConfirm:
-      '今の設定（TikTok ID とポート以外）を、ファイルの内容で上書きします。VOICEVOXの場所は別のPCだと直してください。',
+      '今の設定（TikTok ID とポート以外）を、ファイルの内容で上書きします。効果音ファイルは含まれません。VOICEVOXの場所は別のPCだと直してください。',
     importProfileOk: 'プロファイルを読み込みました',
     importProfileFailed: 'プロファイルの読み込みに失敗しました',
     importProfileInvalid: 'このファイルはコメ読みちゃんのプロファイルではありません',
@@ -869,6 +871,7 @@ export function getRendererCopy(): {
     profileApplyButton: string;
     profileDeleteButton: string;
     pickSoundFailed: string;
+    soundFilesMissing: string;
     saveOk: string;
     saveFailed: string;
     voicevoxLaunching: string;
@@ -1265,6 +1268,7 @@ export function getRendererCopy(): {
     profileApplyButton: MSG.ui.profileApplyButton,
     profileDeleteButton: MSG.ui.profileDeleteButton,
     pickSoundFailed: MSG.ui.pickSoundFailed,
+    soundFilesMissing: MSG.ui.soundFilesMissing,
     saveOk: MSG.ui.saveOk,
     saveFailed: MSG.ui.saveFailed,
     voicevoxLaunching: MSG.tts.voicevoxLaunching,

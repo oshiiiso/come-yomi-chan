@@ -42,11 +42,7 @@ let appChimeContext = null;
 const GIFT_CHIME_BAND_MAX = 30;
 
 function normalizeGiftChimeVolumeUi(raw) {
-  const parsed = typeof raw === 'number' ? raw : Number.parseFloat(String(raw ?? '').trim());
-  if (!Number.isFinite(parsed)) {
-    return 100;
-  }
-  return Math.max(0, Math.min(500, Math.round(parsed)));
+  return normalizeGiftChimeVolumeValue(raw);
 }
 
 function normalizeSoundTemplateIdUi(raw, fallbackId) {
@@ -171,6 +167,9 @@ function paintEventSoundVolume(type) {
   }
   if (range instanceof HTMLInputElement) {
     range.value = value;
+    paintSoundVolumeMeterPos(
+      range.closest('.gift-chime-row__volume, .gift-chime-band__volume-controls'),
+    );
   }
 }
 
@@ -772,6 +771,11 @@ function paintGiftChimeCommonVolume() {
   if (number instanceof HTMLInputElement) {
     number.value = String(next);
   }
+  if (range instanceof HTMLInputElement) {
+    paintSoundVolumeMeterPos(
+      range.closest('.gift-chime-row__volume, .gift-chime-band__volume-controls'),
+    );
+  }
   if (typeof paintTemplateGiftChimeVolumes === 'function') {
     paintTemplateGiftChimeVolumes();
   }
@@ -798,7 +802,8 @@ function bindGiftChimeCommonVolumeControls() {
     if (!Number.isFinite(parsed)) {
       return;
     }
-    range.value = String(Math.max(0, Math.min(500, Math.round(parsed))));
+    range.value = String(Math.max(0, Math.min(MAX_GIFT_CHIME_VOLUME, Math.round(parsed))));
+    paintSoundVolumeMeterPos(range.closest('.gift-chime-row__volume, .gift-chime-band__volume-controls'));
   });
   number.addEventListener('change', commit);
 }
@@ -812,6 +817,11 @@ function paintCommentSoundVolume() {
   }
   if (number instanceof HTMLInputElement) {
     number.value = value;
+  }
+  if (range instanceof HTMLInputElement) {
+    paintSoundVolumeMeterPos(
+      range.closest('.gift-chime-row__volume, .gift-chime-band__volume-controls'),
+    );
   }
 }
 
@@ -836,7 +846,8 @@ function bindCommentSoundVolumeControls() {
     if (!Number.isFinite(parsed)) {
       return;
     }
-    range.value = String(Math.max(0, Math.min(500, Math.round(parsed))));
+    range.value = String(Math.max(0, Math.min(MAX_GIFT_CHIME_VOLUME, Math.round(parsed))));
+    paintSoundVolumeMeterPos(range.closest('.gift-chime-row__volume, .gift-chime-band__volume-controls'));
   });
   number.addEventListener('change', commit);
 }
@@ -1054,7 +1065,13 @@ async function applySelectedProfile() {
     configEchoWait = Math.max(0, configEchoWait - 1);
     fillConfig(before);
   }
-  if (result?.message) {
+  if (result?.ok && Array.isArray(result.missingSoundFiles) && result.missingSoundFiles.length > 0) {
+    setToast(
+      uiCopy.soundFilesMissing ||
+        '一部の効果音ファイルが見つかりません。テンプレ音で代用します。ファイルをもう一度選んでください。',
+      true,
+    );
+  } else if (result?.message) {
     setToast(result.message, !result.ok);
   } else if (result?.ok) {
     setToast(uiCopy.saveOk || '設定を保存しました');
@@ -1124,7 +1141,82 @@ function resolveBuiltinTemplateId(payload) {
   return payload?.kind === 'gift-chime' ? 'gift' : 'default';
 }
 
-function playBuiltinAppChime(gainScale, onEnded, templateId = 'default') {
+let soundLevelRaf = 0;
+let soundLevelWrap = null;
+let soundLevelDisplayed = 0;
+
+function cssAttrValue(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+function findVolumeWrapForPreview(id) {
+  if (id === 'gift-common') {
+    return $('gift-chime-common-volume');
+  }
+  if (id === 'comment') {
+    return $('comment-sound-volume-range')?.closest('.gift-chime-row__volume');
+  }
+  if (id.startsWith('event:')) {
+    const type = id.slice(6);
+    return document
+      .querySelector(`[data-event-sound-volume-range="${cssAttrValue(type)}"]`)
+      ?.closest('.gift-chime-row__volume');
+  }
+  if (id.startsWith('band:')) {
+    const index = Number.parseInt(id.slice(5), 10);
+    const list = $('gift-chime-bands');
+    if (!list || !Number.isFinite(index) || index < 0) {
+      return null;
+    }
+    return list.children[index]?.querySelector('.gift-chime-band__volume-controls');
+  }
+  return document
+    .querySelector(`[data-gift-chime-volume="${cssAttrValue(id)}"]`)
+    ?.closest('.gift-chime-row__volume');
+}
+
+function startSoundLevelWatch(analyser, wrap) {
+  stopSoundLevelWatch();
+  if (!(wrap instanceof HTMLElement)) {
+    return;
+  }
+  if (typeof ensureSoundLevelMeter === 'function') {
+    ensureSoundLevelMeter(wrap);
+  }
+  soundLevelWrap = wrap;
+  soundLevelDisplayed = 0;
+  wrap.classList.add('is-previewing');
+  wrap.style.setProperty('--sound-level', '0');
+  const data = new Uint8Array(analyser.fftSize);
+  const tick = () => {
+    soundLevelRaf = requestAnimationFrame(tick);
+    analyser.getByteTimeDomainData(data);
+    let peak = 0;
+    for (let i = 0; i < data.length; i += 1) {
+      peak = Math.max(peak, Math.abs(data[i] - 128) / 128);
+    }
+    soundLevelDisplayed = Math.max(peak, soundLevelDisplayed * 0.78);
+    if (soundLevelWrap) {
+      soundLevelWrap.style.setProperty('--sound-level', String(soundLevelDisplayed));
+    }
+  };
+  tick();
+}
+
+function stopSoundLevelWatch() {
+  if (soundLevelRaf) {
+    cancelAnimationFrame(soundLevelRaf);
+    soundLevelRaf = 0;
+  }
+  if (soundLevelWrap) {
+    soundLevelWrap.style.setProperty('--sound-level', '0');
+    soundLevelWrap.classList.remove('is-previewing');
+  }
+  soundLevelWrap = null;
+  soundLevelDisplayed = 0;
+}
+
+function playBuiltinAppChime(gainScale, onEnded, templateId = 'default', levelWrap) {
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) {
     if (typeof onEnded === 'function') {
@@ -1138,15 +1230,30 @@ function playBuiltinAppChime(gainScale, onEnded, templateId = 'default') {
   const ctx = appChimeContext;
   const scale =
     typeof gainScale === 'number' && Number.isFinite(gainScale)
-      ? Math.max(0, Math.min(5, gainScale))
+      ? Math.max(0, Math.min(MAX_GIFT_CHIME_GAIN, gainScale))
       : 1;
   const oscillators = [];
+  const bus = ctx.createGain();
+  bus.gain.value = 1;
+  if (levelWrap) {
+    const analyser = ctx.createAnalyser();
+    analyser.fftSize = 256;
+    analyser.smoothingTimeConstant = 0.4;
+    bus.connect(analyser);
+    analyser.connect(ctx.destination);
+    startSoundLevelWatch(analyser, levelWrap);
+  } else {
+    bus.connect(ctx.destination);
+  }
   let finished = false;
   const finish = () => {
     if (finished) {
       return;
     }
     finished = true;
+    if (levelWrap) {
+      stopSoundLevelWatch();
+    }
     if (typeof onEnded === 'function') {
       onEnded();
     }
@@ -1158,7 +1265,7 @@ function playBuiltinAppChime(gainScale, onEnded, templateId = 'default') {
     osc.frequency.value = 880;
     gain.gain.value = Math.max(0.0001, 0.08 * scale);
     osc.connect(gain);
-    gain.connect(ctx.destination);
+    gain.connect(bus);
     const now = ctx.currentTime;
     osc.onended = finish;
     osc.start(now);
@@ -1180,7 +1287,7 @@ function playBuiltinAppChime(gainScale, onEnded, templateId = 'default') {
       );
       gain.gain.exponentialRampToValueAtTime(0.0001, now + startAt + dur);
       osc.connect(gain);
-      gain.connect(ctx.destination);
+      gain.connect(bus);
       osc.start(now + startAt);
       osc.stop(now + startAt + dur + 0.02);
       oscillators.push(osc);
@@ -1208,8 +1315,8 @@ function playBuiltinAppChime(gainScale, onEnded, templateId = 'default') {
   };
 }
 
-function playUrlWithGain(url, gain, onFail, onEnded) {
-  const safeGain = Math.max(0, Math.min(5, Number(gain) || 0));
+function playUrlWithGain(url, gain, onFail, onEnded, levelWrap) {
+  const safeGain = Math.max(0, Math.min(MAX_GIFT_CHIME_GAIN, Number(gain) || 0));
   const fail = typeof onFail === 'function' ? onFail : () => undefined;
   const ended = typeof onEnded === 'function' ? onEnded : () => undefined;
   let finished = false;
@@ -1218,6 +1325,9 @@ function playUrlWithGain(url, gain, onFail, onEnded) {
       return;
     }
     finished = true;
+    if (levelWrap) {
+      stopSoundLevelWatch();
+    }
     ended();
   };
   const stopAudio = (audio) => {
@@ -1230,7 +1340,7 @@ function playUrlWithGain(url, gain, onFail, onEnded) {
     }
   };
 
-  if (safeGain <= 1) {
+  if (safeGain <= 1 && !levelWrap) {
     const audio = new Audio(url);
     audio.volume = safeGain;
     audio.addEventListener('ended', finish);
@@ -1248,7 +1358,7 @@ function playUrlWithGain(url, gain, onFail, onEnded) {
     };
   }
 
-  // 100超は decodeAudioData + GainNode（CORS 付き /sounds 前提）
+  // 100超、または試し聞きのレベル表示は decodeAudioData + GainNode（CORS 付き /sounds 前提）
   const AudioCtx = window.AudioContext || window.webkitAudioContext;
   if (!AudioCtx) {
     fail();
@@ -1289,7 +1399,22 @@ function playUrlWithGain(url, gain, onFail, onEnded) {
       gainNode.gain.value = safeGain;
       bufferSource.buffer = audioBuffer;
       bufferSource.connect(gainNode);
-      gainNode.connect(ctx.destination);
+      if (levelWrap) {
+        const analyser = ctx.createAnalyser();
+        analyser.fftSize = 256;
+        analyser.smoothingTimeConstant = 0.4;
+        gainNode.connect(analyser);
+        analyser.connect(ctx.destination);
+        if (cancelled || finished) {
+          return;
+        }
+        startSoundLevelWatch(analyser, levelWrap);
+      } else {
+        gainNode.connect(ctx.destination);
+      }
+      if (cancelled || finished) {
+        return;
+      }
       bufferSource.onended = finish;
       bufferSource.start();
     } catch {
@@ -1347,7 +1472,7 @@ function pumpAppChime() {
     typeof payload?.volume === 'number' && Number.isFinite(payload.volume)
       ? payload.volume
       : 100;
-  const gain = Math.max(0, Math.min(5, volumeRaw / 100));
+  const gain = Math.max(0, Math.min(MAX_GIFT_CHIME_GAIN, volumeRaw / DEFAULT_GIFT_CHIME_VOLUME));
   const stop = url
     ? playUrlWithGain(url, gain, () => undefined, finishAppChime)
     : playBuiltinAppChime(gain, finishAppChime, resolveBuiltinTemplateId(payload));
@@ -1578,6 +1703,7 @@ function stopGiftChimePreview() {
   if (session && typeof session.stop === 'function') {
     session.stop();
   }
+  stopSoundLevelWatch();
   syncGiftChimePreviewButtons();
 }
 
@@ -1600,7 +1726,13 @@ async function toggleGiftChimePreview(giftId, sound, volume) {
     setToast(result?.message || uiCopy.giftChimeTestFailed || '効果音のテストに失敗しました', true);
     return;
   }
-  const gain = Math.max(0, Math.min(5, Number(result.volume ?? volume ?? 100) / 100));
+  const gain = Math.max(
+    0,
+    Math.min(
+      MAX_GIFT_CHIME_GAIN,
+      Number(result.volume ?? volume ?? DEFAULT_GIFT_CHIME_VOLUME) / DEFAULT_GIFT_CHIME_VOLUME,
+    ),
+  );
   const onEnded = () => {
     if (giftChimePreviewSession?.id === id) {
       giftChimePreviewSession = null;
@@ -1612,14 +1744,22 @@ async function toggleGiftChimePreview(giftId, sound, volume) {
     sound && sound.kind === 'template' && (sound.id === 'gift' || sound.id === 'default')
       ? sound.id
       : 'gift';
+  const levelWrap = findVolumeWrapForPreview(id);
   const stop = url
-    ? playUrlWithGain(url, gain, () => undefined, onEnded)
-    : playBuiltinAppChime(gain, onEnded, templateId);
+    ? playUrlWithGain(url, gain, () => undefined, onEnded, levelWrap)
+    : playBuiltinAppChime(gain, onEnded, templateId, levelWrap);
   giftChimePreviewSession = { id, stop };
   syncGiftChimePreviewButtons();
 }
 
 function bindGiftNotifyAndProfiles() {
+  for (const wrap of document.querySelectorAll(
+    '.gift-chime-row__volume, .gift-chime-band__volume-controls',
+  )) {
+    if (typeof ensureSoundLevelMeter === 'function') {
+      ensureSoundLevelMeter(wrap);
+    }
+  }
   $('speak-gift')?.addEventListener('change', () => {
     syncGiftNotifyModeUi();
     noteFormChanged();
@@ -1746,7 +1886,10 @@ function bindGiftNotifyAndProfiles() {
       if (!Number.isFinite(parsed)) {
         return;
       }
-      range.value = String(Math.max(0, Math.min(500, Math.round(parsed))));
+      range.value = String(Math.max(0, Math.min(MAX_GIFT_CHIME_VOLUME, Math.round(parsed))));
+      paintSoundVolumeMeterPos(
+        range.closest('.gift-chime-row__volume, .gift-chime-band__volume-controls'),
+      );
     });
     number.addEventListener('change', commit);
   }

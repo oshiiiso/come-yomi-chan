@@ -42,6 +42,13 @@ export function deleteAlertMediaFile(fileName: string): boolean {
   return true;
 }
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
 /** 設定で参照中のアラート画像名。 */
 export function collectReferencedAlertMediaFiles(media: EventAlertMediaMap | undefined): Set<string> {
   const keep = new Set<string>();
@@ -60,9 +67,37 @@ export function collectReferencedAlertMediaFiles(media: EventAlertMediaMap | und
   return keep;
 }
 
-/** どのイベントからも参照されていないアラート画像を消す。 */
-export function pruneUnreferencedAlertMediaFiles(media: EventAlertMediaMap | undefined): string[] {
-  const keep = collectReferencedAlertMediaFiles(media);
+export type AlertMediaConfigSnapshot = {
+  eventAlertMedia?: EventAlertMediaMap;
+  configProfiles?: unknown;
+};
+
+/** 今の設定と保存済みプロファイルから参照中のアラート画像名。 */
+export function collectReferencedAlertMediaFilesFromApp(
+  config: AlertMediaConfigSnapshot,
+): Set<string> {
+  const keep = collectReferencedAlertMediaFiles(config.eventAlertMedia);
+  if (!Array.isArray(config.configProfiles)) {
+    return keep;
+  }
+  for (const item of config.configProfiles) {
+    const rec = asRecord(item);
+    const inner = rec ? asRecord(rec.config) : null;
+    if (!inner) {
+      continue;
+    }
+    for (const name of collectReferencedAlertMediaFiles(
+      inner.eventAlertMedia as EventAlertMediaMap | undefined,
+    )) {
+      keep.add(name);
+    }
+  }
+  return keep;
+}
+
+/** 今の設定と保存済みプロファイルのどこからも参照されていないアラート画像を消す。 */
+export function pruneUnreferencedAlertMediaFiles(config: AlertMediaConfigSnapshot): string[] {
+  const keep = collectReferencedAlertMediaFilesFromApp(config);
   const removed: string[] = [];
   for (const name of listAlertMediaFiles()) {
     if (keep.has(name)) {

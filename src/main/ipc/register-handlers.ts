@@ -21,7 +21,7 @@ import {
   profileFromImportPayload,
   profilePatchFromConfig,
 } from '../../shared/config-profiles';
-import { listSoundFiles, saveSoundFile } from '../../shared/sound-files';
+import { listMissingReferencedSoundFiles, listSoundFiles, saveSoundFile } from '../../shared/sound-files';
 import { SOUND_FILE_EXTENSIONS } from '../../shared/sound-ref';
 import { saveAlertMediaFile } from '../../shared/alert-media-files';
 import { ALERT_MEDIA_FILE_EXTENSIONS } from '../../shared/event-alert';
@@ -285,7 +285,12 @@ export function registerIpcHandlers(
     try {
       configStore.save((partial ?? {}) as AppConfigSaveInput);
       await applyLiveConfig(previous);
-      return { ok: true, config: configStore.toView(), message: MSG.ui.saveOk };
+      return {
+        ok: true,
+        config: configStore.toView(),
+        message: MSG.ui.saveOk,
+        missingSoundFiles: listMissingReferencedSoundFiles(configStore.get()),
+      };
     } catch (error) {
       logger.error(`設定の保存に失敗しました: ${getErrorMessage(error)}`);
       try {
@@ -458,7 +463,14 @@ export function registerIpcHandlers(
         activeConfigProfileId: profile.id,
       });
       await applyLiveConfig(previous);
-      return { ok: true, cancelled: false, config: configStore.toView(), message: MSG.ui.importProfileOk };
+      const missingSoundFiles = listMissingReferencedSoundFiles(configStore.get());
+      return {
+        ok: true,
+        cancelled: false,
+        config: configStore.toView(),
+        message: missingSoundFiles.length ? MSG.ui.soundFilesMissing : MSG.ui.importProfileOk,
+        missingSoundFiles,
+      };
     } catch (error) {
       logger.error(`プロファイルの読み込みに失敗しました: ${getErrorMessage(error)}`);
       return { ok: false, cancelled: false, message: MSG.ui.importProfileFailed };

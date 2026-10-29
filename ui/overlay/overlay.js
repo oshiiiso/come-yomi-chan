@@ -19,8 +19,7 @@
   const earlyRows = [];
   let motionName = 'fuwatto';
   let motionMs = 180;
-  const pendingRows = [];
-  /** 設定到達前の earlyRows と同じ上限。溢れた分は古い方から捨てる */
+  /** 設定到達前の earlyRows の上限。溢れた分は古い方から捨てる */
   const PENDING_ROW_MAX = 40;
   const PIN_TYPES = [
     'gift',
@@ -544,7 +543,6 @@
   function applySampleQueues(message) {
     resetSampleTemplates();
     resetPinState();
-    pendingRows.length = 0;
     clearList(chat);
     pinSampleTemplates = Array.isArray(message.pinSamples)
       ? message.pinSamples.map(normalizeSamplePayload).filter(Boolean)
@@ -592,7 +590,7 @@
   function playGiftChime(soundUrl, volume) {
     const gain =
       typeof volume === 'number' && Number.isFinite(volume)
-        ? Math.max(0, Math.min(5, volume / 100))
+        ? Math.max(0, Math.min(2, volume / 100))
         : 0.85;
     stopCurrentChime();
     if (typeof soundUrl === 'string' && soundUrl.trim()) {
@@ -621,7 +619,7 @@
   }
 
   function playUrlWithGain(url, gain, onFail, onEnded) {
-    const safeGain = Math.max(0, Math.min(5, Number(gain) || 0));
+    const safeGain = Math.max(0, Math.min(2, Number(gain) || 0));
     const fail = typeof onFail === 'function' ? onFail : () => undefined;
     const ended = typeof onEnded === 'function' ? onEnded : () => undefined;
     let finished = false;
@@ -748,7 +746,7 @@
     const ctx = chimeContext;
     const scale =
       typeof gainScale === 'number' && Number.isFinite(gainScale)
-        ? Math.max(0, Math.min(5, gainScale))
+        ? Math.max(0, Math.min(2, gainScale))
         : 0.85;
     const oscillators = [];
     let finished = false;
@@ -939,7 +937,6 @@
 
   function onRowRemoved() {
     trimOverflow();
-    flushPendingRows();
   }
 
   function rowMotion(item) {
@@ -1209,23 +1206,33 @@
     item.dataset.leaveTimer = String(fallback);
   }
 
+  function stayingCount() {
+    return [...chat.children].filter((item) => !item.classList.contains('is-leaving')).length;
+  }
+
+  function hardRemoveOldestChatRow() {
+    const item = chat.firstElementChild;
+    if (!(item instanceof HTMLElement)) {
+      return false;
+    }
+    clearRowTimer(item);
+    item.remove();
+    return true;
+  }
+
   function trimOverflow() {
-    while (chat.children.length > chatMaxRows) {
-      const leaving = [...chat.children].filter((item) => item.classList.contains('is-leaving')).length;
-      if (leaving >= chat.children.length - chatMaxRows) {
-        break;
-      }
+    while (stayingCount() > chatMaxRows) {
       const oldest = oldestStayingRow();
       if (!oldest) {
         break;
       }
       beginLeave(oldest);
     }
-  }
-
-  function flushPendingRows() {
-    while (pendingRows.length > 0 && chat.children.length < chatMaxRows) {
-      appendRow(chat, pendingRows.shift());
+    const cap = chatMaxRows + 1;
+    while (chat.children.length > cap) {
+      if (!hardRemoveOldestChatRow()) {
+        break;
+      }
     }
   }
 
@@ -1279,18 +1286,10 @@
   function applyRowLimits(previousRows, previousMs) {
     if (previousRows !== chatMaxRows) {
       trimOverflow();
-      flushPendingRows();
       fillSampleRowsToMax();
     }
     if (previousMs !== chatDisplayMs) {
       refreshShownRowTimers();
-    }
-  }
-
-  function queuePendingRow(payload) {
-    pendingRows.push(payload);
-    while (pendingRows.length > PENDING_ROW_MAX) {
-      pendingRows.shift();
     }
   }
 
@@ -1309,22 +1308,7 @@
       enqueuePin(payload);
       return;
     }
-    if (chat.children.length < chatMaxRows) {
-      appendRow(chat, payload);
-      return;
-    }
-    const alreadyLeaving = [...chat.children].some((item) => item.classList.contains('is-leaving'));
-    if (!alreadyLeaving) {
-      const oldest = oldestStayingRow();
-      if (oldest) {
-        beginLeave(oldest);
-      }
-    }
-    if (chat.children.length < chatMaxRows) {
-      appendRow(chat, payload);
-      return;
-    }
-    queuePendingRow(payload);
+    appendRow(chat, payload);
   }
 
   // src/shared/comment-emotes.ts と同じ判定（配信ソースは単一 JS）
@@ -2150,7 +2134,6 @@
       return;
     }
     stopChatSampleLoop();
-    pendingRows.length = 0;
     resetPinState();
     clearList(chat);
 
@@ -2209,7 +2192,6 @@
     if (message.kind === 'clear') {
       streamSampleActive = false;
       resetSampleTemplates();
-      pendingRows.length = 0;
       resetPinState();
       clearList(chat);
       seedPreviewSamples();

@@ -43,14 +43,40 @@ function addSoundRef(keep: Set<string>, sound: SoundRef | undefined): void {
   }
 }
 
-/** 設定で参照中の効果音ファイル名。 */
-export function collectReferencedSoundFiles(config: {
+function asRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  return value as Record<string, unknown>;
+}
+
+export type SoundFileConfigSnapshot = {
   giftChimeSound?: SoundRef;
   giftChimeByGiftId?: Record<string, SoundRef>;
   giftChimeDiamondBands?: GiftChimeDiamondBand[];
   commentSound?: SoundRef;
   eventSound?: EventSoundMap;
-}): Set<string> {
+  configProfiles?: unknown;
+};
+
+function soundSnapshotFromUnknown(raw: unknown): SoundFileConfigSnapshot | null {
+  const rec = asRecord(raw);
+  if (!rec) {
+    return null;
+  }
+  return {
+    giftChimeSound: rec.giftChimeSound as SoundRef | undefined,
+    giftChimeByGiftId: asRecord(rec.giftChimeByGiftId) as Record<string, SoundRef> | undefined,
+    giftChimeDiamondBands: Array.isArray(rec.giftChimeDiamondBands)
+      ? (rec.giftChimeDiamondBands as GiftChimeDiamondBand[])
+      : undefined,
+    commentSound: rec.commentSound as SoundRef | undefined,
+    eventSound: asRecord(rec.eventSound) as EventSoundMap | undefined,
+  };
+}
+
+/** 1件の設定で参照中の効果音ファイル名。 */
+export function collectReferencedSoundFiles(config: SoundFileConfigSnapshot): Set<string> {
   const keep = new Set<string>();
   addSoundRef(keep, config.giftChimeSound);
   addSoundRef(keep, config.commentSound);
@@ -72,15 +98,40 @@ export function collectReferencedSoundFiles(config: {
   return keep;
 }
 
-/** どの設定からも参照されていない効果音を消す。 */
-export function pruneUnreferencedSoundFiles(config: {
-  giftChimeSound?: SoundRef;
-  giftChimeByGiftId?: Record<string, SoundRef>;
-  giftChimeDiamondBands?: GiftChimeDiamondBand[];
-  commentSound?: SoundRef;
-  eventSound?: EventSoundMap;
-}): string[] {
+/** 今の設定と保存済みプロファイルから参照中の効果音ファイル名。 */
+export function collectReferencedSoundFilesFromApp(config: SoundFileConfigSnapshot): Set<string> {
   const keep = collectReferencedSoundFiles(config);
+  if (!Array.isArray(config.configProfiles)) {
+    return keep;
+  }
+  for (const item of config.configProfiles) {
+    const rec = asRecord(item);
+    const inner = rec ? soundSnapshotFromUnknown(rec.config) : null;
+    if (!inner) {
+      continue;
+    }
+    for (const name of collectReferencedSoundFiles(inner)) {
+      keep.add(name);
+    }
+  }
+  return keep;
+}
+
+/** 今の設定が指しているのに、ディスクに無い効果音。 */
+export function listMissingReferencedSoundFiles(config: SoundFileConfigSnapshot): string[] {
+  const missing: string[] = [];
+  for (const name of collectReferencedSoundFiles(config)) {
+    const full = soundFilePath(name);
+    if (!full || !fs.existsSync(full)) {
+      missing.push(name);
+    }
+  }
+  return missing.sort((a, b) => a.localeCompare(b, 'ja'));
+}
+
+/** 今の設定と保存済みプロファイルのどこからも参照されていない効果音を消す。 */
+export function pruneUnreferencedSoundFiles(config: SoundFileConfigSnapshot): string[] {
+  const keep = collectReferencedSoundFilesFromApp(config);
   const removed: string[] = [];
   for (const name of listSoundFiles()) {
     if (keep.has(name)) {

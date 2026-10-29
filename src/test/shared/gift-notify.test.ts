@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import path from 'node:path';
 import { test } from 'node:test';
 import {
   diamondBandsOverlap,
@@ -6,6 +8,7 @@ import {
   DEFAULT_GIFT_CHIME_VOLUME,
   giftChimeVolumeForId,
   giftChimeVolumeToGain,
+  MAX_GIFT_CHIME_GAIN,
   MAX_GIFT_CHIME_VOLUME,
   normalizeCommentNotifyMode,
   normalizeGiftChimeDestinations,
@@ -236,16 +239,16 @@ test('ダイヤ帯の正規化は逆転・重複を捨てる', () => {
   );
 });
 
-test('ダイヤ帯の音量を 0〜500 に丸める', () => {
+test('ダイヤ帯の音量を 0〜200 に丸める', () => {
   assert.equal(
-    normalizeGiftChimeDiamondBands([{ minDiamonds: 1, maxDiamonds: 10, volume: 250 }])[0]
+    normalizeGiftChimeDiamondBands([{ minDiamonds: 1, maxDiamonds: 10, volume: 150 }])[0]
       ?.volume,
-    250,
+    150,
   );
   assert.equal(
     normalizeGiftChimeDiamondBands([{ minDiamonds: 1, maxDiamonds: 10, volume: 999 }])[0]
       ?.volume,
-    500,
+    MAX_GIFT_CHIME_VOLUME,
   );
 });
 
@@ -314,7 +317,7 @@ test('帯の音がテンプレなら内蔵チャリン、ファイルなら帯�
   assert.equal(resolveGiftChimeBandSound(null), null);
 });
 
-test('ギフト別音量は 0〜500 に丸める', () => {
+test('ギフト別音量は 0〜200 に丸める', () => {
   assert.equal(normalizeGiftChimeVolume(55.6), 56);
   assert.equal(normalizeGiftChimeVolume(-1), 0);
   assert.equal(normalizeGiftChimeVolume(200), 200);
@@ -327,7 +330,7 @@ test('ギフト別音量は 0〜500 に丸める', () => {
   assert.equal(giftChimeVolumeForId('rose', { rose: 25 }), 25);
   assert.equal(giftChimeVolumeForId('other', { rose: 25 }), DEFAULT_GIFT_CHIME_VOLUME);
   assert.equal(giftChimeVolumeToGain(50), 0.5);
-  assert.equal(giftChimeVolumeToGain(500), 5);
+  assert.equal(giftChimeVolumeToGain(MAX_GIFT_CHIME_VOLUME), MAX_GIFT_CHIME_GAIN);
 });
 
 test('テンプレ音は共通音量、個別ファイル音だけギフト別音量', () => {
@@ -364,4 +367,9 @@ test('テンプレ音は共通音量、個別ファイル音だけギフト別�
     180,
   );
   assert.deepEqual(pruneGiftChimeVolumeById(byVolume, bySound), { rose: 40 });
+});
+
+test('画面の音量上限は共有の MAX_GIFT_CHIME_VOLUME と揃える', () => {
+  const source = fs.readFileSync(path.join(process.cwd(), 'ui', 'js', 'list-editor.js'), 'utf8');
+  assert.match(source, new RegExp(`const MAX_GIFT_CHIME_VOLUME = ${MAX_GIFT_CHIME_VOLUME};`));
 });
